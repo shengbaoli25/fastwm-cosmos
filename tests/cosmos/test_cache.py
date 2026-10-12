@@ -80,3 +80,18 @@ def test_mutation_after_open_rejected(tmp_path):
     root=tmp_path/'features';m,_=build(root);ds=CosmosCachedDataset(root,m['identity_sha256'],'t'*64,False)
     (root/'manifest.json').write_text(json.dumps(m)+' ')
     with pytest.raises(ValueError,match='changed'):ds[0]
+
+
+def test_staged_assembly_does_not_decode_or_encode(monkeypatch,tmp_path):
+    class Stage:
+        pixel_identity=Pixels.identity_sha256;identity_sha256='s'*64
+        def __getitem__(self,j):
+            return (torch.full((1,*VIDEO_SHAPE),j,dtype=torch.bfloat16),
+                    torch.full((1,*FIRST_SHAPE),j,dtype=torch.bfloat16))
+    monkeypatch.setattr(Pixels,'window',lambda *a:(_ for _ in ()).throw(AssertionError('No RGB read for assembly')))
+    m=build_cache(tmp_path/'cache',pixels=Pixels(),numeric=Numeric(),encoder=None,
+        text_manifest={'texts':[{'prompt':'wipe'}]},text_identity='t'*64,upstream_hashes={},
+        shard_size=2,production=False,staged=Stage())
+    assert m['status']=='complete' and m['identity']['latent_stage_identity']=='s'*64
+    ds=CosmosCachedDataset(tmp_path/'cache',m['identity_sha256'],'t'*64,False)
+    assert torch.equal(ds[2]['video_latents'],torch.full(VIDEO_SHAPE,2,dtype=torch.bfloat16))

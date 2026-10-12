@@ -72,7 +72,7 @@ def validate(root,expected=None,*,complete=True,production=True):
 
 
 def build_cache(root,*,pixels,numeric,encoder,text_manifest,text_identity,upstream_hashes,
-                shard_size=32,resume=False,limit=None,production=True):
+                shard_size=32,resume=False,limit=None,production=True,staged=None):
     if pixels.manifest['identity']['episode_lengths']!=numeric.manifest['identity']['episode_lengths'] or pixels.manifest['identity']['data_conversion_sha256']!=numeric.manifest['identity']['data_conversion_sha256']:
         raise ValueError('RGB/numeric source lineage differs')
     if shard_size<1 or limit is not None and limit<1: raise ValueError('Positive shard/limit required')
@@ -84,6 +84,9 @@ def build_cache(root,*,pixels,numeric,encoder,text_manifest,text_identity,upstre
         numeric_sidecar_identity=numeric.sidecar_identity_sha256,text_identity=text_identity,
         upstream_hashes=upstream_hashes,episode_lengths=numeric.manifest['identity']['episode_lengths'],prompts=prompts,
         exporter_sha256=file_sha256(__file__))
+    if staged is not None:
+        if staged.pixel_identity!=pixels.identity_sha256:raise ValueError('Stage/RGB pairing differs')
+        identity['latent_stage_identity']=staged.identity_sha256
     digest=cache_identity_sha256(identity)
     if root.exists():
         if not resume: raise FileExistsError('Existing cache requires explicit resume')
@@ -98,9 +101,12 @@ def build_cache(root,*,pixels,numeric,encoder,text_manifest,text_identity,upstre
         for j in range(start,stop):
             sample=numeric[j]
             if int(sample['sample_index'])!=j: raise ValueError('Numeric reader substituted anchor')
-            window=pixels.window(j).unsqueeze(0)
-            with torch.inference_mode():
-                z=encoder(window); first=encoder(window[:,:,:1])
+            if staged is None:
+                window=pixels.window(j).unsqueeze(0)
+                with torch.inference_mode():
+                    z=encoder(window); first=encoder(window[:,:,:1])
+            else:
+                z,first=staged[j]
             if not bool(torch.isfinite(z).all() & torch.isfinite(first).all()) or z.shape!=(1,*VIDEO_SHAPE) or first.shape!=(1,*FIRST_SHAPE): raise ValueError('Wrong official tokenizer output')
             item={k:v.detach().cpu().contiguous().clone() for k,v in sample.items() if isinstance(v,torch.Tensor) and k not in ['video_latents','context','context_mask','text_index']}
             item.update(video_latents=z[0].to('cpu',torch.bfloat16),first_frame_latents=first[0].to('cpu',torch.bfloat16),cosmos_text_index=torch.tensor(prompts.index(sample['prompt']),dtype=torch.int64))
