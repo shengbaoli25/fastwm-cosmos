@@ -10,11 +10,14 @@ import torch
 
 def resource_identity():
     allocation = os.environ.get('COSMOS_ALLOCATION_ID')
-    if not allocation:
+    if not allocation and not os.environ.get('TRAIN_JOB_ID'):
         raise ValueError('Set COSMOS_ALLOCATION_ID to the observed platform allocation UUID')
     query = subprocess.run(['nvidia-smi', '--query-gpu=uuid,name,memory.total',
                             '--format=csv,noheader,nounits'], check=True, capture_output=True, text=True)
     rows = [x.strip() for x in query.stdout.splitlines() if x.strip()]
+    if os.environ.get('TRAIN_JOB_ID'):
+        from .job_identity import distributed_identity
+        return distributed_identity(os.environ, socket.gethostname(), rows)
     if len(rows) < 4:
         raise RuntimeError('At least four actual GPUs required')
     return {'allocation': allocation, 'hostname': socket.gethostname(),
