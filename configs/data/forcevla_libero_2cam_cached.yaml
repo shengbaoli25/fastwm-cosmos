@@ -1,0 +1,7 @@
+train:
+  _target_: fastwam.cache.LatentCacheDataset
+  cache_root: ./data/forcevla_fastwam_libero_2cam/vae_cache
+  # Filled with the verified manifest identity when exporting the ready plan.
+  expected_identity_sha256: null
+  require_production: true
+  max_cached_shards: 2

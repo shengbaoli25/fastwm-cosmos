@@ -1,0 +1,22 @@
+{
+  "source": "Official yuanty/fastwam model repository, public API and README verified 2026-10-10",
+  "repo_id": "yuanty/fastwam",
+  "revision": "8eaceeb24c3cc92ff2a9c9a9d266a4941b836705",
+  "filename": "libero_uncond_2cam224.pt",
+  "size_bytes": 12041735140,
+  "sha256": "1000437cfcf55c000094f79a2600634c502bcb5b492476b94bf8509883a49579",
+  "url": "https://huggingface.co/yuanty/fastwam/resolve/8eaceeb24c3cc92ff2a9c9a9d266a4941b836705/libero_uncond_2cam224.pt",
+  "metadata_probe": {
+    "method": "Public HTTP Range, first 524288 bytes; restricted metadata-only parser, no Torch weights loaded",
+    "archive_first_record": "step_021700/data.pkl",
+    "source_step": 21700,
+    "torch_dtype": "torch.bfloat16",
+    "mot_tensors": 1649,
+    "proprio_weight_shape": [4096, 8],
+    "action_encoder_weight_shape": [1024, 7],
+    "video_patch_embedding_weight_shape": [3072, 48, 1, 2, 2]
+  },
+  "transfer": "Keep every original policy weight via strict loading. ForceVLA raw state7 is normalized with shared wipe statistics then zero-padded to8 using the stock ConcatLeftAlign merger. Actions remain7.",
+  "normalization": "Use ForceVLA shared all_train stats, not the release LIBERO stats. Robot/tasks/coordinates differ; finetuning is required.",
+  "scheduler": "Current official codebase action shift1 is used for finetuning/inference. README says the original base release used action shift5."
+}

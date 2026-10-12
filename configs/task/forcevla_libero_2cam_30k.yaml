@@ -1,0 +1,28 @@
+# @package _global_
+defaults:
+  - override /data: forcevla_libero_2cam
+  - override /model: fastwam_baseline
+  - _self_
+
+# Complete released FastWAM Base: Video30 + Action30 and original MoT/mask.
+# Same effective batch16 as LIBERO; single H200 uses accumulation.
+batch_size: 1
+num_workers: 4
+gradient_accumulation_steps: 16
+lr_scheduler_type: cosine
+learning_rate: 1.0e-4
+num_epochs: 10
+# Explicit optimizer-update horizon; takes precedence over num_epochs.
+max_steps: 30000
+mixed_precision: bf16
+seed: 42
+max_grad_norm: 1.0
+weight_decay: 1.0e-2
+log_every: 10
+# Official full weights + optimizer/scheduler/dataloader-state save mechanism.
+# More frequent than LIBERO's 2000, to retain progress within a 5h allocation.
+save_every: 500
+# All 50 episodes train; fixed training-fit inference is a separate command.
+eval_every: 0
+eval_num_inference_steps: 16
+resume: null

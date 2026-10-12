@@ -1,0 +1,90 @@
+"""Pinned official Cosmos Base assets. No Wan policy/AE checkpoint is loaded."""
+from pathlib import Path
+import json
+import torch
+from safetensors.torch import load_file
+from fastwam.cache.latent import file_sha256, cache_identity_sha256
+from .native import native_imports, target_net_config, preserve_fp32_strategy
+
+UPSTREAM_COMMIT='a2c298b0a3df3778b973fe65e9e58877b292d8a7'
+MODEL_ID='nvidia/Cosmos-Predict2.5-2B'
+REVISION='15a82a2ec231bc318692aa0456a36537c806e7d4'
+WEIGHT_FILE='base/pre-trained/d20b7120-df3e-4911-919d-db6e08bad31c_ema_bf16.pt'
+WEIGHT_SHA='3d7686b12088be24a05854f348158203393977f1ddd2a22e242de87b8918bed5'
+TOKENIZER_FILE='tokenizer.pth'
+TOKENIZER_SHA='38071ab59bd94681c686fa51d75a1968f64e470262043be31f7a094e442fd981'
+
+
+def checked(path, digest):
+    p=Path(path).resolve()
+    if not p.is_file() or file_sha256(p)!=digest:
+        raise ValueError(f'Official asset SHA256 differs: {p}')
+    return p
+
+
+def load_video(upstream, checkpoint, *, device='cuda', dtype=torch.bfloat16):
+    _,module,_,Net,_=native_imports(Path(upstream).resolve())
+    p=checked(checkpoint,WEIGHT_SHA)
+    config=target_net_config(); config['sac_config']=module.SACConfig(mode='none')
+    with torch.device('meta'): net=Net(**config)
+    payload=torch.load(p,map_location='cpu',weights_only=True,mmap=True)
+    if not isinstance(payload,dict) or not payload or any(not k.startswith('net.') for k in payload):
+        raise ValueError('Expected official flat net.* Cosmos checkpoint')
+    net.load_state_dict({k.removeprefix('net.'):v for k,v in payload.items()},strict=True,assign=True)
+    if any(x.is_meta for x in (*net.parameters(),*net.buffers())):
+        raise ValueError('Incomplete Cosmos checkpoint materialization')
+    for k,x in net.state_dict().items():
+        if isinstance(x,torch.Tensor) and x.is_floating_point() and not bool(torch.isfinite(x).all()):
+            raise ValueError('Nonfinite official tensor '+k)
+    net.to(device=device,dtype=dtype); preserve_fp32_strategy(net)
+    return net
+
+
+def load_tokenizer(upstream,checkpoint,*,device='cuda'):
+    _,_,vae,_,_=native_imports(Path(upstream).resolve())
+    p=checked(checkpoint,TOKENIZER_SHA)
+    return vae.WanVAE(vae_pth=str(p),device=torch.device(device),dtype=torch.bfloat16,is_amp=False,temporal_window=16)
+
+
+def read_text_bank(path):
+    root=Path(path).resolve(); manifest=json.loads((root/'manifest.json').read_text())
+    if manifest.get('schema')!='cosmos-reason1-full-concat-v1' or manifest.get('status')!='complete':
+        raise ValueError('Complete Cosmos Reason1 text manifest required')
+    if manifest.get('encoder')!='nvidia/Cosmos-Reason1-7B' or manifest.get('feature_dim')!=100352:
+        raise ValueError('Wan T5 / random text cannot substitute for Cosmos Reason1')
+    pinned=json.loads(Path(__file__).with_name('reason1_weights.json').read_text())
+    if manifest.get('encoder_revision')!=pinned['revision'] or any(manifest.get('encoder_files',{}).get(k)!=v for k,v in pinned['weights'].items()):
+        raise ValueError('Text provenance does not bind all official Reason1 weight shards')
+    items=manifest['texts']; bank=[]
+    if not items or len({x['prompt'] for x in items})!=len(items): raise ValueError('Unique nonempty task prompts required')
+    for item in items:
+        p=(root/item['path']).resolve()
+        if not p.is_relative_to(root): raise ValueError('Text path escapes root')
+        checked(p,item['sha256']); x=load_file(str(p))['context']
+        if x.shape!=(512,100352) or x.dtype!=torch.bfloat16 or not bool(torch.isfinite(x).all()):
+            raise ValueError('Cosmos text must be finite BF16 [512,100352]')
+        bank.append(x)
+    return torch.stack(bank),manifest,cache_identity_sha256(manifest)
+
+
+def create_cosmos_forcewm(*,upstream,checkpoint,text_cache,expected_text_identity,
+                         action_seed=42,force_seed=43,memory_seed=44,
+                         generated_video_steps=16,gradient_checkpointing=True,device='cuda',**kwargs):
+    from .model import CosmosForceWM
+    bank,texts,digest=read_text_bank(text_cache)
+    if digest!=expected_text_identity: raise ValueError('Pinned text cache identity differs')
+    net=load_video(upstream,checkpoint,device='cpu')
+    manifest=dict(schema='cosmos-force28-v1',upstream=UPSTREAM_COMMIT,model=MODEL_ID,
+        revision=REVISION,video_sha256=WEIGHT_SHA,tokenizer_sha256=TOKENIZER_SHA,
+        depth=28,action_seed=action_seed,force_seed=force_seed,memory_seed=memory_seed,
+        generated_video_steps=generated_video_steps,text_identity=digest,
+        video='native Base bidirectional/global-time; isolated sigma0 observed KV',
+        force='supervised shifted AR MSE; measured w0->w1..w32; no force noise',
+        initialization='official Cosmos only; AE/Force/proprio/dual memory random',
+        loss='FastWAM shifted-uniform FM v5/a1; Force MSE; lambda 1/1/1',
+        recipe=dict(ranks=4,batch16=16,accum=1,global_batch=64,max_steps=30000),
+        extra_config=kwargs)
+    model=CosmosForceWM(net,manifest=manifest,text_bank=bank,action_seed=action_seed,
+        force_seed=force_seed,memory_seed=memory_seed,generated_video_steps=generated_video_steps,
+        gradient_checkpointing=gradient_checkpointing,**kwargs)
+    return model.to(device=device,dtype=torch.bfloat16)

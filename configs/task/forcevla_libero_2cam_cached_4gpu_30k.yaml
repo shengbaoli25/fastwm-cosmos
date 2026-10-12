@@ -1,0 +1,6 @@
+# @package _global_
+defaults:
+  - forcevla_libero_2cam_cached_8gpu_30k
+  - _self_
+
+# Same per-device recipe; launch with four processes, giving global batch64.

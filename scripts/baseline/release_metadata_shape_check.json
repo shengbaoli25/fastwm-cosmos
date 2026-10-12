@@ -1,0 +1,16 @@
+{
+  "status": "complete_metadata_shape_check",
+  "source_url": "https://huggingface.co/yuanty/fastwam/resolve/8eaceeb24c3cc92ff2a9c9a9d266a4941b836705/libero_uncond_2cam224.pt",
+  "revision": "8eaceeb24c3cc92ff2a9c9a9d266a4941b836705",
+  "http_status": 206,
+  "content_range": "bytes 0-524287/12041735140",
+  "bytes_read": 524288,
+  "strict_mot_and_proprio_keys_shapes_match": true,
+  "mot_tensor_count": 1649,
+  "source_step": 21700,
+  "proprio_weight_shape": [
+    4096,
+    8
+  ],
+  "note": "All tensor keys and shapes checked from limited safe metadata-only parse. Full file SHA256 and GPU loading remain unverified until downloaded."
+}

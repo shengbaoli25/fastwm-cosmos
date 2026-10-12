@@ -1,0 +1,49 @@
+train:
+  _target_: fastwam.datasets.lerobot.robot_video_dataset.RobotVideoDataset
+  dataset_dirs: [./data/forcevla_fastwam_libero_2cam/wipe]
+  shape_meta:
+    # Same image order and packing as official libero_2cam.yaml:
+    # primary on the left, wrist on the right. Both are real recorded views.
+    images:
+      - {key: cam_main, raw_shape: [3, 480, 640], shape: [3, 224, 224]}
+      - {key: cam_wrist, raw_shape: [3, 480, 640], shape: [3, 224, 224]}
+    action:
+      - {key: default, raw_shape: 7, shape: 7}
+    state:
+      - {key: default, raw_shape: 7, shape: 7}
+  num_frames: 33
+  global_sample_stride: 1
+  action_video_freq_ratio: 4
+  video_size: [224, 448]
+  camera_key: null
+  val_set_proportion: 0.0
+  is_training_set: true
+  pretrained_norm_stats: ./data/forcevla_fastwam/shared_stats/dataset_stats.json
+  skip_padding_as_possible: false
+  concat_multi_camera: horizontal
+  processor:
+    _target_: fastwam.datasets.lerobot.processors.fastwam_processor.FastWAMProcessor
+    shape_meta: ${data.train.shape_meta}
+    num_obs_steps: ${data.train.num_frames}
+    num_output_cameras: 2
+    action_output_dim: 7
+    proprio_output_dim: 8
+    # Keep ForceVLA absolute pose/gripper targets. LIBERO delta commands and
+    # min/max statistics describe another robot and are not copied.
+    delta_action_dim_mask: {default: [false, false, false, false, false, false, false]}
+    action_state_transforms: null
+    use_stepwise_action_norm: false
+    norm_default_mode: z-score
+    norm_exception_mode: null
+    action_state_merger:
+      _target_: fastwam.datasets.lerobot.transforms.action_state_merger.ConcatLeftAlign
+      state_target_dim: 8
+    train_transforms:
+      - {_target_: fastwam.datasets.lerobot.transforms.image.ToTensor}
+      - {_target_: torchvision.transforms.Resize, size: [224, 224]}
+    val_transforms:
+      - {_target_: fastwam.datasets.lerobot.transforms.image.ToTensor}
+      - {_target_: torchvision.transforms.Resize, size: [224, 224]}
+  text_embedding_cache_dir: ./data/text_embeds_cache/forcevla
+  use_text_embed_cache: true
+  context_len: 128

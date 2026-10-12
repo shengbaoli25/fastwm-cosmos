@@ -1,0 +1,23 @@
+# @package _global_
+defaults:
+  - override /data: cosmos_forcewm_cached
+  - override /model: cosmos_forcewm
+  - _self_
+
+batch_size: 16
+num_workers: 8
+gradient_accumulation_steps: 1
+learning_rate: 1.0e-4
+lr_scheduler_type: cosine
+weight_decay: 1.0e-2
+num_epochs: 10
+max_steps: 30000
+mixed_precision: bf16
+seed: 42
+max_grad_norm: 1.0
+log_every: 10
+save_every: 5000
+eval_every: 0
+eval_num_inference_steps: 16
+resume: null
+output_dir: runs/cosmos-forcewm28-4rank-30k

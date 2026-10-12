@@ -1,0 +1,4 @@
+# Additional native Torch backend dependencies; base FastWAM pins stay unchanged.
+loguru==0.7.3
+nvidia-ml-py==13.610.43
+attrs>=25.3.0

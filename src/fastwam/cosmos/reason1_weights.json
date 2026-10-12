@@ -1,0 +1,10 @@
+{
+  "model": "nvidia/Cosmos-Reason1-7B",
+  "revision": "3210bec0495fdc7a8d3dbb8d58da5711eab4b423",
+  "weights": {
+    "model-00001-of-00004.safetensors": "c28404126221997ae8eb70a23b919c96174d42e35ae1d537e0c95093d50b359a",
+    "model-00002-of-00004.safetensors": "f281081864c10992d3e03874c79d526c84407e049d713747f19eb9c79cd16db3",
+    "model-00003-of-00004.safetensors": "3bb3a62a8d0e83c6283388ddea99395b221f908f9181b8edd0f7f91d02260ebe",
+    "model-00004-of-00004.safetensors": "91bacbe1ad798e16daa05023b4e4bec70b53c8cd7d757db86c5bc76c4e0bbf15"
+  }
+}

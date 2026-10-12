@@ -1,0 +1,35 @@
+# @package _global_
+defaults:
+  - override /data: forcevla_libero_2cam_cached
+  - override /model: fastwam_baseline
+  - _self_
+
+# The source recipe is used ONLY by the offline VAE precomputation command.
+cache_source_config: configs/data/forcevla_libero_2cam.yaml
+
+# Official LIBERO microbatch recipe, distributed over one eight-GPU node.
+batch_size: 16
+num_workers: 8
+gradient_accumulation_steps: 1
+lr_scheduler_type: cosine
+learning_rate: 1.0e-4
+num_epochs: 10
+max_steps: 30000
+mixed_precision: bf16
+seed: 42
+max_grad_norm: 1.0
+weight_decay: 1.0e-2
+log_every: 10
+save_every: 5000
+eval_every: 0
+eval_num_inference_steps: 16
+resume: null
+
+# Cached datasets have no RGB Processor; dimensions are exactly the same.
+model:
+  proprio_dim: 8
+  video_dit_config:
+    action_dim: 7
+  action_dit_config:
+    action_dim: 7
+  mot_checkpoint_mixed_attn: false

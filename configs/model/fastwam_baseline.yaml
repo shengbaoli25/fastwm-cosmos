@@ -1,0 +1,13 @@
+defaults:
+  - fastwam
+  - _self_
+
+# Exact official FastWAM class and factory; only attach bounded AdamW groups.
+_target_: fastwam.baseline.runtime.create_fastwam_baseline
+model_init_seed: ${seed}
+pretrained_fastwam_checkpoint: checkpoints/fastwam_release/libero_uncond_2cam224.pt
+pretrained_fastwam_sha256: 1000437cfcf55c000094f79a2600634c502bcb5b492476b94bf8509883a49579
+require_pretrained_fastwam: true
+# All video/action/proprio parameters are loaded strictly from the full policy.
+# Wan VAE remains loaded from its official component weight.
+skip_dit_load_from_pretrain: true
