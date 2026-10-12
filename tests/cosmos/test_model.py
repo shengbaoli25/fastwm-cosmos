@@ -144,3 +144,26 @@ def test_state_fingerprint_covers_values_dtypes_and_rng():
     assert state_digest(value)!=original
     value['a']=torch.tensor([1.,2.],dtype=torch.float64)
     assert state_digest(value)!=original
+
+
+def test_bf16_all_branches_with_native_fp32_video_and_no_autocast():
+    # DeepSpeed BF16 executes without torch autocast. The native video output
+    # stays FP32, but Force's observation projection is BF16.
+    model=tiny_model()
+    model.video.net.use_wan_fp32_strategy=True
+    for block in model.video.blocks:block.use_wan_fp32_strategy=True
+    model.video.net.final_layer.use_wan_fp32_strategy=True
+    model.bfloat16()
+    observed=[]
+    hook=model.dit['force'].observation_encoder.register_forward_pre_hook(
+        lambda module,args:observed.append(args[0].dtype))
+    with torch.backends.mkldnn.flags(enabled=False):
+        loss,metrics=model.training_loss(sample(1));loss.backward()
+    hook.remove()
+    assert observed and set(observed)=={torch.bfloat16}
+    assert torch.isfinite(loss) and all(torch.isfinite(torch.tensor(v)) for v in metrics.values())
+    for branch in ('video','action','force','controls'):
+        grads=[p.grad for p in model.dit[branch].parameters() if p.grad is not None]
+        assert grads and all(torch.isfinite(g).all() for g in grads),branch
+    result=model.infer_forcewm(sample(1),num_inference_steps=1)
+    assert all(torch.isfinite(v).all() for v in result.values())

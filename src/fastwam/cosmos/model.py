@@ -151,7 +151,9 @@ class CosmosForceWM(nn.Module):
             history_is_pad=sample['history_is_pad'].to(self.device,torch.bool),
             history_channel_valid=sample['history_channel_valid'].to(self.device,torch.bool),
             candidate_is_pad=sample['action_is_pad'].to(self.device,torch.bool),
-            observation_latents=x[:,:,:1],video_features=layers,video_is_pad=pad)
+            # Native Cosmos velocity/scheduler may retain FP32. Force weights
+            # use the expert dtype even when DeepSpeed disables autocast.
+            observation_latents=x[:,:,:1].to(self.torch_dtype),video_features=layers,video_is_pad=pad)
 
     def action_velocity(self, action, clock, context, cmask, observation_kv, memory, condition):
         # Fresh free AR under current Action/clock on every Action evaluation.
