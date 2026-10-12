@@ -6,7 +6,7 @@ from fastwam.forcewm.masks import build_force_attention_mask
 
 def setup():
     m=tiny_model();s=sample(1);raw,c,mask=m._contexts(s)
-    memory=m.generate_video_memory(s['first_frame_latents'],raw)
+    memory=m.generate_video_memory(s['first_frame_latents'],raw,s['action'],s['action_is_pad'])
     cond=m._condition(s,s['action'],torch.tensor([250.]),c,mask,memory)
     return m,s,cond
 

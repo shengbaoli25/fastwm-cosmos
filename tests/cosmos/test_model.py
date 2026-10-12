@@ -13,11 +13,13 @@ def test_native_forward_and_gradients():
     net=tiny_net();adapter=CosmosExpert(copy.deepcopy(net));x=torch.randn(2,16,3,4,4,requires_grad=True)
     y=x.detach().clone().requires_grad_();context=torch.randn(2,3,24);sigma=torch.tensor([.4,.7])
     condition=torch.zeros(2,1,3,4,4);condition[:,:,0]=1
-    native=net(x,sigma[:,None]*1000,context,condition,fps=torch.full((2,),7.5),padding_mask=torch.zeros(2,1,4,4))
-    actual=adapter(y,sigma,context,fps=7.5)
+    controls=torch.randn(2,8,7,requires_grad=True);controls2=controls.detach().clone().requires_grad_()
+    native=net(x,sigma[:,None]*1000,context,condition,fps=torch.full((2,),7.5),padding_mask=torch.zeros(2,1,4,4),action=controls)
+    actual=adapter(y,sigma,context,candidate_actions=controls2,fps=7.5)
     torch.testing.assert_close(native,actual,atol=2e-6,rtol=2e-5)
     native.square().mean().backward();actual.square().mean().backward()
     torch.testing.assert_close(x.grad,y.grad,atol=2e-6,rtol=2e-5)
+    torch.testing.assert_close(controls.grad,controls2.grad,atol=2e-6,rtol=2e-5)
     for (n,p),(m,q) in zip(net.named_parameters(),adapter.net.named_parameters()):
         assert n==m
         if p.grad is None: assert q.grad is None
@@ -26,8 +28,9 @@ def test_native_forward_and_gradients():
 
 def test_projected_context_matches_native():
     net=tiny_net();e=CosmosExpert(net);x=torch.randn(2,16,3,4,4);raw=torch.randn(2,3,24);sigma=torch.tensor([.1,.6])
-    expected=e(x,sigma,raw,fps=7.5)
-    p=e.prepare(x,sigma,net.crossattn_proj(raw),fps=7.5,context_is_projected=True);tokens=p['tokens']
+    controls=torch.randn(2,8,7)
+    expected=e(x,sigma,raw,candidate_actions=controls,fps=7.5)
+    p=e.prepare(x,sigma,net.crossattn_proj(raw),candidate_actions=controls,fps=7.5,context_is_projected=True);tokens=p['tokens']
     for i in range(e.num_layers):
         q,k,v,state=e.block_qkv(i,tokens,p);tokens=e.block_finish(i,F.scaled_dot_product_attention(q,k,v),state,p)
     torch.testing.assert_close(e.finish(tokens,p),expected)
@@ -47,7 +50,7 @@ def test_two_adam_updates_and_full_checkpoint(tmp_path):
     for _ in range(2):
         opt.zero_grad();loss,metrics=model.training_loss(s);loss.backward()
         assert set(metrics)=={'loss_video','loss_action','loss_force'}
-        for branch in ('video','action','force'):
+        for branch in ('video','action','force','controls'):
             assert any(p.grad is not None and p.grad.abs().max()>0 for p in model.dit[branch].parameters())
         opt.step()
     assert {int(v['step']) for v in opt.state.values()}=={2}
@@ -124,8 +127,9 @@ def test_bf16_native_fp32_strategy_forward_and_backward():
     x=torch.randn(1,16,3,4,4,dtype=torch.bfloat16,requires_grad=True)
     y=x.detach().clone().requires_grad_();c=torch.randn(1,3,24,dtype=torch.bfloat16);t=torch.tensor([.5])
     mask=torch.zeros(1,1,3,4,4,dtype=torch.bfloat16);mask[:,:,0]=1
-    a=net(x,t[:,None]*1000,c,mask,fps=torch.full((1,),7.5),padding_mask=torch.zeros(1,1,4,4,dtype=torch.bfloat16))
-    b=adapter(y,t,c,fps=7.5)
+    controls=torch.randn(1,8,7,dtype=torch.bfloat16)
+    a=net(x,t[:,None]*1000,c,mask,fps=torch.full((1,),7.5),padding_mask=torch.zeros(1,1,4,4,dtype=torch.bfloat16),action=controls)
+    b=adapter(y,t,c,candidate_actions=controls,fps=7.5)
     torch.testing.assert_close(a,b,rtol=.02,atol=.03)
     with torch.backends.mkldnn.flags(enabled=False):
         a.square().mean().backward();b.square().mean().backward()

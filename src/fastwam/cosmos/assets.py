@@ -1,16 +1,17 @@
-"""Pinned official Cosmos Base assets. No Wan policy/AE checkpoint is loaded."""
+"""Pinned official Cosmos robot/action-cond assets. No Wan policy/AE checkpoint is loaded."""
 from pathlib import Path
 import json
 import torch
 from safetensors.torch import load_file
 from fastwam.cache.latent import file_sha256, cache_identity_sha256
 from .native import native_imports, target_net_config, preserve_fp32_strategy
+from .controls import CONTROL_PROTOCOL
 
 UPSTREAM_COMMIT='a2c298b0a3df3778b973fe65e9e58877b292d8a7'
 MODEL_ID='nvidia/Cosmos-Predict2.5-2B'
 REVISION='15a82a2ec231bc318692aa0456a36537c806e7d4'
-WEIGHT_FILE='base/pre-trained/d20b7120-df3e-4911-919d-db6e08bad31c_ema_bf16.pt'
-WEIGHT_SHA='3d7686b12088be24a05854f348158203393977f1ddd2a22e242de87b8918bed5'
+WEIGHT_FILE='robot/action-cond/38c6c645-7d41-4560-8eeb-6f4ddc0e6574_ema_bf16.pt'
+WEIGHT_SHA='b2e993cea3e242bc72288612488fe91770a1c073c98c3fec6d610411ffc30646'
 TOKENIZER_FILE='tokenizer.pth'
 TOKENIZER_SHA='38071ab59bd94681c686fa51d75a1968f64e470262043be31f7a094e442fd981'
 
@@ -68,23 +69,25 @@ def read_text_bank(path):
 
 
 def create_cosmos_forcewm(*,upstream,checkpoint,text_cache,expected_text_identity,
-                         action_seed=42,force_seed=43,memory_seed=44,
+                         action_seed=42,force_seed=43,memory_seed=44,control_seed=45,
                          generated_video_steps=16,gradient_checkpointing=True,device='cuda',**kwargs):
     from .model import CosmosForceWM
     bank,texts,digest=read_text_bank(text_cache)
     if digest!=expected_text_identity: raise ValueError('Pinned text cache identity differs')
     net=load_video(upstream,checkpoint,device='cpu')
-    manifest=dict(schema='cosmos-force28-v1',upstream=UPSTREAM_COMMIT,model=MODEL_ID,
+    manifest=dict(schema='cosmos-actioncond-force28-v2',upstream=UPSTREAM_COMMIT,model=MODEL_ID,
         revision=REVISION,video_sha256=WEIGHT_SHA,tokenizer_sha256=TOKENIZER_SHA,
-        depth=28,action_seed=action_seed,force_seed=force_seed,memory_seed=memory_seed,
+        depth=28,action_seed=action_seed,force_seed=force_seed,memory_seed=memory_seed,control_seed=control_seed,
         generated_video_steps=generated_video_steps,text_identity=digest,
-        video='native Base bidirectional/global-time; isolated sigma0 observed KV',
+        video='official robot/action-cond bidirectional/global-time; isolated sigma0 observed KV',
+        control_protocol=CONTROL_PROTOCOL,
+        memory='detached free video conditioned on current A_sigma, refreshed every Action call and final A0',
         force='supervised shifted AR MSE; measured w0->w1..w32; no force noise',
-        initialization='official Cosmos only; AE/Force/proprio/dual memory random',
+        initialization='official Cosmos only; AE/Force/proprio/dual memory/control projection random',
         loss='FastWAM shifted-uniform FM v5/a1; Force MSE; lambda 1/1/1',
         recipe=dict(ranks=4,batch16=16,accum=1,global_batch=64,max_steps=30000),
         extra_config=kwargs)
     model=CosmosForceWM(net,manifest=manifest,text_bank=bank,action_seed=action_seed,
-        force_seed=force_seed,memory_seed=memory_seed,generated_video_steps=generated_video_steps,
+        force_seed=force_seed,memory_seed=memory_seed,control_seed=control_seed,generated_video_steps=generated_video_steps,
         gradient_checkpointing=gradient_checkpointing,**kwargs)
     return model.to(device=device,dtype=torch.bfloat16)

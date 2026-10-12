@@ -37,3 +37,8 @@ def test_gpu_gate_binds_source_recipe_and_unforced_exit(tmp_path):
         else:rr['ranks'].pop()
         rp.write_text(json.dumps(rr));op.write_text(json.dumps(oo))
         with pytest.raises(ValueError):verify_preflight(p,rp,op)
+
+
+def test_control_seed_is_pinned():
+    cfg=config();cfg["model"]["control_seed"]=44
+    with pytest.raises(ValueError):validate_config(cfg)

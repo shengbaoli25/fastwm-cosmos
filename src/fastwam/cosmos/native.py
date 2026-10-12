@@ -19,6 +19,7 @@ NET_MODULE = "cosmos_predict2._src.predict2.networks.minimal_v4_dit"
 VAE_MODULE = "cosmos_predict2._src.predict2.tokenizers.wan2pt1"
 
 PINNED_CORE_SHA256 = {
+    'cosmos_predict2/_src/predict2/action/networks/action_conditioned_minimal_v1_lvg_dit.py': 'a30a664c990790c42e5c8cf06801adac4432ba7a0eefaf8628433577c40f0845',
     "cosmos_predict2/_src/predict2/networks/minimal_v4_dit.py": "f672511a9c7944d87835cd257923149b0511ce798203c8a73fe488e59b2073b6",
     "cosmos_predict2/_src/predict2/networks/minimal_v1_lvg_dit.py": "2d3ddcf94158c61223bc610f31ede475f7e4e27cc3b604ff3557b73d891e665f",
     "cosmos_predict2/_src/predict2/tokenizers/wan2pt1.py": "885aaa3250f60f026b279f099dc08b2548d904604b839c57000c6c65a8d165bb",
@@ -148,9 +149,9 @@ def native_imports(repo: Path):
                 torch.ones(1, 1, 50, 1, 1, device=device))
 
     vae_module._video_vae = load_local_vae
-    from cosmos_predict2._src.predict2.networks.minimal_v1_lvg_dit import MinimalV1LVGDiT
+    from cosmos_predict2._src.predict2.action.networks.action_conditioned_minimal_v1_lvg_dit import ActionChunkConditionedMinimalV1LVGDiT
     from cosmos_predict2._src.predict2.conditioner import DataType
-    return torch, net_module, vae_module, MinimalV1LVGDiT, DataType
+    return torch, net_module, vae_module, ActionChunkConditionedMinimalV1LVGDiT, DataType
 
 
 def target_net_config() -> dict:
@@ -164,7 +165,7 @@ def target_net_config() -> dict:
         rope_w_extrapolation_ratio=3.0, rope_t_extrapolation_ratio=1.0,
         timestep_scale=0.001, use_crossattn_projection=True,
         crossattn_proj_in_channels=100352, crossattn_emb_channels=1024,
-        use_wan_fp32_strategy=True,
+        use_wan_fp32_strategy=True, action_dim=7, temporal_compression_ratio=4,
     )
 
 

@@ -26,6 +26,7 @@ def validate_config(cfg):
             or m['force_ffn']!=4608 or m['force_heads']!=16
             or m['action_hidden']!=1024 or m['action_ffn']!=4096
             or m['memory_width']!=512 or m['memory_heads']!=8
+            or m.get('control_seed')!=45
             or (m['action_seed'],m['force_seed'],m['memory_seed'])!=(42,43,44)):
         raise ValueError('Bound production Cosmos28/AE28/Force28 configuration required')
 

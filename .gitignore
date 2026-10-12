@@ -247,6 +247,8 @@ onelogger.log
 
 !tests/
 !tests/cosmos/
-!tests/cosmos/**
+!tests/cosmos/*.py
+**/__pycache__/
+*.py[cod]
 !requirements-cosmos.txt
 !requirements-test-cosmos.txt

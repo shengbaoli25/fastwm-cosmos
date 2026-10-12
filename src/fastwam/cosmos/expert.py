@@ -1,4 +1,4 @@
-"""Expose the official Cosmos Base DiT to the FastWAM cached training contract.
+"""Expose the official Cosmos action-chunk DiT to cached FastWAM training.
 
 The adapter retains native patching, QKV norms/RoPE, three AdaLN branches,
 text cross-attention and output head. The native video path remains
@@ -15,21 +15,22 @@ from torch.nn import functional as F
 
 
 class CosmosExpert(nn.Module):
-    """Native Base adapter with explicit global-time or observed-only mode.
+    """Native action-chunk adapter with global-time or observed-only mode.
 
     Video uses native bidirectional attention and one global diffusion time.
     The policy observation stream contains one clean latent and sigma0, and
-    never receives teacher future video. Action conditioning is rejected.
+    never receives teacher future video/actions. Future video requires explicit
+    native controls; callers own the dataset-to-control temporal mapping.
     """
 
     def __init__(self, net: nn.Module):
         super().__init__()
         required = ("prepare_embedded_sequence", "t_embedder", "t_embedding_norm", "blocks",
-                    "final_layer", "unpatchify")
+                    "final_layer", "unpatchify", "action_embedder_B_D", "action_embedder_B_3D")
         if any(not hasattr(net, name) for name in required):
-            raise ValueError("CosmosExpert requires the native base Cosmos DiT")
-        if getattr(net, "patch_temporal", None) != 1:
-            raise ValueError("CosmosExpert requires patch_temporal=1 ")
+            raise ValueError("CosmosExpert requires the native action-chunk Cosmos DiT")
+        if getattr(net, "patch_temporal", None) != 1 or getattr(net, "_num_action_per_latent_frame", None) != 4:
+            raise ValueError("CosmosExpert requires patch_temporal=1 and four controls per future latent")
         if not len(net.blocks):
             raise ValueError("CosmosExpert requires at least one transformer block")
         self.net = net
@@ -117,8 +118,20 @@ class CosmosExpert(nn.Module):
         timestep = timestep * self.net.timestep_scale
         with self._fp32_region(self.net, latents):
             time, adaln = self.net.t_embedder(timestep)
-        if candidate_actions is not None:
-            raise ValueError("This Base video branch never accepts action conditioning")
+        if frames > 1:
+            expected = (batch, (frames - 1) * 4, 7)
+            if (candidate_actions is None or candidate_actions.shape != expected
+                    or not candidate_actions.is_floating_point() or not torch.isfinite(candidate_actions).all()):
+                raise ValueError("Explicit finite native controls [B,4*(T_latent-1),7] required")
+            dtype = next(self.net.action_embedder_B_D.parameters()).dtype
+            actions = candidate_actions.to(device=latents.device, dtype=dtype).reshape(batch, frames-1, 28)
+            action_time = self.net.action_embedder_B_D(actions)
+            action_adaln = self.net.action_embedder_B_3D(actions)
+            time = time + torch.cat((torch.zeros_like(action_time[:, :1]), action_time), dim=1)
+            if adaln is not None:
+                adaln = adaln + torch.cat((torch.zeros_like(action_adaln[:, :1]), action_adaln), dim=1)
+        elif candidate_actions is not None:
+            raise ValueError("A single observed latent accepts no future controls")
         with self._fp32_region(self.net, time):
             time = self.net.t_embedding_norm(time)
         if extra is not None and extra.shape != x.shape:

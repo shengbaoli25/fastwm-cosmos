@@ -17,6 +17,7 @@ from fastwam.forcewm.model import (AutoregressiveForceWM, ActionDualMemory,
 from fastwam.baseline.optimizer import bounded_optimizer_param_groups
 from .expert import CosmosExpert
 from .state import ForceRuntimeState
+from .controls import VideoControlAdapter
 
 
 class _ActionOps:
@@ -39,7 +40,7 @@ class CosmosForceWM(nn.Module):
     def __init__(self, net, *, manifest, text_bank=None, action_hidden=1024,
                  action_ffn=4096, force_hidden=1280, force_ffn=4608,
                  force_heads=16, memory_width=512, memory_heads=8,
-                 action_seed=42, force_seed=43, memory_seed=44,
+                 action_seed=42, force_seed=43, memory_seed=44, control_seed=45,
                  generated_video_steps=16, gradient_checkpointing=True, fps=7.5):
         super().__init__()
         self.manifest = dict(manifest)
@@ -65,9 +66,11 @@ class CosmosForceWM(nn.Module):
                 checkpoint_layers=gradient_checkpointing)
             memories = nn.ModuleList([ActionDualMemory(acfg, video.hidden_dim,
                 force_hidden, memory_width, memory_heads) for _ in range(self.depth)])
+            torch.manual_seed(control_seed)
+            controls = VideoControlAdapter()
         # Original trainer optimizes .dit and .proprio_encoder, saves all ranks.
         self.dit = nn.ModuleDict(dict(video=video, action=action, force=force,
-            memories=memories, runtime=ForceRuntimeState(memory_seed, self.manifest)))
+            memories=memories, controls=controls, runtime=ForceRuntimeState(memory_seed, self.manifest)))
         self.register_buffer('text_bank', text_bank, persistent=False)
         self.v_scheduler = WanContinuousFlowMatchScheduler(shift=5.)
         self.a_scheduler = WanContinuousFlowMatchScheduler(shift=1.)
@@ -109,8 +112,9 @@ class CosmosForceWM(nn.Module):
         context = torch.cat((text, self.proprio_encoder(proprio)[:, None]), 1)
         return text, context, torch.ones(context.shape[:2], device=self.device, dtype=torch.bool)
 
-    def _video(self, latents, clock, raw_context, *, collect=False, observed=False):
+    def _video(self, latents, clock, raw_context, *, controls=None, collect=False, observed=False):
         prepared = self.video.prepare(latents, clock.float()/1000., raw_context,
+            candidate_actions=controls,
             observed_only=observed, fps=self.fps, context_is_projected=True,
             observed_time='clean_zero' if observed else 'native_global')
         x = prepared['tokens']; layers=[]; kv=[]
@@ -127,16 +131,17 @@ class CosmosForceWM(nn.Module):
         return self.video.finish(x,prepared), tuple(layers), tuple(kv)
 
     @torch.no_grad()
-    def generate_video_memory(self, first, raw_context):
-        # Explicit geometry; no teacher video argument can reach this method.
+    def generate_video_memory(self, first, raw_context, current_action, action_is_pad):
+        # Only current A_sigma (final A0 at clock0), never teacher video/clean GT.
+        controls = self.dit['controls'](current_action.detach(), action_is_pad).detach()
         shape = (*first.shape[:2], 3, *first.shape[3:])
         x = self.dit['runtime'].normal(shape).to(self.device,self.torch_dtype)
         x[:,:,:1] = first.detach()
         times,deltas = self.v_scheduler.build_inference_schedule(self.generated_video_steps,self.device,x.dtype)
         for t,dt in zip(times,deltas):
-            v,_,_ = self._video(x,t.expand(len(x)),raw_context)
+            v,_,_ = self._video(x,t.expand(len(x)),raw_context,controls=controls)
             x = self.v_scheduler.step(v,dt,x); x[:,:,:1] = first.detach()
-        _,layers,_ = self._video(x,torch.zeros(len(x),device=self.device,dtype=x.dtype),raw_context,collect=True)
+        _,layers,_ = self._video(x,torch.zeros(len(x),device=self.device,dtype=x.dtype),raw_context,controls=controls,collect=True)
         return x.detach(), layers, torch.zeros(layers[0].shape[:2],device=self.device,dtype=torch.bool)
 
     def _condition(self, sample, action, clock, context, cmask, memory):
@@ -179,13 +184,15 @@ class CosmosForceWM(nn.Module):
         vn=torch.randn_like(clean); an=torch.randn_like(action)
         noisy=self.v_scheduler.add_noise(clean,vn,vt); noisy[:,:,:1]=first
         na=self.a_scheduler.add_noise(action,an,at)
-        pred,_,_=self._video(noisy,vt,raw)
+        apad=sample['action_is_pad'].to(self.device,torch.bool)
+        # Clean GT controls belong only to the supervised video path.
+        pred,_,_=self._video(noisy,vt,raw,controls=self.dit['controls'](action,apad))
         # Future latent covers four original frames. Partially valid group is kept.
         imagepad=sample['image_is_pad'].to(self.device,torch.bool)
         vvalid=~imagepad[:,1:].reshape(len(clean),2,4).all(-1)
         target=self.v_scheduler.training_target(clean,vn,vt)
         lv=temporal_mse(pred[:,:,1:].transpose(1,2).flatten(2),target[:,:,1:].transpose(1,2).flatten(2),vvalid,self.v_scheduler,vt)
-        memory=self.generate_video_memory(first,raw.detach())
+        memory=self.generate_video_memory(first,raw.detach(),na,apad)
         _,_,kv=self._video(first,torch.zeros_like(vt),raw,observed=True)
         condition=self._condition(sample,na,at,ctx,cmask,memory)
         pa,_=self.action_velocity(na,at,ctx,cmask,kv,memory,condition)
@@ -208,16 +215,18 @@ class CosmosForceWM(nn.Module):
             first=sample['first_frame_latents'].to(self.device,self.torch_dtype)
             if first.shape[1:3]!=(16,1): raise ValueError('Only observed Cosmos latent accepted')
             raw,ctx,cmask=self._contexts(sample)
-            memory=self.generate_video_memory(first,raw)
+            apad=sample['action_is_pad'].to(self.device,torch.bool)
             zero=torch.zeros(len(first),device=self.device,dtype=self.torch_dtype)
             _,_,kv=self._video(first,zero,raw,observed=True)
             gen=torch.Generator(device='cpu').manual_seed(seed)
             action=torch.randn((len(first),32,7),generator=gen).to(self.device,self.torch_dtype)
             times,deltas=self.a_scheduler.build_inference_schedule(num_inference_steps,self.device,self.torch_dtype)
             for t,dt in zip(times,deltas):
+                memory=self.generate_video_memory(first,raw,action,apad)
                 clock=t.expand(len(first)); cond=self._condition(sample,action,clock,ctx,cmask,memory)
                 velocity,_=self.action_velocity(action,clock,ctx,cmask,kv,memory,cond)
                 action=self.a_scheduler.step(velocity,dt,action)
+            memory=self.generate_video_memory(first,raw,action,apad)
             cond=self._condition(sample,action,zero,ctx,cmask,memory)
             final_force=self.dit['force'].rollout(**cond)
             return dict(action=action,force=final_force.wrench,video_latents=memory[0])
@@ -226,14 +235,14 @@ class CosmosForceWM(nn.Module):
             for module,mode in prior_modes.items(): module.training=mode
 
     def save_checkpoint(self,path,optimizer=None,step=None):
-        payload={'schema':'fastwam-cosmos-force28-v1','manifest':self.manifest,'model':self.state_dict(),'step':step}
+        payload={'schema':'fastwam-cosmos-actioncond-force28-v2','manifest':self.manifest,'model':self.state_dict(),'step':step}
         if optimizer is not None: payload['optimizer']=optimizer.state_dict()
         path=Path(path); temp=path.with_suffix(path.suffix+'.tmp')
         torch.save(payload,temp); temp.replace(path)
 
     def load_checkpoint(self,path,optimizer=None):
         payload=torch.load(path,map_location='cpu',weights_only=True)
-        if payload.get('schema')!='fastwam-cosmos-force28-v1' or payload.get('manifest')!=self.manifest:
+        if payload.get('schema')!='fastwam-cosmos-actioncond-force28-v2' or payload.get('manifest')!=self.manifest:
             raise ValueError('Checkpoint architecture/assets/protocol differ')
         self.load_state_dict(payload['model'],strict=True)
         if optimizer is not None: optimizer.load_state_dict(payload['optimizer'])
