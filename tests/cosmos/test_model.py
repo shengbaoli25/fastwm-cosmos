@@ -71,23 +71,21 @@ def test_two_adam_updates_and_full_checkpoint(tmp_path):
     with pytest.raises(ValueError,match='differ'):restored.load_checkpoint(path)
 
 
-def test_no_teacher_future_leak_and_final_clock_refresh():
+def test_explicit_condition_and_no_future_video_force_leak():
     m=tiny_model();s=sample();changed={k:v.clone() for k,v in s.items()}
     for key in ['video_latents','wrench_future','action']:changed[key].fill_(999)
-    seen=[];force=m.dit['force'];original=force.rollout
-    def observe(**condition):
-        assert not {'wrench_future','previous_wrench','target','noise'}&condition.keys()
-        seen.append((condition['noisy_action'].clone(),condition['action_clock'].clone()))
-        return original(**condition)
-    force.rollout=observe
-    modes={mod:mod.training for mod in m.modules()};m.dit['action'].eval()
-    original_mode=m.dit['action'].training;rng=m.dit['runtime'].get_state()
-    first=m.infer_forcewm(s,num_inference_steps=2,seed=8)
-    assert len(seen)==3 and torch.count_nonzero(seen[-1][1])==0
-    torch.testing.assert_close(seen[-1][0],first['action'])
-    assert m.dit['action'].training==original_mode and torch.equal(rng,m.dit['runtime'].get_state())
-    second=m.infer_forcewm(changed,num_inference_steps=2,seed=8)
+    m.dit['action'].eval();rng=m.dit['runtime'].get_state()
+    first=m.infer_forcewm(s,action_condition=s['action'],num_inference_steps=2,seed=8)
+    assert not m.dit['action'].training and torch.equal(rng,m.dit['runtime'].get_state())
+    second=m.infer_forcewm(changed,action_condition=s['action'],num_inference_steps=2,seed=8)
     for key in first:torch.testing.assert_close(first[key],second[key],rtol=0,atol=0)
+    with pytest.raises(TypeError):m.infer_forcewm(s)
+
+
+def test_old_ar_checkpoint_is_rejected(tmp_path):
+    m=tiny_model();p=tmp_path/'old.pt';m.save_checkpoint(p)
+    payload=torch.load(p,weights_only=True);payload['schema']='fastwam-cosmos-actioncond-force28-v2';torch.save(payload,p)
+    with pytest.raises(ValueError,match='differ'):m.load_checkpoint(p)
 
 
 def test_training_action_loss_isolated_from_future_ground_truth():
@@ -165,5 +163,6 @@ def test_bf16_all_branches_with_native_fp32_video_and_no_autocast():
     for branch in ('video','action','force','controls'):
         grads=[p.grad for p in model.dit[branch].parameters() if p.grad is not None]
         assert grads and all(torch.isfinite(g).all() for g in grads),branch
-    result=model.infer_forcewm(sample(1),num_inference_steps=1)
+    s=sample(1)
+    result=model.infer_forcewm(s,action_condition=s['action'],num_inference_steps=1)
     assert all(torch.isfinite(v).all() for v in result.values())

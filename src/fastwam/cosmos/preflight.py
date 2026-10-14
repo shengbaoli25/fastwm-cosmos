@@ -92,7 +92,12 @@ def execute(config_path,output):
     if not isinstance(adam,torch.optim.AdamW):raise RuntimeError('Actual AdamW required')
     if h.inspect_scheduler(trainer.scheduler)!={'last_epoch':0,'warmup_milestones':[1500],'cosine_steps':28500}:
         raise RuntimeError('Complete 30k learning rate schedule required')
-    layer_calls=[0]*28;handles=[]
+    layer_calls=[0]*28;handles=[];query_gradients=[]
+    def record_query_gradient(gradient):
+        query_gradients.append({'finite':bool(torch.isfinite(gradient).all()),
+                                'all_queries_nonzero':bool(gradient.float().abs().sum(-1).gt(0).all())})
+        return gradient
+    handles.append(model.dit['force'].queries.register_hook(record_query_gradient))
     for i,block in enumerate(model.dit['force'].blocks):
         def count(module,args,out,i=i):layer_calls[i]+=1
         handles.append(block.register_forward_hook(count))
@@ -102,7 +107,7 @@ def execute(config_path,output):
     for handle in handles:handle.remove()
     report={'rank':rank,'world_size':4,'batch_per_rank':16,'global_batch':64,
         'actual_engine_updates':int(engine.global_steps),'scheduler':h.inspect_scheduler(trainer.scheduler),
-        **h.inspect_adam(adam),'losses':losses,'updates':updates,'teacher_layer_calls':layer_calls,
+        **h.inspect_adam(adam),'losses':losses,'updates':updates,'chunk_layer_calls':layer_calls,'query_gradients':query_gradients,
         'all_parameters_finite':all(h._finite(p) for p in model.parameters()),
         'startup_seconds':startup,'peak_allocated_gib':torch.cuda.max_memory_allocated()/2**30,
         'peak_reserved_gib':torch.cuda.max_memory_reserved()/2**30,
@@ -113,6 +118,7 @@ def execute(config_path,output):
     accepted=(report['actual_engine_updates']==2 and report['adam_state_steps']
         and all(x==2 for x in report['adam_state_steps']) and report['all_parameters_finite']
         and report['adam_master_and_moments_finite'] and min(layer_calls)>=2
+        and len(query_gradients)==2 and all(g['finite'] and g['all_queries_nonzero'] for g in query_gradients)
         and all(not u['optimizer_step_was_skipped'] for u in updates))
     from .persistence import resource_identity,training_state_fingerprints
     report['resource']=resource_identity()

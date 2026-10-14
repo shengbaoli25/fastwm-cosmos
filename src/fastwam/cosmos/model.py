@@ -1,7 +1,8 @@
-"""Cosmos28 + random Action28 + supervised autoregressive Force28.
+"""Cosmos28 + random Action28 + direct supervised Force28 chunk.
 
 Native global-time bidirectional video; isolated current-image observation KV.
-Generated future video/Force memories never contain teacher future values.
+Both world models use explicit clean actions; future video/force labels stay in losses.
+Action FM is conditional reconstruction when its WM controls are target actions.
 """
 from pathlib import Path
 import torch
@@ -12,8 +13,8 @@ from fastwam.models.wan22.action_dit import ActionDiT
 from fastwam.models.wan22.mot import MoT
 from fastwam.models.wan22.wan_video_dit import flash_attention
 from fastwam.models.wan22.schedulers.scheduler_continuous import WanContinuousFlowMatchScheduler
-from fastwam.forcewm.model import (AutoregressiveForceWM, ActionDualMemory,
-                                  shifted_wrench_inputs, masked_force_mse)
+from fastwam.forcewm.model import ActionDualMemory, masked_force_mse
+from fastwam.forcewm.chunk import ChunkForceWM
 from fastwam.baseline.optimizer import bounded_optimizer_param_groups
 from .expert import CosmosExpert
 from .state import ForceRuntimeState
@@ -60,7 +61,7 @@ class CosmosForceWM(nn.Module):
             action = ActionDiT(**acfg)
             self.proprio_encoder = nn.Linear(8, text_dim)
             torch.manual_seed(force_seed)
-            force = AutoregressiveForceWM(video_hidden_dim=video.hidden_dim,
+            force = ChunkForceWM(video_hidden_dim=video.hidden_dim,
                 text_dim=text_dim, hidden_dim=force_hidden, ffn_dim=force_ffn,
                 num_heads=force_heads, num_layers=self.depth, observation_channels=16,
                 checkpoint_layers=gradient_checkpointing)
@@ -131,9 +132,9 @@ class CosmosForceWM(nn.Module):
         return self.video.finish(x,prepared), tuple(layers), tuple(kv)
 
     @torch.no_grad()
-    def generate_video_memory(self, first, raw_context, current_action, action_is_pad):
-        # Only current A_sigma (final A0 at clock0), never teacher video/clean GT.
-        controls = self.dit['controls'](current_action.detach(), action_is_pad).detach()
+    def generate_video_memory(self, first, raw_context, action_condition, action_is_pad):
+        # Explicit clean controls; latent diffusion noise remains video-only.
+        controls = self.dit['controls'](action_condition.detach(), action_is_pad).detach()
         shape = (*first.shape[:2], 3, *first.shape[3:])
         x = self.dit['runtime'].normal(shape).to(self.device,self.torch_dtype)
         x[:,:,:1] = first.detach()
@@ -144,10 +145,10 @@ class CosmosForceWM(nn.Module):
         _,layers,_ = self._video(x,torch.zeros(len(x),device=self.device,dtype=x.dtype),raw_context,controls=controls,collect=True)
         return x.detach(), layers, torch.zeros(layers[0].shape[:2],device=self.device,dtype=torch.bool)
 
-    def _condition(self, sample, action, clock, context, cmask, memory):
+    def _condition(self, sample, action_condition, context, cmask, memory):
         x,layers,pad = memory
         return dict(history=sample['history'].to(self.device,self.torch_dtype),
-            noisy_action=action.detach(),action_clock=clock.detach(),context=context.detach(),context_mask=cmask,
+            action_condition=action_condition.detach(),context=context.detach(),context_mask=cmask,
             history_is_pad=sample['history_is_pad'].to(self.device,torch.bool),
             history_channel_valid=sample['history_channel_valid'].to(self.device,torch.bool),
             candidate_is_pad=sample['action_is_pad'].to(self.device,torch.bool),
@@ -155,12 +156,10 @@ class CosmosForceWM(nn.Module):
             # use the expert dtype even when DeepSpeed disables autocast.
             observation_latents=x[:,:,:1].to(self.torch_dtype),video_features=layers,video_is_pad=pad)
 
-    def action_velocity(self, action, clock, context, cmask, observation_kv, memory, condition):
-        # Fresh free AR under current Action/clock on every Action evaluation.
-        force = self.dit['force'].rollout(**condition)
+    def action_velocity(self, action, clock, context, cmask, observation_kv, memory, force, apad):
+        # AE diffusion states never flow back into either world model.
         expert = self.dit['action']
         x,_,mod,text,mask,freq = expert.prepare(action,clock,context,cmask)
-        apad=condition['candidate_is_pad']
         for i,(kobs,vobs) in enumerate(observation_kv):
             block=expert.blocks[i]; mem=self.dit['memories'][i]
             def run(tokens,kobs,vobs,block=block,mem=mem,i=i):
@@ -187,64 +186,78 @@ class CosmosForceWM(nn.Module):
         noisy=self.v_scheduler.add_noise(clean,vn,vt); noisy[:,:,:1]=first
         na=self.a_scheduler.add_noise(action,an,at)
         apad=sample['action_is_pad'].to(self.device,torch.bool)
-        # Clean GT controls belong only to the supervised video path.
+        # The same clean GT action conditions supervised and generated video.
         pred,_,_=self._video(noisy,vt,raw,controls=self.dit['controls'](action,apad))
         # Future latent covers four original frames. Partially valid group is kept.
         imagepad=sample['image_is_pad'].to(self.device,torch.bool)
         vvalid=~imagepad[:,1:].reshape(len(clean),2,4).all(-1)
         target=self.v_scheduler.training_target(clean,vn,vt)
         lv=temporal_mse(pred[:,:,1:].transpose(1,2).flatten(2),target[:,:,1:].transpose(1,2).flatten(2),vvalid,self.v_scheduler,vt)
-        memory=self.generate_video_memory(first,raw.detach(),na,apad)
+        memory=self.generate_video_memory(first,raw.detach(),action,apad)
         _,_,kv=self._video(first,torch.zeros_like(vt),raw,observed=True)
-        condition=self._condition(sample,na,at,ctx,cmask,memory)
-        pa,_=self.action_velocity(na,at,ctx,cmask,kv,memory,condition)
+        condition=self._condition(sample,action,ctx,cmask,memory)
+        force=self.dit['force'](**condition)
+        pa,_=self.action_velocity(na,at,ctx,cmask,kv,memory,force,apad)
         la=temporal_mse(pa,self.a_scheduler.training_target(action,an,at),~sample['action_is_pad'].to(self.device,torch.bool),self.a_scheduler,at)
         gt=sample['wrench_future'].to(self.device,self.torch_dtype)
         fpad=sample['force_is_pad'].to(self.device,torch.bool); fvalid=sample['wrench_valid'].to(self.device,torch.bool)
-        previous=shifted_wrench_inputs(condition['history'],gt,fpad,fvalid)
-        teacher=self.dit['force'].forward_teacher(previous_wrench=previous,**condition)
-        lf=masked_force_mse(teacher.wrench,gt,fpad,fvalid)
+        lf=masked_force_mse(force.wrench,gt,fpad,fvalid)
         return lv+la+lf, dict(loss_video=float(lv.detach()),loss_action=float(la.detach()),loss_force=float(lf.detach()))
 
     def forward(self,sample): return self.training_loss(sample)
 
     @torch.no_grad()
-    def infer_forcewm(self,sample,*,num_inference_steps=16,seed=0):
+    def infer_forcewm(self, sample, *, action_condition, num_inference_steps=16,
+                      seed=0, video_seed=44, generate_action=True):
+        """Conditional WM evaluation; AE output is conditional reconstruction.
+
+        action_condition is mandatory and already normalized, clean [B,32,7].
+        No fallback to sample action or intermediate AE noise is permitted.
+        video_seed is independent of the AE sampling seed.
+        """
         prior_modes={module:module.training for module in self.modules()}; self.eval()
         prior_rng=self.dit['runtime'].get_state()
-        self.dit['runtime'].manual_seed(seed+44)
+        self.dit['runtime'].manual_seed(video_seed)
         try:
             first=sample['first_frame_latents'].to(self.device,self.torch_dtype)
             if first.shape[1:3]!=(16,1): raise ValueError('Only observed Cosmos latent accepted')
+            controls=action_condition.to(self.device,self.torch_dtype)
+            if controls.shape != (len(first),32,7): raise ValueError('Explicit clean Action32x7 required')
             raw,ctx,cmask=self._contexts(sample)
             apad=sample['action_is_pad'].to(self.device,torch.bool)
-            zero=torch.zeros(len(first),device=self.device,dtype=self.torch_dtype)
-            _,_,kv=self._video(first,zero,raw,observed=True)
-            gen=torch.Generator(device='cpu').manual_seed(seed)
-            action=torch.randn((len(first),32,7),generator=gen).to(self.device,self.torch_dtype)
-            times,deltas=self.a_scheduler.build_inference_schedule(num_inference_steps,self.device,self.torch_dtype)
-            for t,dt in zip(times,deltas):
-                memory=self.generate_video_memory(first,raw,action,apad)
-                clock=t.expand(len(first)); cond=self._condition(sample,action,clock,ctx,cmask,memory)
-                velocity,_=self.action_velocity(action,clock,ctx,cmask,kv,memory,cond)
-                action=self.a_scheduler.step(velocity,dt,action)
-            memory=self.generate_video_memory(first,raw,action,apad)
-            cond=self._condition(sample,action,zero,ctx,cmask,memory)
-            final_force=self.dit['force'].rollout(**cond)
-            return dict(action=action,force=final_force.wrench,video_latents=memory[0])
+            memory=self.generate_video_memory(first,raw,controls,apad)
+            condition=self._condition(sample,controls,ctx,cmask,memory)
+            force=self.dit['force'](**condition)
+            result=dict(force=force.wrench,video_latents=memory[0])
+            if generate_action:
+                if num_inference_steps < 1: raise ValueError('Positive Action generation steps required')
+                zero=torch.zeros(len(first),device=self.device,dtype=self.torch_dtype)
+                _,_,kv=self._video(first,zero,raw,observed=True)
+                gen=torch.Generator(device='cpu').manual_seed(seed)
+                action=torch.randn((len(first),32,7),generator=gen).to(self.device,self.torch_dtype)
+                times,deltas=self.a_scheduler.build_inference_schedule(num_inference_steps,self.device,self.torch_dtype)
+                for t,dt in zip(times,deltas):
+                    velocity,_=self.action_velocity(action,t.expand(len(first)),ctx,cmask,kv,memory,force,apad)
+                    action=self.a_scheduler.step(velocity,dt,action)
+                result['action']=action
+            return result
         finally:
             self.dit['runtime'].set_state(prior_rng)
             for module,mode in prior_modes.items(): module.training=mode
 
+    def infer_world_model(self, sample, *, action_condition, video_seed=44):
+        return self.infer_forcewm(sample, action_condition=action_condition,
+                                  video_seed=video_seed, generate_action=False)
+
     def save_checkpoint(self,path,optimizer=None,step=None):
-        payload={'schema':'fastwam-cosmos-actioncond-force28-v2','manifest':self.manifest,'model':self.state_dict(),'step':step}
+        payload={'schema':'fastwam-cosmos-clean-action-force-chunk28-v3','manifest':self.manifest,'model':self.state_dict(),'step':step}
         if optimizer is not None: payload['optimizer']=optimizer.state_dict()
         path=Path(path); temp=path.with_suffix(path.suffix+'.tmp')
         torch.save(payload,temp); temp.replace(path)
 
     def load_checkpoint(self,path,optimizer=None):
         payload=torch.load(path,map_location='cpu',weights_only=True)
-        if payload.get('schema')!='fastwam-cosmos-actioncond-force28-v2' or payload.get('manifest')!=self.manifest:
+        if payload.get('schema')!='fastwam-cosmos-clean-action-force-chunk28-v3' or payload.get('manifest')!=self.manifest:
             raise ValueError('Checkpoint architecture/assets/protocol differ')
         self.load_state_dict(payload['model'],strict=True)
         if optimizer is not None: optimizer.load_state_dict(payload['optimizer'])

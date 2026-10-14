@@ -75,14 +75,15 @@ def create_cosmos_forcewm(*,upstream,checkpoint,text_cache,expected_text_identit
     bank,texts,digest=read_text_bank(text_cache)
     if digest!=expected_text_identity: raise ValueError('Pinned text cache identity differs')
     net=load_video(upstream,checkpoint,device='cpu')
-    manifest=dict(schema='cosmos-actioncond-force28-v2',upstream=UPSTREAM_COMMIT,model=MODEL_ID,
+    manifest=dict(schema='cosmos-clean-action-force-chunk28-v3',upstream=UPSTREAM_COMMIT,model=MODEL_ID,
         revision=REVISION,video_sha256=WEIGHT_SHA,tokenizer_sha256=TOKENIZER_SHA,
         depth=28,action_seed=action_seed,force_seed=force_seed,memory_seed=memory_seed,control_seed=control_seed,
         generated_video_steps=generated_video_steps,text_identity=digest,
         video='official robot/action-cond bidirectional/global-time; isolated sigma0 observed KV',
         control_protocol=CONTROL_PROTOCOL,
-        memory='detached free video conditioned on current A_sigma, refreshed every Action call and final A0',
-        force='supervised shifted AR MSE; measured w0->w1..w32; no force noise',
+        memory='detached generated video from explicit clean action; shared fixed memory across AE diffusion',
+        force='direct learned-query chunk masked MSE; H[-31..0], U[0..31] -> W[1..32]; no previous future wrench or Action clock',
+        action_semantics='conditional reconstruction under GT-action-conditioned WM; not an observation-only policy',
         initialization='official Cosmos only; AE/Force/proprio/dual memory/control projection random',
         loss='FastWAM shifted-uniform FM v5/a1; Force MSE; lambda 1/1/1',
         recipe=dict(ranks=4,batch16=16,accum=1,global_batch=64,max_steps=30000),
