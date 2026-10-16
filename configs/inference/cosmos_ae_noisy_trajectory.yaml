@@ -1,0 +1,10 @@
+# Inference-only settings. Original training recipe/losses/checkpoints stay v3.
+# Pass these fields as ActionSampling(**cfg.action_sampling), and supply the
+# normalized GT trajectory explicitly as action_reference. Do not pass this
+# config to the training/model constructor.
+action_sampling:
+  initialization: noisy_reference
+  noise_strength: 0.1
+  num_inference_steps: 16
+  seed: 0
+video_seed: 44

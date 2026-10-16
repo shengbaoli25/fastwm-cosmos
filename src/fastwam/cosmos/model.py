@@ -19,6 +19,7 @@ from fastwam.baseline.optimizer import bounded_optimizer_param_groups
 from .expert import CosmosExpert
 from .state import ForceRuntimeState
 from .controls import VideoControlAdapter
+from .action_sampling import ActionSampling
 
 
 class _ActionOps:
@@ -208,12 +209,16 @@ class CosmosForceWM(nn.Module):
 
     @torch.no_grad()
     def infer_forcewm(self, sample, *, action_condition, num_inference_steps=16,
-                      seed=0, video_seed=44, generate_action=True):
+                      seed=0, video_seed=44, generate_action=True,
+                      action_reference=None, action_sampling=None):
         """Conditional WM evaluation; AE output is conditional reconstruction.
 
         action_condition is mandatory and already normalized, clean [B,32,7].
         No fallback to sample action or intermediate AE noise is permitted.
         video_seed is independent of the AE sampling seed.
+        action_sampling selects the AE starting state only. Omission preserves
+        the original Gaussian sampler; noisy_reference requires an explicit
+        normalized reference, never an implicit sample['action'] fallback.
         """
         prior_modes={module:module.training for module in self.modules()}; self.eval()
         prior_rng=self.dit['runtime'].get_state()
@@ -225,17 +230,21 @@ class CosmosForceWM(nn.Module):
             if controls.shape != (len(first),32,7): raise ValueError('Explicit clean Action32x7 required')
             raw,ctx,cmask=self._contexts(sample)
             apad=sample['action_is_pad'].to(self.device,torch.bool)
+            if apad.shape != (len(first),32): raise ValueError('Action padding [B,32] required')
+            if not generate_action and (action_sampling is not None or action_reference is not None):
+                raise ValueError('Action sampling options require generate_action=True')
+            if generate_action:
+                sampling = action_sampling or ActionSampling('gaussian', 1., num_inference_steps, seed)
+                if not isinstance(sampling, ActionSampling): raise TypeError('ActionSampling required')
+                action,times,deltas=sampling.prepare(self.a_scheduler, batch_size=len(first),
+                    device=self.device,dtype=self.torch_dtype,reference=action_reference)
             memory=self.generate_video_memory(first,raw,controls,apad)
             condition=self._condition(sample,controls,ctx,cmask,memory)
             force=self.dit['force'](**condition)
             result=dict(force=force.wrench,video_latents=memory[0])
             if generate_action:
-                if num_inference_steps < 1: raise ValueError('Positive Action generation steps required')
                 zero=torch.zeros(len(first),device=self.device,dtype=self.torch_dtype)
                 _,_,kv=self._video(first,zero,raw,observed=True)
-                gen=torch.Generator(device='cpu').manual_seed(seed)
-                action=torch.randn((len(first),32,7),generator=gen).to(self.device,self.torch_dtype)
-                times,deltas=self.a_scheduler.build_inference_schedule(num_inference_steps,self.device,self.torch_dtype)
                 for t,dt in zip(times,deltas):
                     velocity,_=self.action_velocity(action,t.expand(len(first)),ctx,cmask,kv,memory,force,apad)
                     action=self.a_scheduler.step(velocity,dt,action)
@@ -244,6 +253,14 @@ class CosmosForceWM(nn.Module):
         finally:
             self.dit['runtime'].set_state(prior_rng)
             for module,mode in prior_modes.items(): module.training=mode
+
+    def infer_trajectory_denoising(self, sample, *, action_condition, action_reference,
+                                   noise_strength=0.1, num_inference_steps=16,
+                                   seed=0, video_seed=44):
+        """Reconstruct a perturbed reference; both WMs retain clean controls."""
+        return self.infer_forcewm(sample, action_condition=action_condition,
+            action_reference=action_reference, video_seed=video_seed,
+            action_sampling=ActionSampling('noisy_reference',noise_strength,num_inference_steps,seed))
 
     def infer_world_model(self, sample, *, action_condition, video_seed=44):
         return self.infer_forcewm(sample, action_condition=action_condition,
