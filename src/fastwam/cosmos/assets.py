@@ -70,7 +70,7 @@ def read_text_bank(path):
 
 def create_cosmos_forcewm(*,upstream,checkpoint,text_cache,expected_text_identity,
                          action_seed=42,force_seed=43,memory_seed=44,control_seed=45,
-                         generated_video_steps=16,gradient_checkpointing=True,device='cuda',**kwargs):
+                         generated_video_steps=16,gradient_checkpointing=True,device='cuda',ae_training_noise_max=1.0,**kwargs):
     from .model import CosmosForceWM
     bank,texts,digest=read_text_bank(text_cache)
     if digest!=expected_text_identity: raise ValueError('Pinned text cache identity differs')
@@ -90,5 +90,5 @@ def create_cosmos_forcewm(*,upstream,checkpoint,text_cache,expected_text_identit
         extra_config=kwargs)
     model=CosmosForceWM(net,manifest=manifest,text_bank=bank,action_seed=action_seed,
         force_seed=force_seed,memory_seed=memory_seed,control_seed=control_seed,generated_video_steps=generated_video_steps,
-        gradient_checkpointing=gradient_checkpointing,**kwargs)
+        gradient_checkpointing=gradient_checkpointing,ae_training_noise_max=ae_training_noise_max,**kwargs)
     return model.to(device=device,dtype=torch.bfloat16)

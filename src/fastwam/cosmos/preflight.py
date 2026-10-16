@@ -18,6 +18,10 @@ def validate_config(cfg):
     if cfg['data'].get('val') is not None:
         raise ValueError('The inherited recipe has no separate validation split')
     m=cfg['model'];d=cfg['data']['train']
+    noise=m.get('ae_training_noise_max',1.0)
+    import math
+    if isinstance(noise,bool) or not isinstance(noise,(int,float)) or not math.isfinite(noise) or not 0 < noise <= 1:
+        raise ValueError('AE training noise max must be finite in (0, 1]')
     if (m['_target_']!='fastwam.cosmos.assets.create_cosmos_forcewm'
             or d['_target_']!='fastwam.cosmos.cache.CosmosCachedDataset'
             or len(d.get('expected_identity_sha256',''))!=64

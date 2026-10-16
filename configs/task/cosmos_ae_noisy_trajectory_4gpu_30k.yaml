@@ -1,0 +1,9 @@
+# @package _global_
+# Inherit the original RealAction recipe; only AE training noise changes.
+defaults:
+  - cosmos_forcewm_4gpu_30k
+  - _self_
+
+model:
+  ae_training_noise_max: 0.1
+output_dir: runs/cosmos-ae-noisy-trajectory-4rank-30k

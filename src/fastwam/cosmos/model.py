@@ -6,6 +6,7 @@ Action FM is conditional reconstruction when its WM controls are target actions.
 """
 from pathlib import Path
 import torch
+import math
 from torch import nn
 from torch.nn import functional as F
 from torch.utils.checkpoint import checkpoint
@@ -43,9 +44,18 @@ class CosmosForceWM(nn.Module):
                  action_ffn=4096, force_hidden=1280, force_ffn=4608,
                  force_heads=16, memory_width=512, memory_heads=8,
                  action_seed=42, force_seed=43, memory_seed=44, control_seed=45,
-                 generated_video_steps=16, gradient_checkpointing=True, fps=7.5):
+                 generated_video_steps=16, gradient_checkpointing=True, fps=7.5,
+                 ae_training_noise_max=1.0):
         super().__init__()
+        if isinstance(ae_training_noise_max, bool) or not isinstance(ae_training_noise_max, (int, float)) or not math.isfinite(ae_training_noise_max) or not 0 < ae_training_noise_max <= 1:
+            raise ValueError('AE training noise max must be finite in (0, 1]')
+        self.ae_training_noise_max = float(ae_training_noise_max)
         self.manifest = dict(manifest)
+        if self.ae_training_noise_max != 1.0:
+            self.manifest['ae_training_noise'] = dict(distribution='uniform', sigma_min=0.,
+                sigma_max=self.ae_training_noise_max, all_trajectory_entries=True,
+                interpolation='(1-sigma)*GT + sigma*Gaussian', clock='1000*sigma',
+                target='Gaussian-GT', loss_weight='original scheduler; no renormalization')
         self.gradient_checkpointing = gradient_checkpointing
         self.generated_video_steps, self.fps = int(generated_video_steps), float(fps)
         if self.generated_video_steps < 1:
@@ -183,6 +193,8 @@ class CosmosForceWM(nn.Module):
         raw,ctx,cmask=self._contexts(sample)
         vt=self.v_scheduler.sample_training_t(len(clean),self.device,self.torch_dtype)
         at=self.a_scheduler.sample_training_t(len(clean),self.device,self.torch_dtype)
+        if self.ae_training_noise_max != 1.0:
+            at = at * self.ae_training_noise_max
         vn=torch.randn_like(clean); an=torch.randn_like(action)
         noisy=self.v_scheduler.add_noise(clean,vn,vt); noisy[:,:,:1]=first
         na=self.a_scheduler.add_noise(action,an,at)
