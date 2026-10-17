@@ -30,13 +30,13 @@ class ChunkForceWM(nn.Module):
                                     for _ in range(num_layers)])
         self.head = nn.Sequential(nn.LayerNorm(hidden_dim), nn.Linear(hidden_dim, 6))
 
-    def forward(self, *, history, action_condition, context, context_mask,
+    def prepare(self, *, history, action_condition, context, context_mask,
                 history_is_pad, candidate_is_pad, history_channel_valid,
-                observation_latents, video_features, video_is_pad):
+                observation_latents):
+        """Build measured H, clean U and learned W without future labels."""
         b = history.shape[0]
         if (history.shape != (b, self.history_steps, 13)
                 or action_condition.shape != (b, self.horizon, 7)
-                or len(video_features) != len(self.blocks)
                 or observation_latents.ndim != 5
                 or observation_latents.shape[1:3] != (self.observation_channels, 1)):
             raise ValueError('Force history/clean action/video geometry differs')
@@ -44,8 +44,7 @@ class ChunkForceWM(nn.Module):
         u, uv = mask_invalid_channels(action_condition, candidate_is_pad)
         if not bool(hv[:, -1, 7:].all()):
             raise ValueError('Measured current wrench required')
-        if (context_mask.dtype != torch.bool or video_is_pad.dtype != torch.bool
-                or not bool(context_mask.any(-1).all()) or not bool((~video_is_pad).any(-1).all())):
+        if (context_mask.dtype != torch.bool or not bool(context_mask.any(-1).all())):
             raise ValueError('Available text/video context required')
         text = torch.where(context_mask[..., None], context, 0).sum(1)
         text = self.text_encoder(text / context_mask.sum(-1).clamp_min(1)[:, None])
@@ -60,6 +59,18 @@ class ChunkForceWM(nn.Module):
         x = torch.where(valid[..., None], x, 0)
         mask = build_force_attention_mask(history_is_pad, candidate_is_pad, wpad,
                                           history_channel_valid=history_channel_valid)
+        return x, mask, valid, wpad, first_w
+
+    def forward(self, *, history, action_condition, context, context_mask,
+                history_is_pad, candidate_is_pad, history_channel_valid,
+                observation_latents, video_features, video_is_pad):
+        if (len(video_features) != len(self.blocks) or video_is_pad.dtype != torch.bool
+                or not bool((~video_is_pad).any(-1).all())):
+            raise ValueError('Available text/video context required')
+        x, mask, valid, wpad, first_w = self.prepare(history=history,
+            action_condition=action_condition, context=context, context_mask=context_mask,
+            history_is_pad=history_is_pad, candidate_is_pad=candidate_is_pad,
+            history_channel_valid=history_channel_valid, observation_latents=observation_latents)
         vmask = (~video_is_pad)[:, None, None, :]
         layers = []
         for block, video in zip(self.blocks, video_features):

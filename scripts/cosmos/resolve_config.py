@@ -10,13 +10,15 @@ from fastwam.cosmos.preflight import validate_config
 
 def main():
     p=argparse.ArgumentParser()
+    p.add_argument('--task', choices=['cosmos_forcewm_4gpu_30k', 'cosmos_forcewm_joint_4gpu_30k'],
+                   default='cosmos_forcewm_4gpu_30k')
     for key in ('text-cache','feature-cache','checkpoint','upstream','output-dir','config-output'):p.add_argument('--'+key,required=True)
     a=p.parse_args();bank,tm,td=read_text_bank(a.text_cache);del bank
     fm=validate(a.feature_cache);checked(a.checkpoint,WEIGHT_SHA);verify_upstream(Path(a.upstream))
     if fm['identity']['text_identity']!=td:raise ValueError('Feature/text identities differ')
     root=Path(__file__).resolve().parents[2]
     with initialize_config_dir(config_dir=str(root/'configs'),version_base=None):
-        cfg=compose(config_name='train',overrides=['task=cosmos_forcewm_4gpu_30k'])
+        cfg=compose(config_name='train',overrides=['task='+a.task])
     cfg.model.expected_text_identity=td;cfg.model.text_cache=str(Path(a.text_cache).resolve())
     cfg.model.checkpoint=str(Path(a.checkpoint).resolve());cfg.model.upstream=str(Path(a.upstream).resolve())
     cfg.data.train.cache_root=str(Path(a.feature_cache).resolve());cfg.data.train.expected_identity_sha256=fm['identity_sha256']

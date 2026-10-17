@@ -68,9 +68,9 @@ def read_text_bank(path):
     return torch.stack(bank),manifest,cache_identity_sha256(manifest)
 
 
-def create_cosmos_forcewm(*,upstream,checkpoint,text_cache,expected_text_identity,
+def _create_cosmos_forcewm(*,upstream,checkpoint,text_cache,expected_text_identity,
                          action_seed=42,force_seed=43,memory_seed=44,control_seed=45,
-                         generated_video_steps=16,gradient_checkpointing=True,device='cuda',**kwargs):
+                         generated_video_steps=16,gradient_checkpointing=True,device='cuda',joint=False,**kwargs):
     from .model import CosmosForceWM
     bank,texts,digest=read_text_bank(text_cache)
     if digest!=expected_text_identity: raise ValueError('Pinned text cache identity differs')
@@ -88,7 +88,27 @@ def create_cosmos_forcewm(*,upstream,checkpoint,text_cache,expected_text_identit
         loss='FastWAM shifted-uniform FM v5/a1; Force MSE; lambda 1/1/1',
         recipe=dict(ranks=4,batch16=16,accum=1,global_batch=64,max_steps=30000),
         extra_config=kwargs)
-    model=CosmosForceWM(net,manifest=manifest,text_bank=bank,action_seed=action_seed,
+    model_type=CosmosForceWM
+    if joint:
+        from .joint import JointCosmosForceWM, JOINT_PROTOCOL
+        model_type=JointCosmosForceWM
+        manifest.update(schema='cosmos-force-joint-self-attention28-v1',
+            joint_protocol=JOINT_PROTOCOL,
+            video='native Cosmos QK norm/RoPE/AdaLN plus joint Video-Force attention; isolated observed KV for AE',
+            memory='joint generated video; detached rollout; differentiable clock0 joint refresh for Force loss; detached AE memories',
+            force='H/U/W direct masks plus bidirectional Video edges; learned32 queries; no future labels/Action clock',
+            attention=dict(heads=net.num_heads,video_width=net.model_channels,
+                           force_width=kwargs.get('force_hidden',1280),force_qkv_width=net.model_channels),
+            initialization='official Cosmos; common random modules match RealAction seeds; new Force joint QKV/output random')
+    model=model_type(net,manifest=manifest,text_bank=bank,action_seed=action_seed,
         force_seed=force_seed,memory_seed=memory_seed,control_seed=control_seed,generated_video_steps=generated_video_steps,
         gradient_checkpointing=gradient_checkpointing,**kwargs)
     return model.to(device=device,dtype=torch.bfloat16)
+
+
+def create_cosmos_forcewm(**kwargs):
+    return _create_cosmos_forcewm(joint=False,**kwargs)
+
+
+def create_joint_cosmos_forcewm(**kwargs):
+    return _create_cosmos_forcewm(joint=True,**kwargs)

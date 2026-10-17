@@ -1,5 +1,12 @@
 # FastWAM · Cosmos28 · ForceWM28
 
+**Joint-attention comparison branch:** `codex/cosmos-force-joint-self-attention`
+adds bidirectional per-layer Cosmos/Force self-attention while keeping the original
+RealAction recipe, clean GT actions in both WMs, and noisy actions in AE. Select
+`task=cosmos_forcewm_joint_4gpu_30k`; see the [architecture, matched configuration,
+validation and run guide](docs/cosmos/joint-self-attention.md). The following
+description documents the retained RealAction baseline.
+
 This experiment replaces the Wan video branch with the **official Cosmos-Predict2.5-2B robot/action-cond**, retains an Action Expert and a supervised direct-chunk ForceWM, and aligns all three branches to **28 layers**. The implementation inherits the LIBERO two-camera FastWAM data processing and Accelerator/ZeRO trainer. Legacy Wan entry points remain in the tree for provenance; this experiment uses only `scripts/cosmos/` and `configs/task/cosmos_forcewm_4gpu_30k.yaml`.
 
 **Status:** implementation and synthetic CPU contract tests exist. Actual official-weight loading, complete Cosmos feature export, four-GPU training, distributed checkpoint restore and evaluation must be established by runtime receipts. CPU tests are not GPU/quality evidence. See [design and operations](docs/cosmos/design.md).

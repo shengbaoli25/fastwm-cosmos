@@ -1,0 +1,5 @@
+defaults:
+  - cosmos_forcewm
+  - _self_
+
+_target_: fastwam.cosmos.assets.create_joint_cosmos_forcewm

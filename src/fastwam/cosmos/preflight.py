@@ -18,7 +18,8 @@ def validate_config(cfg):
     if cfg['data'].get('val') is not None:
         raise ValueError('The inherited recipe has no separate validation split')
     m=cfg['model'];d=cfg['data']['train']
-    if (m['_target_']!='fastwam.cosmos.assets.create_cosmos_forcewm'
+    if (m['_target_'] not in ('fastwam.cosmos.assets.create_cosmos_forcewm',
+                              'fastwam.cosmos.assets.create_joint_cosmos_forcewm')
             or d['_target_']!='fastwam.cosmos.cache.CosmosCachedDataset'
             or len(d.get('expected_identity_sha256',''))!=64
             or not d.get('require_production') or len(m.get('expected_text_identity',''))!=64
