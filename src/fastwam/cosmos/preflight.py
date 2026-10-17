@@ -19,7 +19,8 @@ def validate_config(cfg):
         raise ValueError('The inherited recipe has no separate validation split')
     m=cfg['model'];d=cfg['data']['train']
     if (m['_target_'] not in {'fastwam.cosmos.assets.create_cosmos_forcewm',
-                            'fastwam.cosmos.assets.create_cosmos_paired_regions'}
+                            'fastwam.cosmos.assets.create_cosmos_paired_regions',
+                            'fastwam.cosmos.assets.create_cosmos_region_queries'}
             or d['_target_']!='fastwam.cosmos.cache.CosmosCachedDataset'
             or len(d.get('expected_identity_sha256',''))!=64
             or not d.get('require_production') or len(m.get('expected_text_identity',''))!=64
@@ -30,6 +31,12 @@ def validate_config(cfg):
             or m.get('control_seed')!=45
             or (m['action_seed'],m['force_seed'],m['memory_seed'])!=(42,43,44)):
         raise ValueError('Bound production Cosmos28/AE28/Force28 configuration required')
+    if m['_target_'] == 'fastwam.cosmos.assets.create_cosmos_region_queries':
+        if (m.get('region_count') != 32 or m.get('region_layer') != 13
+                or m.get('region_width') != 512 or m.get('region_heads') != 8
+                or m.get('region_seed') != 46 or m.get('region_writeback') is not True
+                or any(k in m for k in ('region_pairs', 'region_reconstruction_weight', 'region_diversity_weight'))):
+            raise ValueError('Independent32 queries with task-only supervision required')
 
 
 
@@ -93,12 +100,18 @@ def execute(config_path,output):
     if not isinstance(adam,torch.optim.AdamW):raise RuntimeError('Actual AdamW required')
     if h.inspect_scheduler(trainer.scheduler)!={'last_epoch':0,'warmup_milestones':[1500],'cosine_steps':28500}:
         raise RuntimeError('Complete 30k learning rate schedule required')
-    layer_calls=[0]*28;handles=[];query_gradients=[]
+    layer_calls=[0]*28;handles=[];query_gradients=[];region_gradients=[]
     def record_query_gradient(gradient):
         query_gradients.append({'finite':bool(torch.isfinite(gradient).all()),
                                 'all_queries_nonzero':bool(gradient.float().abs().sum(-1).gt(0).all())})
         return gradient
     handles.append(model.dit['force'].queries.register_hook(record_query_gradient))
+    if 'regions' in model.dit:
+        def record_region_gradient(gradient):
+            region_gradients.append({'finite':bool(torch.isfinite(gradient).all()),
+                'all_queries_nonzero':bool(gradient.float().abs().sum(-1).gt(0).all())})
+            return gradient
+        handles.append(model.dit['regions'].queries.register_hook(record_region_gradient))
     for i,block in enumerate(model.dit['force'].blocks):
         def count(module,args,out,i=i):layer_calls[i]+=1
         handles.append(block.register_forward_hook(count))
@@ -109,6 +122,7 @@ def execute(config_path,output):
     report={'rank':rank,'world_size':4,'batch_per_rank':16,'global_batch':64,
         'actual_engine_updates':int(engine.global_steps),'scheduler':h.inspect_scheduler(trainer.scheduler),
         **h.inspect_adam(adam),'losses':losses,'updates':updates,'chunk_layer_calls':layer_calls,'query_gradients':query_gradients,
+        'region_query_gradients':region_gradients,
         'all_parameters_finite':all(h._finite(p) for p in model.parameters()),
         'startup_seconds':startup,'peak_allocated_gib':torch.cuda.max_memory_allocated()/2**30,
         'peak_reserved_gib':torch.cuda.max_memory_reserved()/2**30,
@@ -120,7 +134,9 @@ def execute(config_path,output):
         and all(x==2 for x in report['adam_state_steps']) and report['all_parameters_finite']
         and report['adam_master_and_moments_finite'] and min(layer_calls)>=2
         and len(query_gradients)==2 and all(g['finite'] and g['all_queries_nonzero'] for g in query_gradients)
-        and all(not u['optimizer_step_was_skipped'] for u in updates))
+        and all(not u['optimizer_step_was_skipped'] for u in updates)
+        and ('regions' not in model.dit or (len(region_gradients)==2
+             and all(g['finite'] and g['all_queries_nonzero'] for g in region_gradients))))
     from .persistence import resource_identity,training_state_fingerprints
     report['resource']=resource_identity()
     trainer.checkpoint_root=str(output/'checkpoint')

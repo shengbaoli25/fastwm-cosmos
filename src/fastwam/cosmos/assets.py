@@ -107,3 +107,12 @@ def create_cosmos_paired_regions(*, region_pairs=32, region_width=512, region_he
         region_diversity_weight=region_diversity_weight, region_writeback=region_writeback)
     return create_cosmos_forcewm(_model_type=PairedCosmosForceWM,
                                 _constructor_options=options, **kwargs)
+
+
+def create_cosmos_region_queries(*, region_count=32, region_width=512, region_heads=8,
+                                region_layer=13, region_seed=46, region_writeback=True, **kwargs):
+    from .region_queries import RegionQueryCosmosForceWM
+    options = dict(region_count=region_count, region_width=region_width, region_heads=region_heads,
+                   region_layer=region_layer, region_seed=region_seed, region_writeback=region_writeback)
+    return create_cosmos_forcewm(_model_type=RegionQueryCosmosForceWM,
+                                _constructor_options=options, **kwargs)

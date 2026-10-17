@@ -1,0 +1,11 @@
+defaults:
+  - cosmos_forcewm
+  - _self_
+
+_target_: fastwam.cosmos.assets.create_cosmos_region_queries
+region_count: 32
+region_width: 512
+region_heads: 8
+region_layer: 13
+region_seed: 46
+region_writeback: true

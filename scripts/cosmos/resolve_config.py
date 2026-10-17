@@ -11,7 +11,7 @@ from fastwam.cosmos.preflight import validate_config
 def main():
     p=argparse.ArgumentParser()
     p.add_argument('--task',default='cosmos_forcewm_4gpu_30k',
-        choices=['cosmos_forcewm_4gpu_30k','cosmos_forcewm_paired_4gpu_30k'])
+        choices=['cosmos_forcewm_4gpu_30k','cosmos_forcewm_paired_4gpu_30k','cosmos_forcewm_regions32_4gpu_30k'])
     for key in ('text-cache','feature-cache','checkpoint','upstream','output-dir','config-output'):p.add_argument('--'+key,required=True)
     a=p.parse_args();bank,tm,td=read_text_bank(a.text_cache);del bank
     fm=validate(a.feature_cache);checked(a.checkpoint,WEIGHT_SHA);verify_upstream(Path(a.upstream))
