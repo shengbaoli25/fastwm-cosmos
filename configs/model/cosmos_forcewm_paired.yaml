@@ -1,0 +1,13 @@
+defaults:
+  - cosmos_forcewm
+  - _self_
+
+_target_: fastwam.cosmos.assets.create_cosmos_paired_regions
+region_pairs: 32
+region_width: 512
+region_heads: 8
+region_layer: 13
+region_seed: 46
+region_reconstruction_weight: 0.05
+region_diversity_weight: 0.001
+region_writeback: true

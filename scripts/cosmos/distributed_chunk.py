@@ -62,7 +62,8 @@ def main():
     run.mkdir(parents=False, exist_ok=False)
     OmegaConf.save(cfg, str(run/'resolved.yaml'))
     journal = {'status': 'starting', 'resource': resource, 'source': str(ROOT), 'resume': False,
-               'experiment': 'clean-action-force-chunk', 'action_semantics': 'GT-conditioned reconstruction',
+               'experiment': ('paired-regions32' if original['model']['_target_'].endswith('.create_cosmos_paired_regions')
+                              else 'clean-action-force-chunk'), 'action_semantics': 'GT-conditioned reconstruction',
                'loss_weights': {'video': 1, 'action': 1, 'force': 1}, 'original_config_sha256': sha(args.config),
                'config_sha256': sha(run/'resolved.yaml'), 'commands': commands,
                'user_time_cap': None, 'started_at': datetime.now(timezone.utc).isoformat()}

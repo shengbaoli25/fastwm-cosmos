@@ -70,7 +70,8 @@ def read_text_bank(path):
 
 def create_cosmos_forcewm(*,upstream,checkpoint,text_cache,expected_text_identity,
                          action_seed=42,force_seed=43,memory_seed=44,control_seed=45,
-                         generated_video_steps=16,gradient_checkpointing=True,device='cuda',**kwargs):
+                         generated_video_steps=16,gradient_checkpointing=True,device='cuda',
+                         _model_type=None,_constructor_options=None,**kwargs):
     from .model import CosmosForceWM
     bank,texts,digest=read_text_bank(text_cache)
     if digest!=expected_text_identity: raise ValueError('Pinned text cache identity differs')
@@ -88,7 +89,21 @@ def create_cosmos_forcewm(*,upstream,checkpoint,text_cache,expected_text_identit
         loss='FastWAM shifted-uniform FM v5/a1; Force MSE; lambda 1/1/1',
         recipe=dict(ranks=4,batch16=16,accum=1,global_batch=64,max_steps=30000),
         extra_config=kwargs)
-    model=CosmosForceWM(net,manifest=manifest,text_bank=bank,action_seed=action_seed,
+    model_type=CosmosForceWM if _model_type is None else _model_type
+    model=model_type(net,manifest=manifest,text_bank=bank,action_seed=action_seed,
         force_seed=force_seed,memory_seed=memory_seed,control_seed=control_seed,generated_video_steps=generated_video_steps,
-        gradient_checkpointing=gradient_checkpointing,**kwargs)
+        gradient_checkpointing=gradient_checkpointing,**(_constructor_options or {}),**kwargs)
     return model.to(device=device,dtype=torch.bfloat16)
+
+
+def create_cosmos_paired_regions(*, region_pairs=32, region_width=512, region_heads=8,
+                                region_layer=13, region_seed=46,
+                                region_reconstruction_weight=.05,
+                                region_diversity_weight=.001, region_writeback=True, **kwargs):
+    from .paired import PairedCosmosForceWM
+    options = dict(region_pairs=region_pairs, region_width=region_width, region_heads=region_heads,
+        region_layer=region_layer, region_seed=region_seed,
+        region_reconstruction_weight=region_reconstruction_weight,
+        region_diversity_weight=region_diversity_weight, region_writeback=region_writeback)
+    return create_cosmos_forcewm(_model_type=PairedCosmosForceWM,
+                                _constructor_options=options, **kwargs)

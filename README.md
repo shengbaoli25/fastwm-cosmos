@@ -41,3 +41,10 @@ Action FM retains its noisy input and original loss. It reads fixed, detached ge
 This branch uses the new v3 checkpoint/manifest schema and rejects old AR checkpoints. See [clean-action chunk contract and launch](docs/cosmos/clean-action-chunk.md).
 
 The unresolved `???` fields are deliberate: training requires the identity of an actual complete Cosmos feature/text cache. Follow the ordered preparation, probe, restore and foreground launch commands in [the operation guide](docs/cosmos/operations.md). Existing RGB and numeric caches are read only. VAE/text encoding happens offline; the training model has no VAE or RGB decoder.
+
+# Paired visual queries on RealAction
+
+The optional `cosmos_forcewm_paired_4gpu_30k` task adds 32 relation pairs per camera,
+keeps all 784 dense future video tokens, and supports bidirectional region/Force
+fusion with spatial Video writeback. See [the design and offline viewer](docs/cosmos/paired-regions.md).
+This experimental branch has no trained region-localization results yet.

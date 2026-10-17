@@ -1,0 +1,7 @@
+# @package _global_
+defaults:
+  - cosmos_forcewm_4gpu_30k
+  - override /model: cosmos_forcewm_paired
+  - _self_
+
+output_dir: runs/cosmos-paired-regions32-4rank-30k
