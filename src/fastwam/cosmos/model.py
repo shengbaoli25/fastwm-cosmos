@@ -167,6 +167,10 @@ class CosmosForceWM(nn.Module):
         force = self.dit['force'](**self._condition(sample, action, context, cmask, memory))
         return memory, force
 
+    def _action_observation(self, first, raw):
+        zero = torch.zeros(len(first), device=self.device, dtype=self.torch_dtype)
+        return self._video(first, zero, raw, observed=True)[2]
+
     def action_velocity(self, action, clock, context, cmask, observation_kv, memory, force, apad):
         # AE diffusion states never flow back into either world model.
         expert = self.dit['action']
@@ -205,7 +209,7 @@ class CosmosForceWM(nn.Module):
         target=self.v_scheduler.training_target(clean,vn,vt)
         lv=temporal_mse(pred[:,:,1:].transpose(1,2).flatten(2),target[:,:,1:].transpose(1,2).flatten(2),vvalid,self.v_scheduler,vt)
         memory,force=self._world_models(sample,first,raw,ctx,cmask,action,apad)
-        _,_,kv=self._video(first,torch.zeros_like(vt),raw,observed=True)
+        kv=self._action_observation(first,raw)
         pa,_=self.action_velocity(na,at,ctx,cmask,kv,memory,force,apad)
         la=temporal_mse(pa,self.a_scheduler.training_target(action,an,at),~sample['action_is_pad'].to(self.device,torch.bool),self.a_scheduler,at)
         gt=sample['wrench_future'].to(self.device,self.torch_dtype)
@@ -238,8 +242,7 @@ class CosmosForceWM(nn.Module):
             result=dict(force=force.wrench,video_latents=memory[0])
             if generate_action:
                 if num_inference_steps < 1: raise ValueError('Positive Action generation steps required')
-                zero=torch.zeros(len(first),device=self.device,dtype=self.torch_dtype)
-                _,_,kv=self._video(first,zero,raw,observed=True)
+                kv=self._action_observation(first,raw)
                 gen=torch.Generator(device='cpu').manual_seed(seed)
                 action=torch.randn((len(first),32,7),generator=gen).to(self.device,self.torch_dtype)
                 times,deltas=self.a_scheduler.build_inference_schedule(num_inference_steps,self.device,self.torch_dtype)

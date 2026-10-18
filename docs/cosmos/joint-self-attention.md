@@ -1,144 +1,70 @@
-# Cosmos / ForceWM joint self-attention 对照
+# O/R/V/F/A masked joint attention
 
-本分支 `codex/cosmos-force-joint-self-attention` 从 RealAction 的
-`1f1756ee80ab113ea0ae4bea772a4f469bf0ca08` 建立，提供两路 WM 双向联合注意力，
-用于检验“Force 与 Video 相互作用及 Force loss 回传会损害 Cosmos 预训练能力”的假设。
-目前只有实现与 CPU 契约验证，没有本实验的 GPU 训练或质量结论。
+本分支仍为 `codex/cosmos-force-joint-self-attention`。v2 在原 joint v1 上修改
+三专家的交互方式，使用真实 Action32 作为参考 R；后续 GPT 轨迹使用同一显式条件接口。
 
-## 对照边界
+| Query / Key | O | R | V | F | A |
+|---|---|---|---|---|---|
+| O | 是 | 否 | 否 | 否 | 否 |
+| R | 是 | 是 | 否 | 否 | 否 |
+| V | 是 | 是 | 是 | 是 | 否 |
+| F | 是 | 是 | 是 | 是 | 否 |
+| A | 是 | 是 | 是 | 是 | 是 |
 
-| 项目 | RealAction 基线 | 本分支 joint 模型 |
-|---|---|---|
-| Cosmos | 官方 robot/action-cond，28 层，宽 2048，16×128 heads | 相同官方初始化、原生 QK norm / RoPE / AdaLN / text cross-attention / 输出层 |
-| Force | 28 层，宽 1280，FFN 4608，16 heads | 相同残差宽度、FFN、层数；Q/K/V 投影到 16×128，再投影回 1280 |
-| WM 交互 | Force W 单向读取 detached 生成视频 | 每层一次 SDPA 对拼接的 Video、H、U、W 做联合注意力 |
-| Video 能看到 Force | 否 | 所有有效 H/U/W；包括测量力历史与 learned future queries |
-| Force loss → Cosmos | 生成记忆 detach，不能沿此路径回传 | 对独立生成结果的 clock=0 联合 refresh 可回传 |
-| WM 的 Action | 同一份归一化真实 Action[0..31] | 相同；无 AE 输出、AE noisy Action 或 Action clock |
-| AE 输入 | `(1−σ) Action_GT + σ Gaussian`，σ 逐样本采样 0..1 | 相同；保持原 scheduler shift=1、clock=1000σ |
-| AE 记忆 | detached Video / Force，同一 diffusion 内固定 | 相同；独立当前帧 Video K/V 路径也相同 |
+O 包含当前双视角视频 token 和测量历史 H。R 为干净的参考动作编码。
+V 为两个未来 latent 时间组的视频 token。F 为 32 个 learned future-wrench queries，
+不输入真实未来受力。A 是 AE 在当前扩散步的动作状态。
 
-这里对齐的是原 RealAction 的 **σ∈[0,1]**，不是另外的 σ∈[0,0.1] 弱噪声实验。
-训练配置由 `cosmos_forcewm_joint_4gpu_30k` 继承原 task，模型配置由
-`cosmos_forcewm_joint` 继承原 model；展开后仅 `_target_` 和 `output_dir` 不同。
+物理拼接顺序为 `[observed video, future video, H, R, F, A]`；由组 ID 生成 mask，
+不要求同一逻辑组在物理序列中相邻。有效 O 内部双向，R 内部双向，F 内部双向，
+按本次五组表执行，覆盖 v1 的 H/U/W causal submask。
+无效输入不得作为有效 query 的 key；无效 query 仅保留自身 sentinel 并在 block 后清零。
 
-保持四卡/四 rank、B16、accum1、global64、AdamW lr=1e-4、betas=(0.9,0.95)、
-weight_decay=0.01、warmup1500、cosine 到 30000、save5000、BF16/原生 FP32 区域、
-ZeRO1、梯度裁剪1、全局/AE seed42、Force seed43、生成视频 seed44、控制投影 seed45，
-VideoFM / ActionFM / ForceMSE 权重 1:1:1。检查 5000 checkpoint 时仍保留 30000 scheduler。
+观测视频使用 clean-zero 时钟，且首帧的原生 action modulation 为零。
+因此 O 的初始表示和各层表示都不依赖 R/V/F/A；R 可以读取 O，但不能经多层间接读取预测。
+文本与当前 proprio 作为已观测条件保留各 expert 原本的 context 接口。
 
-## 数据和梯度路径
+## AE 与两个 WM
 
-```mermaid
-flowchart LR
-    A[同一 clean GT Action] --> V[Cosmos Video tokens]
-    A --> F[Force H / U / learned W queries]
-    H[真实历史力与 proprio] --> F
-    V <--> J[每层 joint self-attention]
-    J <--> F
-    N[noisy GT Action + AE clock] --> AE[Action Expert]
-    J --> D[detached 固定 Video / Force memory]
-    D --> AE
-```
+移除 `ActionDualMemory`，不再分别对 future-video / future-force 做附加 cross-attention。
+AE 使用自己的原生 Q/K/V、QK norm、RoPE、残差和 FFN，读取全部 WM prefix K/V 与自身 K/V，
+这些 key 在同一个 softmax 中归一化。
 
-每层先保留各自输入投影，再拼接 Q/K/V 做一次 softmax attention，最后拆分输出：
-Video 走官方的 residual / AdaLN / text cross-attention / FFN，Force 走自己的 residual / FFN。
-Force 的旧独立 self-attention 和单向 video cross-attention 被联合注意力替代，
-没有留在优化器中的未用分支。共享模块保留与基线相同的随机初始化；新注意力投影使用独立的
-RNG fork 初始化，不推进原本用于后续 AE memory 初始化的 RNG 状态。
+由于 O/R/V/F 的 query 行禁止读取 A，可以先计算每层的 WM prefix K/V，再计算 A 行。
+这是五组 masked joint attention 的精确分块计算，不是新的双 memory 模块。
+prefix 来自对应层 attention 前的原生 K/V，而非 block 后 feature 再投影。
+推理时同一 reference 下缓存 prefix，复用于所有 AE 去噪步。
 
-直接 Force→Force mask 仍为 H 读 causal H、U 读 bidirectional U、W 读 H/U 和 causal W。
-新增 Video↔全部有效 Force token 的边，因此经过多层后可以通过 Video 间接交换信息；
-不能再声称保持原 H/U/W 的跨层严格隔离。无效 Force token 不能成为任何有效 query 的 K/V，
-无效 query 仅有自身 sentinel，并在每层后清零。未来 W 是 32 个 learned queries，
-一次预测 future wrench[1..32]；没有真实未来 wrench 输入、previous-wrench teacher 或 AR。
+训练时 prefix K/V 保留梯度：ActionFM 可以更新 AE 与被读取的 WM 表示。
+这与 v1 的 detached AE memories 不同。前向 mask 不等同于梯度冻结；
+WM 的前向输入始终没有 AE 状态、AE diffusion clock 或未来受力标签。
 
-训练的 VideoFM 正常读取加噪目标视频进行监督。**ForceMSE 和 AE memory 来自另一条独立生成路径**：
+## 生成与监督
 
-1. 从独立当前帧 latent 和视频高斯噪声起步，以相同 clean Action 做 16 步 joint 视频生成；
-   每步固定当前帧，整个 rollout 使用 no-grad。
-2. 对生成 latent 做一次 clock=0 的 joint refresh。训练时该 pass 保持 autograd，
-   ForceMSE 经它回传到 Cosmos，rollout 本身不展开反传。
-3. 把此 refresh 的 Video / Force features detach 后交给 AE，AE 仍只重建 noisy Action。
-   未来 Video / Force 标签以及它们的标签有效性掩码不参与生成路径。
+保留 VideoFM + ActionFM + ForceMSE，权重 1:1:1。
+VideoFM 使用加噪目标视频；Force/AE 使用另一条从观测与独立高斯噪声起步的 16 步视频生成，
+整个 rollout no-grad，再执行 differentiable clock0 refresh。
+Force 与 AE 不读取监督路径的未来视频标签，也不根据目标 Force masks 筛选输入。
+移除重复的 observed-only Video pass，因为 O 已包含在 WM prefix。
 
-生成视频不使用目标未来 latent。实际推理和训练 Force 路径的生成 seed、同一组 WM 输入一致时，
-其计算流程一致。独立 observed-only Video K/V 始终只看当前帧，不使用联合 future features。
+## 从 v1 step5000 热启动
 
-## 代价与可解释范围
+显式配置 `model.initial_checkpoint` 和 `model.initial_checkpoint_sha256`。
+迁移器要求旧 joint v1 schema 与 step=5000，核对完整文件 SHA256，逐项检查所有保留权重的
+名称、形状和有限性。仅允许丢弃旧 `dit.memories.*` 与旧 runtime buffers。
+全部保留权重原值加载，重建新 manifest 和 seed44 runtime RNG。
+普通 checkpoint load 仍严格拒绝 v1/v2 混载；只有显式迁移入口允许模型权重迁移。
 
-联合方式改变 Force 注意力投影与参数量，不是严格等参数对照。Video 的预训练参数保持同样形状
-与初始值，Force 残差/FFN 和 AE 几何不变。实际参数计数见下表；它们是模型结构计数，
-不是显存或吞吐实测。
+优化器和 scheduler 重新建立。本轮 global_step 从 0 开始、`max_steps=30000`，
+即在原 5000 步权重基础上训练新的 30000 步；不把它称为旧 run 的完整状态续训。
+新 run 和旧 checkpoint 分开保存。
 
-| 参数量 | RealAction | joint |
-|---|---:|---:|
-| 每个 Force block | 26,893,568 | 22,300,672 |
-| 28 个 Force blocks 的差值 | — | −128,601,088 |
-| ForceWM 整体 | 754,581,510 | 625,980,422 |
-| 全模型 | 3,751,013,676 | 3,622,412,588 |
+四 H200 / 四 rank / 每卡 B16 / global64 / BF16 / ZeRO1 / lr1e-4 /
+warmup1500 / cosine至30000 / save5000 沿用原设置。原生 FP32 模块维持官方策略。
 
-两组训练均有 19 次 Video pass：监督1、生成16、refresh1、独立当前帧1。
-joint 在前18次同时执行 Force block，基线只在生成后执行一次 Force 网络；joint 的 refresh
-还保留 Video 梯度图，因此不能沿用基线的时间/显存预算。正式运行须以新的实际四卡预检为准。
+正式运行前必须在实际四卡上通过两次 Adam 更新、完整保存，以及独立四进程精确恢复。
+CPU 检查覆盖五组 mask、多层 O/R 隔离、缓存与完整联合 attention 的输出和梯度一致性、
+AE loss 回传、未来标签隔离、padding、BF16、gradient checkpointing、严格迁移和精确恢复。
+实际检查结果与资源状态记录于部署凭据，不用 CPU 测试替代 GPU 验证。
 
-相对基线的结果反映整个“双向交互 + 梯度耦合”改动，不能单凭下降就归因于预训练物理理解被破坏。
-如果需要进一步隔离梯度效应，应另作相同 joint 拓扑下的梯度阻断或冻结 Cosmos 对照。
-本分支未擅自加入这些额外实验。
-
-## 配置与后续入口
-
-先在本分支的独立部署目录，用实际且已验证的资产路径展开配置；下面路径是待填写项：
-
-```bash
-PYTHONPATH=src /path/to/native/.venv/bin/python scripts/cosmos/resolve_config.py \
-  --task cosmos_forcewm_joint_4gpu_30k \
-  --text-cache /path/to/verified/reason1-cache \
-  --feature-cache /path/to/verified/cosmos-feature-cache \
-  --checkpoint /path/to/official/robot-action-cond.pt \
-  --upstream /path/to/this-source/third_party/cosmos-predict2.5 \
-  --output-dir /path/to/new-joint-run/training \
-  --config-output /path/to/joint-resolved.yaml
-```
-
-解析器逐一核原始资产 SHA、缓存身份和源 pin，拒绝未填身份值。默认计划模式可查看实际三个阶段，
-不会创建 run 目录或启动训练：
-
-```bash
-/path/to/native/.venv/bin/python scripts/cosmos/distributed_chunk.py \
-  --config /path/to/joint-resolved.yaml \
-  --run-root /path/to/new-joint-run \
-  --native-python /path/to/native/.venv/bin/python
-```
-
-后续实际运行用同一入口显式 `--execute`，由平台提供真实 `TRAIN_JOB_ID`，先完成实际四卡
-two-Adam/full-state-save 和独立 fresh 四卡恢复，再进入正式训练。
-`binding.py` 对当前全部 Python source、实际配置和 pinned upstream 计算身份，旧基线 receipts
-不能复用；dispatch 记录 `cosmos-force-joint-self-attention`。正式 run/output 必须独立。
-旧 `scripts/resume/frozen_code.json` 仍属于旧实验，不是新分支的来源证明，也不用于新实验启动。
-
-权重 schema 为 `fastwam-cosmos-force-joint-self-attention28-v1`，manifest schema 为
-`cosmos-force-joint-self-attention28-v1`，记录联合拓扑、宽度和 refresh 梯度协议。
-权重 load 与全状态 runtime manifest 均严格匹配，拒绝混载基线 v3。
-
-## 后续公平评测
-
-优先与原 RealAction 的**同一 5000 step**比较，不把不同步数混在一起。保留两组实际 source、
-checkpoint SHA、原生日志、同 step loss 单点和末段同 steps 均值。相同数据缓存、划分、normalizer、
-raw FP64 归一化、Action/Force masks 和严格 +1 对齐，两个 WM 均输入同一 clean GT Action。
-
-复用五个完整训练 episode 0/12/24/36/49、129 窗（包括原119窗以及头尾补窗），逐窗重置观察条件，
-固定相同 Video seed44/16步和 AE seed0/16步；AE 起点也须两组一致，默认都从原版 Gaussian 起步。
-若另测 GT+σ0.1 的重建，两组同时使用相同起点，单列结果；不与 Gaussian 起点混比。
-分别报告 Action 起点/去噪误差、Force 六通道和聚合误差、main/wrist 各自 PSNR 与实际预测视频。
-
-这些是训练集条件生成/重建测试。它们不能单独证明自主策略、闭环表现、泛化或完整物理世界理解。
-判断预训练能力是否受损需要额外保留的物理场景/视频评测集与合适的冻结/梯度对照。
-
-## 已有验证
-
-`PYTHONPATH=src python -m pytest tests/cosmos -q`：83 passed（包含15项 joint 测试）。
-覆盖真实双向输入影响、ForceMSE→Cosmos 梯度、Video loss→Force 梯度、AE noise/clock 隔离、
-未来标签隔离、padding、共享初始化、两次 Adam 后完整保存与下一步精确恢复、旧 schema 拒绝、
-BF16/原生 FP32 无 autocast 和 gradient checkpointing 一致性。
-这些使用缩小的官方 Cosmos 网络与合成数据，只证明代码契约，不是 GPU 实测。
+训练集真实动作条件下的重建用于结构筛选；仍需要后续 GPT 参考轨迹细化、留出数据和真机闭环验证。

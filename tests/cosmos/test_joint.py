@@ -10,7 +10,7 @@ from hydra import compose, initialize_config_dir
 from omegaconf import OmegaConf
 
 from conftest import tiny_net, tiny_model, sample
-from fastwam.cosmos.joint import JointCosmosForceWM, joint_attention_mask
+from fastwam.cosmos.joint import JointCosmosForceWM, joint_attention_mask, grouped_attention_mask, joint_token_layout, action_prefix_mask, GROUP_READS, warm_start_joint
 from fastwam.cosmos.preflight import validate_config
 from fastwam.forcewm.masks import build_force_attention_mask
 from fastwam.forcewm.model import masked_force_mse
@@ -30,19 +30,16 @@ def world_models(model, s):
         raw, ctx, cmask, s['action'].to(model.torch_dtype), s['action_is_pad'])
 
 
-def test_joint_mask_preserves_force_edges_and_excludes_unavailable_tokens():
-    hp = torch.tensor([[True, False]])
-    ap = torch.tensor([[False, True]])
-    wp = torch.zeros_like(ap)
-    fm = build_force_attention_mask(hp, ap, wp)
-    valid = ~torch.cat((hp, ap, wp), 1)
-    mask = joint_attention_mask(3, fm, valid)
-    assert torch.equal(mask[:, :, 3:, 3:], fm)
-    assert mask[:, :, :3, :3].all()
-    assert torch.equal(mask[0, 0, 0, 3:], valid[0])
-    assert torch.equal(mask[0, 0, 3:, 0], valid[0])
-    for i in (3, 6):
-        assert mask[0, 0, i].sum() == 1 and mask[0, 0, i, i]
+def test_joint_mask_matches_requested_groups_and_excludes_unavailable_tokens():
+    valid = torch.tensor([[False, True, True, False, True, True]])
+    groups, all_valid = joint_token_layout(3, 1, valid, 2, 2)
+    mask = joint_attention_mask(3, 1, valid, 2, 2)
+    reads = torch.tensor(GROUP_READS, dtype=torch.bool)
+    for i in range(9):
+        for j in range(9):
+            expected = (bool(reads[groups[i], groups[j]]) and bool(all_valid[0, i])
+                        and bool(all_valid[0, j])) if all_valid[0, i] else i == j
+            assert bool(mask[0, 0, i, j]) == expected
 
 
 def test_joint_block_is_single_concatenated_attention_with_both_directions():
@@ -289,10 +286,93 @@ def test_factory_binds_new_architecture_and_runtime_manifest(monkeypatch):
         action_hidden=32, action_ffn=64, force_hidden=24, force_ffn=64,
         force_heads=2, memory_width=16, memory_heads=2)
     assert isinstance(m, JointCosmosForceWM)
-    assert m.manifest['schema'] == 'cosmos-force-joint-self-attention28-v1'
+    assert m.manifest['schema'] == 'cosmos-orvfa-joint28-v2'
     assert m.manifest['joint_protocol'] == JOINT_PROTOCOL
     assert m.manifest['attention'] == dict(heads=2, video_width=32, force_width=24, force_qkv_width=32)
     invalid = copy.deepcopy(m.state_dict())
     invalid['dit.runtime.manifest_bytes'][0] ^= 1
     with pytest.raises(ValueError, match='manifest differs'):
         m.load_state_dict(invalid)
+
+
+def test_cached_prefix_equals_full_three_expert_attention_and_gradients():
+    torch.manual_seed(71)
+    groups = torch.tensor([0, 2, 2, 0, 1, 3, 4, 4, 4])
+    valid = torch.tensor([[True, True, True, False, True, True, True, True, False]])
+    full_mask = grouped_attention_mask(groups, valid)
+    q, k, v = [torch.randn(1, 2, 9, 16, dtype=torch.float64, requires_grad=True) for _ in range(3)]
+    full = F.scaled_dot_product_attention(q, k, v, attn_mask=full_mask)
+    prefix = F.scaled_dot_product_attention(q[:, :, :6], k[:, :, :6], v[:, :, :6],
+                                          attn_mask=full_mask[:, :, :6, :6])
+    action = F.scaled_dot_product_attention(q[:, :, 6:], k, v,
+        attn_mask=action_prefix_mask(valid[:, :6], ~valid[:, 6:]))
+    split = torch.cat((prefix, action), 2)
+    torch.testing.assert_close(full, split, atol=1e-6, rtol=1e-5)
+    g1 = torch.autograd.grad(full.square().sum(), (q, k, v), retain_graph=True)
+    g2 = torch.autograd.grad(split.square().sum(), (q, k, v))
+    for a, b in zip(g1, g2):
+        torch.testing.assert_close(a, b, atol=2e-6, rtol=1e-5)
+
+
+def test_observed_and_reference_do_not_leak_future_across_layers():
+    m = joint_model(False)
+    s = sample(1)
+    raw, ctx, cmask = m._contexts(s)
+    def read(latents, reference):
+        return m._joint_video(latents, torch.tensor([600.]), raw, ctx, cmask,
+                              s, reference, s['action_is_pad'], collect=True)[1]
+    latents = s['video_latents'].clone()
+    latents[:, :, :1] = s['first_frame_latents']
+    a = read(latents, s['action'])
+    # First four video patches + 32 history tokens belong to O.
+    observed = list(range(4)) + list(range(12, 44))
+    reference = list(range(44, 76))
+    changed = latents.clone()
+    changed[:, :, 1:] += 100
+    with torch.no_grad():
+        m.dit['force'].queries.add_(100)
+    b = read(changed, s['action'])
+    c = read(changed, s['action'] + 100)
+    for layer in range(m.depth):
+        for i in (0, 1):
+            torch.testing.assert_close(a[layer][i][:, :, observed + reference],
+                                       b[layer][i][:, :, observed + reference], rtol=0, atol=0)
+            torch.testing.assert_close(a[layer][i][:, :, observed],
+                                       c[layer][i][:, :, observed], rtol=0, atol=0)
+    assert not torch.allclose(b[-1][0][:, :, reference], c[-1][0][:, :, reference])
+
+
+def test_action_loss_trains_both_wms_without_cross_memory_modules():
+    m = joint_model(False)
+    s = sample(1)
+    memory, force = world_models(m, s)
+    raw, ctx, cmask = m._contexts(s)
+    action, _ = m.action_velocity(s['action'] * .1, torch.tensor([300.]), ctx, cmask,
+                                 (), memory, force, s['action_is_pad'])
+    action.square().mean().backward()
+    assert 'memories' not in m.dit
+    for group in ('video', 'force', 'action'):
+        assert any(p.grad is not None and p.grad.abs().sum() > 0 for p in m.dit[group].parameters())
+
+
+def test_model_only_warm_start_preserves_all_retained_tensors_and_rebinds_runtime(tmp_path):
+    from fastwam.cache.latent import file_sha256
+    m = joint_model(False)
+    state = {k: v.clone() if isinstance(v, torch.Tensor) else v for k, v in m.state_dict().items()}
+    state['dit.memories.0.removed_parameter'] = torch.ones(2)
+    path = tmp_path / 'step5000.pt'
+    torch.save(dict(schema='fastwam-cosmos-force-joint-self-attention28-v1', step=5000,
+                    model=state), path)
+    restored = joint_model(False)
+    receipt = warm_start_joint(restored, path, file_sha256(path))
+    assert receipt['optimizer'] == 'fresh' and receipt['step'] == 5000
+    for key, value in restored.state_dict().items():
+        if not key.startswith('dit.runtime.'):
+            torch.testing.assert_close(value, state[key], rtol=0, atol=0)
+    with pytest.raises(ValueError, match='SHA256'):
+        warm_start_joint(restored, path, '0' * 64)
+    state['dit.action.head.weight'] = torch.full_like(state['dit.action.head.weight'], float('nan'))
+    torch.save(dict(schema='fastwam-cosmos-force-joint-self-attention28-v1', step=5000,
+                    model=state), path)
+    with pytest.raises(ValueError, match='nonfinite'):
+        warm_start_joint(restored, path, file_sha256(path))

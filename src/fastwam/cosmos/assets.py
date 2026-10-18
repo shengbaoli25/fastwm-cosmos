@@ -70,7 +70,8 @@ def read_text_bank(path):
 
 def _create_cosmos_forcewm(*,upstream,checkpoint,text_cache,expected_text_identity,
                          action_seed=42,force_seed=43,memory_seed=44,control_seed=45,
-                         generated_video_steps=16,gradient_checkpointing=True,device='cuda',joint=False,**kwargs):
+                         generated_video_steps=16,gradient_checkpointing=True,device='cuda',joint=False,
+                         initial_checkpoint=None,initial_checkpoint_sha256=None,**kwargs):
     from .model import CosmosForceWM
     bank,texts,digest=read_text_bank(text_cache)
     if digest!=expected_text_identity: raise ValueError('Pinned text cache identity differs')
@@ -92,17 +93,24 @@ def _create_cosmos_forcewm(*,upstream,checkpoint,text_cache,expected_text_identi
     if joint:
         from .joint import JointCosmosForceWM, JOINT_PROTOCOL
         model_type=JointCosmosForceWM
-        manifest.update(schema='cosmos-force-joint-self-attention28-v1',
+        manifest.update(schema='cosmos-orvfa-joint28-v2',
             joint_protocol=JOINT_PROTOCOL,
-            video='native Cosmos QK norm/RoPE/AdaLN plus joint Video-Force attention; isolated observed KV for AE',
-            memory='joint generated video; detached rollout; differentiable clock0 joint refresh for Force loss; detached AE memories',
-            force='H/U/W direct masks plus bidirectional Video edges; learned32 queries; no future labels/Action clock',
+            video='native Cosmos projections with O/R/V/F mask; clean-zero observed clock',
+            memory='native WM prefix KV; AE shares joint softmax; differentiable generated refresh',
+            force='O/R/V/F group masks; learned32 future queries; no future labels/AE clock',
             attention=dict(heads=net.num_heads,video_width=net.model_channels,
                            force_width=kwargs.get('force_hidden',1280),force_qkv_width=net.model_channels),
             initialization='official Cosmos; common random modules match RealAction seeds; new Force joint QKV/output random')
     model=model_type(net,manifest=manifest,text_bank=bank,action_seed=action_seed,
         force_seed=force_seed,memory_seed=memory_seed,control_seed=control_seed,generated_video_steps=generated_video_steps,
         gradient_checkpointing=gradient_checkpointing,**kwargs)
+    if initial_checkpoint is not None:
+        if not joint or initial_checkpoint_sha256 is None:
+            raise ValueError('Joint warm start requires an explicit checkpoint SHA256')
+        from .joint import warm_start_joint
+        warm_start_joint(model, initial_checkpoint, initial_checkpoint_sha256)
+    elif initial_checkpoint_sha256 is not None:
+        raise ValueError('Initial checkpoint path required with its SHA256')
     return model.to(device=device,dtype=torch.bfloat16)
 
 

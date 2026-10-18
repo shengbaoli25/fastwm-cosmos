@@ -1,6 +1,7 @@
 """Independent clean-action/chunk experiment with the unchanged four-H200 recipe.
 
-Existing runs are never stopped, reused as outputs, or used as initialization.
+Existing outputs are never reused. An explicit SHA-bound model-only warm start
+may initialize a changed architecture; optimizer/scheduler start fresh.
 Fresh two-Adam/save and independent four-rank restore must pass before formal.
 """
 import argparse
