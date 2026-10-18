@@ -1,10 +1,13 @@
 # RealMan cup joint training
 
-This is an independent ORVFA joint run on `1018_test_cup_force`: 73 episodes,
+This is an independent Video-isolated ORVFA joint run on `1018_test_cup_force`: 73 episodes,
 35611 anchors, 30 Hz, no validation split, 30000 optimizer updates on four H200s.
-The parent architecture is commit `2fd15a0`: Video and Force interact in both
-directions, AE reads their prefix and its own state, neither WM reads noisy AE.
-No new visual queries or changes to joint attention are introduced.
+The requested second architecture is inherited from `7f62575`: every Video
+query rejects all Force-owned H/R/F keys and AE states. Force reads Video and
+Force; AE reads both WMs and its own state. These branch rules intersect the
+existing O/R/V/F/A mask. Native clean Action32 controls and text remain available
+to Video. This is forward isolation only: Force/AE losses can still update Video.
+No new visual queries are introduced.
 
 ## Data contract
 
@@ -51,6 +54,14 @@ cache, resolves the unchanged joint recipe and invokes `distributed_chunk.py`.
 Two actual distributed Adam updates, full-state save and a fresh four-rank
 restore are mandatory before the formal 30000-step run. Each new attempt
 requires unused work/run directories; a failed encoder cannot enter training.
+
+For the corrected second-architecture run, `scripts/cosmos/train_realman_cached.py`
+reuses only the completed text/video/numeric caches from the first attempt. It
+rechecks raw dataset identity, the complete cache lineage, every feature shard,
+text pairing, official weights and upstream before dispatch. It requires the
+Video-isolated protocol and a new work/run directory. The first attempt's model,
+optimizer, scheduler and GPU-gate evidence are never reused. All 30000 formal
+updates start fresh after new two-update and independent restore GPU gates.
 
 ## Validation
 
