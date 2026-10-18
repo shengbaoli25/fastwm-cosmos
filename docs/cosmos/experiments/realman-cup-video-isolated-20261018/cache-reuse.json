@@ -1,0 +1,26 @@
+{
+  "prepared": "/inspire/ssd/project/long-range-embodied-collaborative-intelligence/ky26340/realman-cup-joint-preparation-v1",
+  "dataset_source_sha": "d2cd2923bc4983f60897e68a434c742c0d91321459fb5c81894b61d3de6ebe0f",
+  "cache_identity": "0c8896bf03948b99a91b31291c1b8316f788ea0a5a20e8751e4d249f1c29fd52",
+  "samples": 35611,
+  "joint_protocol": "orvfa-video-isolated-native-kv-generated-refresh-v3",
+  "branch_reads": [
+    [
+      1,
+      0,
+      0
+    ],
+    [
+      1,
+      1,
+      0
+    ],
+    [
+      1,
+      1,
+      1
+    ]
+  ],
+  "model_warm_start": false,
+  "optimizer_resume": false
+}

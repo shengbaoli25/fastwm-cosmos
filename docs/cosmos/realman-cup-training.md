@@ -70,3 +70,20 @@ videos decoded, 71222 total camera frames, 30 Hz, 640x480. Two-view input was
 rendered and visually checked. CPU regression: 34 tests passed across
 `test_joint.py`, `test_cache.py`, and `test_realman.py`. These are not a substitute
 for actual allocated GPU preflight evidence.
+
+## Submitted run configuration
+
+The running job uses source commit `bcb89b0` on
+`codex/realman-cup-joint-30k`. Its byte-for-byte resolved configuration is saved in
+[`configs/experiments/realman_cup_video_isolated_4h200_30k.resolved.yaml`](../../configs/experiments/realman_cup_video_isolated_4h200_30k.resolved.yaml),
+including the verified RealMan feature/text cache identities and official weights.
+The architecture mask is defined in the committed `joint.py`; it is not a YAML switch.
+
+The [run record](experiments/realman-cup-video-isolated-20261018/run.json),
+[original launch command](experiments/realman-cup-video-isolated-20261018/launch-command.txt),
+and [cache reuse receipt](experiments/realman-cup-video-isolated-20261018/cache-reuse.json)
+bind that snapshot to the actual four-H200 job. The dataset metadata identifies
+the robot as `realman_rm75_ctag2f120`; this is the local RM75 dataset with six-axis
+force/torque and two cameras. The saved paths describe the existing run. For a new
+run, use unused work/run directories through `train_realman_cached.py`, which
+revalidates the source and cache and creates the resolved configuration.

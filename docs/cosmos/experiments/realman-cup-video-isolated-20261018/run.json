@@ -1,0 +1,56 @@
+{
+  "dataset": "1018_test_cup_force",
+  "robot_type": "realman_rm75_ctag2f120",
+  "episodes": 73,
+  "anchors": 35611,
+  "fps": 30,
+  "cameras": {
+    "main": "observation.images.global",
+    "wrist": "observation.images.wrist"
+  },
+  "force": "observation.force",
+  "code_commit": "bcb89b0246d25df32380157909a59ad01e5f4c0c",
+  "code_branch": "codex/realman-cup-joint-30k",
+  "joint_protocol": "orvfa-video-isolated-native-kv-generated-refresh-v3",
+  "branch_order": [
+    "Video",
+    "Force",
+    "AE"
+  ],
+  "branch_reads": [
+    [
+      1,
+      0,
+      0
+    ],
+    [
+      1,
+      1,
+      0
+    ],
+    [
+      1,
+      1,
+      1
+    ]
+  ],
+  "task": "cosmos_forcewm_joint_4gpu_30k",
+  "gpus": 4,
+  "gpu_type": "H200",
+  "batch_per_rank": 16,
+  "global_batch": 64,
+  "max_steps": 30000,
+  "model_warm_start": false,
+  "optimizer_resume": false,
+  "job_id": "job-7a375360-47b6-4639-91ee-b61e9f9cf160",
+  "job_url": "https://qz.sii.edu.cn/jobs/distributedTrainingDetail/job-7a375360-47b6-4639-91ee-b61e9f9cf160?spaceId=ws-9dcc0e1f-80a4-4af2-bc2f-0e352e7b17e6",
+  "source_directory": "/inspire/hdd/project/long-range-embodied-collaborative-intelligence/ky26340/fastwm-cosmos/source-bcb89b0",
+  "setup_directory": "/inspire/ssd/project/long-range-embodied-collaborative-intelligence/ky26340/realman-cup-video-isolated-setup-v1",
+  "run_directory": "/inspire/ssd/project/long-range-embodied-collaborative-intelligence/ky26340/realman-cup-video-isolated-4h200-v1",
+  "remote_config": "/inspire/ssd/project/long-range-embodied-collaborative-intelligence/ky26340/realman-cup-video-isolated-4h200-v1/resolved.yaml",
+  "snapshot": "configs/experiments/realman_cup_video_isolated_4h200_30k.resolved.yaml",
+  "snapshot_sha256": "344059d45fc403bd56abec6df738a343bb4e2a7313f1f856ebddef7cf26b8c70",
+  "setup_config_sha256": "cc2ce8c6f414ee2e28a85d97a20518fb6e9bca28d84c953bc5416f70e8198d16",
+  "dataset_source_sha256": "d2cd2923bc4983f60897e68a434c742c0d91321459fb5c81894b61d3de6ebe0f",
+  "snapshot_captured_utc": "2026-10-18T16:57:13.098553+00:00"
+}
