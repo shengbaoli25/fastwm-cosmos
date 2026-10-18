@@ -10,7 +10,7 @@ from hydra import compose, initialize_config_dir
 from omegaconf import OmegaConf
 
 from conftest import tiny_net, tiny_model, sample
-from fastwam.cosmos.joint import JointCosmosForceWM, joint_attention_mask, grouped_attention_mask, joint_token_layout, action_prefix_mask, GROUP_READS, warm_start_joint
+from fastwam.cosmos.joint import JointCosmosForceWM, joint_attention_mask, grouped_attention_mask, joint_token_layout, action_prefix_mask, GROUP_READS, BRANCH_READS, warm_start_joint
 from fastwam.cosmos.preflight import validate_config
 from fastwam.forcewm.masks import build_force_attention_mask
 from fastwam.forcewm.model import masked_force_mse
@@ -32,12 +32,15 @@ def world_models(model, s):
 
 def test_joint_mask_matches_requested_groups_and_excludes_unavailable_tokens():
     valid = torch.tensor([[False, True, True, False, True, True]])
-    groups, all_valid = joint_token_layout(3, 1, valid, 2, 2)
+    groups, all_valid, branches = joint_token_layout(3, 1, valid, 2, 2)
     mask = joint_attention_mask(3, 1, valid, 2, 2)
     reads = torch.tensor(GROUP_READS, dtype=torch.bool)
+    branch_reads = torch.tensor([[True, False, False], [True, True, False], [True, True, True]])
+    assert torch.equal(branch_reads, torch.tensor(BRANCH_READS, dtype=torch.bool))
     for i in range(9):
         for j in range(9):
-            expected = (bool(reads[groups[i], groups[j]]) and bool(all_valid[0, i])
+            expected = (bool(reads[groups[i], groups[j]]) and bool(branch_reads[branches[i], branches[j]])
+                        and bool(all_valid[0, i])
                         and bool(all_valid[0, j])) if all_valid[0, i] else i == j
             assert bool(mask[0, 0, i, j]) == expected
 
@@ -73,14 +76,15 @@ def test_force_only_loss_updates_native_cosmos_and_queries():
     assert all(p.grad is None for p in m.dit['action'].parameters())
 
 
-def test_video_only_loss_updates_force_attention():
+def test_video_only_loss_cannot_update_force_branch():
     m = joint_model()
     s = sample(1)
     raw, ctx, cmask = m._contexts(s)
     prediction = m._supervised_video(s, s['video_latents'], torch.tensor([500.]),
         raw, ctx, cmask, s['action'], s['action_is_pad'])
     prediction.square().mean().backward()
-    assert m.dit['force'].blocks[0].self_attention.v.weight.grad.abs().sum() > 0
+    assert any(p.grad is not None and p.grad.abs().sum() > 0 for p in m.video.parameters())
+    assert all(p.grad is None or p.grad.count_nonzero() == 0 for p in m.dit['force'].parameters())
 
 
 def test_shared_initialization_matches_baseline_except_joint_attention():
@@ -111,14 +115,21 @@ def test_inference_future_labels_cannot_change_any_prediction_and_rng_restores()
     assert not m.dit['action'].training and m.training
 
 
-def test_history_changes_video_and_observation_changes_force():
+def test_force_history_cannot_change_video_and_observation_changes_force():
     m = joint_model(False)
     s = sample(1)
     a = m.infer_world_model(s, action_condition=s['action'])
     changed = copy.deepcopy(s)
     changed['history'] += 5
     b = m.infer_world_model(changed, action_condition=s['action'])
-    assert not torch.allclose(a['video_latents'], b['video_latents'])
+    torch.testing.assert_close(a['video_latents'], b['video_latents'], rtol=0, atol=0)
+    assert not torch.allclose(a['force'], b['force'])
+    # Even perturbing every Force-owned embedding and block cannot affect Video.
+    with torch.no_grad():
+        for parameter in m.dit['force'].parameters():
+            parameter.add_(torch.randn_like(parameter) * .1)
+    isolated = m.infer_world_model(changed, action_condition=s['action'])
+    torch.testing.assert_close(a['video_latents'], isolated['video_latents'], rtol=0, atol=0)
     changed = copy.deepcopy(s)
     changed['first_frame_latents'] += 5
     c = m.infer_world_model(changed, action_condition=s['action'])
@@ -286,7 +297,8 @@ def test_factory_binds_new_architecture_and_runtime_manifest(monkeypatch):
         action_hidden=32, action_ffn=64, force_hidden=24, force_ffn=64,
         force_heads=2, memory_width=16, memory_heads=2)
     assert isinstance(m, JointCosmosForceWM)
-    assert m.manifest['schema'] == 'cosmos-orvfa-joint28-v2'
+    assert m.manifest['schema'] == 'cosmos-orvfa-video-isolated28-v3'
+    assert m.manifest['branch_allowed_reads'] == BRANCH_READS
     assert m.manifest['joint_protocol'] == JOINT_PROTOCOL
     assert m.manifest['attention'] == dict(heads=2, video_width=32, force_width=24, force_qkv_width=32)
     invalid = copy.deepcopy(m.state_dict())
@@ -299,7 +311,8 @@ def test_cached_prefix_equals_full_three_expert_attention_and_gradients():
     torch.manual_seed(71)
     groups = torch.tensor([0, 2, 2, 0, 1, 3, 4, 4, 4])
     valid = torch.tensor([[True, True, True, False, True, True, True, True, False]])
-    full_mask = grouped_attention_mask(groups, valid)
+    branches = torch.tensor([0, 0, 0, 1, 1, 1, 2, 2, 2])
+    full_mask = grouped_attention_mask(groups, valid, branches)
     q, k, v = [torch.randn(1, 2, 9, 16, dtype=torch.float64, requires_grad=True) for _ in range(3)]
     full = F.scaled_dot_product_attention(q, k, v, attn_mask=full_mask)
     prefix = F.scaled_dot_product_attention(q[:, :, :6], k[:, :, :6], v[:, :, :6],

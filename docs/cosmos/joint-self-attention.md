@@ -1,7 +1,18 @@
-# O/R/V/F/A masked joint attention
+# Video-isolated masked joint self-attention
 
-本分支仍为 `codex/cosmos-force-joint-self-attention`。v2 在原 joint v1 上修改
-三专家的交互方式，使用真实 Action32 作为参考 R；后续 GPT 轨迹使用同一显式条件接口。
+本分支为 `codex/cosmos-force-joint-video-isolated`。这是 v2 的独立对照实验，
+将 Video 的前向生成从 Force/AE token 中隔离，便于后续加入学习 Query。
+仍使用真实 Action32 作为参考 R；后续 GPT 轨迹使用同一显式条件接口。
+
+先应用分支范围约束：
+
+| Query 分支 / Key 分支 | Video | Force (H/R/F) | AE |
+|---|---|---|---|
+| Video | 是 | 否 | 否 |
+| Force | 是 | 是 | 否 |
+| AE | 是 | 是 | 是 |
+
+再与 v2 的五组信息约束取交集。以下是原有五组约束，**不是最终单独使用的 mask**：
 
 | Query / Key | O | R | V | F | A |
 |---|---|---|---|---|---|
@@ -15,9 +26,12 @@ O 包含当前双视角视频 token 和测量历史 H。R 为干净的参考动�
 V 为两个未来 latent 时间组的视频 token。F 为 32 个 learned future-wrench queries，
 不输入真实未来受力。A 是 AE 在当前扩散步的动作状态。
 
-物理拼接顺序为 `[observed video, future video, H, R, F, A]`；由组 ID 生成 mask，
+物理拼接顺序为 `[observed video, future video, H, R, F, A]`；由组 ID 和分支 owner 生成 mask，
 不要求同一逻辑组在物理序列中相邻。有效 O 内部双向，R 内部双向，F 内部双向，
-按本次五组表执行，覆盖 v1 的 H/U/W causal submask。
+但观测视频 O 也不能读取 Force 分支的历史 H。未来视频 V 不读取 H/R/F。
+Force 的 H/R/F 保留 v2 的组约束，不能通过 R 间接读取未来 V/F。
+此处“Video 禁止读 Force”覆盖整个 Force 分支，而非仅未来受力 F。
+Video 原生的干净 Action32 controls / AdaLN 与文本条件保留；它不依赖 Force 的参考编码。
 无效输入不得作为有效 query 的 key；无效 query 仅保留自身 sentinel 并在 block 后清零。
 
 观测视频使用 clean-zero 时钟，且首帧的原生 action modulation 为零。
@@ -36,7 +50,8 @@ prefix 来自对应层 attention 前的原生 K/V，而非 block 后 feature 再
 推理时同一 reference 下缓存 prefix，复用于所有 AE 去噪步。
 
 训练时 prefix K/V 保留梯度：ActionFM 可以更新 AE 与被读取的 WM 表示。
-这与 v1 的 detached AE memories 不同。前向 mask 不等同于梯度冻结；
+ForceMSE 仍可更新 Video；VideoFM 不能更新 Force。前向独立不等同于梯度冻结。
+这与 v1 的 detached AE memories 不同。
 WM 的前向输入始终没有 AE 状态、AE diffusion clock 或未来受力标签。
 
 ## 生成与监督
@@ -53,7 +68,8 @@ Force 与 AE 不读取监督路径的未来视频标签，也不根据目标 For
 迁移器要求旧 joint v1 schema 与 step=5000，核对完整文件 SHA256，逐项检查所有保留权重的
 名称、形状和有限性。仅允许丢弃旧 `dit.memories.*` 与旧 runtime buffers。
 全部保留权重原值加载，重建新 manifest 和 seed44 runtime RNG。
-普通 checkpoint load 仍严格拒绝 v1/v2 混载；只有显式迁移入口允许模型权重迁移。
+v3 使用独立 checkpoint schema、joint protocol 和带分支 mask 的 manifest。
+普通 checkpoint load 严格拒绝不同架构混载；只有显式迁移入口允许模型权重迁移。
 
 优化器和 scheduler 重新建立。本轮 global_step 从 0 开始、`max_steps=30000`，
 即在原 5000 步权重基础上训练新的 30000 步；不把它称为旧 run 的完整状态续训。
@@ -63,7 +79,8 @@ Force 与 AE 不读取监督路径的未来视频标签，也不根据目标 For
 warmup1500 / cosine至30000 / save5000 沿用原设置。原生 FP32 模块维持官方策略。
 
 正式运行前必须在实际四卡上通过两次 Adam 更新、完整保存，以及独立四进程精确恢复。
-CPU 检查覆盖五组 mask、多层 O/R 隔离、缓存与完整联合 attention 的输出和梯度一致性、
+CPU 检查覆盖分支与五组 mask 的交集、Force 全参数/历史扰动时 Video 完全不变、
+VideoFM 无 Force 梯度、多层 O/R 隔离、缓存与完整联合 attention 的输出和梯度一致性、
 AE loss 回传、未来标签隔离、padding、BF16、gradient checkpointing、严格迁移和精确恢复。
 实际检查结果与资源状态记录于部署凭据，不用 CPU 测试替代 GPU 验证。
 

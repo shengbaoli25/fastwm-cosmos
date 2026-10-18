@@ -93,9 +93,9 @@ def _create_cosmos_forcewm(*,upstream,checkpoint,text_cache,expected_text_identi
     if joint:
         from .joint import JointCosmosForceWM, JOINT_PROTOCOL
         model_type=JointCosmosForceWM
-        manifest.update(schema='cosmos-orvfa-joint28-v2',
+        manifest.update(schema='cosmos-orvfa-video-isolated28-v3',
             joint_protocol=JOINT_PROTOCOL,
-            video='native Cosmos projections with O/R/V/F mask; clean-zero observed clock',
+            video='native Cosmos projections; O/R/V/F mask AND Video-only KV; clean-zero observed clock',
             memory='native WM prefix KV; AE shares joint softmax; differentiable generated refresh',
             force='O/R/V/F group masks; learned32 future queries; no future labels/AE clock',
             attention=dict(heads=net.num_heads,video_width=net.model_channels,

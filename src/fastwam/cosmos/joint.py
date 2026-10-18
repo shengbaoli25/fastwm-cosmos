@@ -1,6 +1,7 @@
-"""O/R/V/F/A masked joint attention with a reusable WM prefix.
+"""Video-isolated O/R/V/F/A joint attention with a reusable WM prefix.
 
-O reads O; R reads O/R; V and F read O/R/V/F; A reads everything.
+The O/R/V/F/A rules are intersected with Video -> Video, Force ->
+Video/Force, and AE -> all. Video never reads Force-owned H/R/F tokens.
 The clean reference is currently recorded Action32, never noisy AE states.
 """
 import torch
@@ -12,19 +13,24 @@ from fastwam.forcewm.chunk import ChunkForceWM
 from fastwam.forcewm.model import Attention, ForcePrediction
 from .model import CosmosForceWM
 
-JOINT_PROTOCOL = 'orvfa-masked-joint-native-kv-generated-refresh-v2'
+JOINT_PROTOCOL = 'orvfa-video-isolated-native-kv-generated-refresh-v3'
 GROUP_READS = ((1, 0, 0, 0, 0), (1, 1, 0, 0, 0),
                (1, 1, 1, 1, 0), (1, 1, 1, 1, 0), (1, 1, 1, 1, 1))
+BRANCH_READS = ((1, 0, 0), (1, 1, 0), (1, 1, 1))
 
 
-def grouped_attention_mask(groups, valid):
+def grouped_attention_mask(groups, valid, branches):
     """Boolean allowed edges; unavailable rows have only a diagonal sentinel."""
     if (groups.ndim != 1 or valid.ndim != 2 or groups.numel() != valid.shape[1]
             or groups.dtype != torch.long or valid.dtype != torch.bool
-            or not bool(((groups >= 0) & (groups < 5)).all())):
-        raise ValueError('O/R/V/F/A group IDs and boolean token validity required')
+            or not bool(((groups >= 0) & (groups < 5)).all())
+            or branches.shape != groups.shape or branches.dtype != torch.long
+            or not bool(((branches >= 0) & (branches < 3)).all())):
+        raise ValueError('O/R/V/F/A groups, Video/Force/AE owners and boolean validity required')
     reads = torch.tensor(GROUP_READS, device=valid.device, dtype=torch.bool)
-    allowed = reads[groups[:, None], groups[None, :]][None]
+    branch_reads = torch.tensor(BRANCH_READS, device=valid.device, dtype=torch.bool)
+    allowed = (reads[groups[:, None], groups[None, :]]
+               & branch_reads[branches[:, None], branches[None, :]])[None]
     allowed = allowed & valid[:, :, None] & valid[:, None, :]
     sentinel = torch.eye(len(groups), device=valid.device, dtype=torch.bool)[None]
     return (allowed | ((~valid)[:, :, None] & sentinel))[:, None]
@@ -40,12 +46,14 @@ def joint_token_layout(video_tokens, observed_tokens, force_valid, history_steps
                           device=force_valid.device, dtype=torch.long)
     valid = torch.cat((torch.ones(len(force_valid), video_tokens, device=force_valid.device,
                                  dtype=torch.bool), force_valid), 1)
-    return groups, valid
+    branches = torch.tensor([0] * video_tokens + [1] * force_valid.shape[1],
+                            device=force_valid.device, dtype=torch.long)
+    return groups, valid, branches
 
 
 def joint_attention_mask(video_tokens, observed_tokens, force_valid, history_steps=32, horizon=32):
-    groups, valid = joint_token_layout(video_tokens, observed_tokens, force_valid, history_steps, horizon)
-    return grouped_attention_mask(groups, valid)
+    groups, valid, branches = joint_token_layout(video_tokens, observed_tokens, force_valid, history_steps, horizon)
+    return grouped_attention_mask(groups, valid, branches)
 
 
 def action_prefix_mask(prefix_valid, action_is_pad):
@@ -97,7 +105,7 @@ class JointChunkForceWM(ChunkForceWM):
 
 class JointCosmosForceWM(CosmosForceWM):
     force_type = JointChunkForceWM
-    checkpoint_schema = 'fastwam-cosmos-orvfa-joint28-v2'
+    checkpoint_schema = 'fastwam-cosmos-orvfa-video-isolated28-v3'
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -105,8 +113,10 @@ class JointCosmosForceWM(CosmosForceWM):
                 or self.video.hidden_dim != self.video.num_heads * self.video.attn_head_dim):
             raise ValueError('Joint attention requires matching native Cosmos head geometry')
         del self.dit['memories']
-        self.manifest.update(schema='cosmos-orvfa-joint28-v2', joint_protocol=JOINT_PROTOCOL,
+        self.manifest.update(schema='cosmos-orvfa-video-isolated28-v3', joint_protocol=JOINT_PROTOCOL,
             attention_groups=['O', 'R', 'V', 'F', 'A'], allowed_reads=GROUP_READS,
+            attention_branches=['Video', 'Force', 'AE'], branch_allowed_reads=BRANCH_READS,
+            video_isolation='all Video queries reject Force-owned H/R/F KV; native clean Action32 controls retained',
             reference='explicit clean recorded Action32; future GPT reference uses the same input',
             memory='native per-layer WM prefix KV; differentiable clock0 refresh; no-grad rollout',
             action_gradients='AE loss reaches prefix projections and WMs; no AE state in WM forward',
@@ -129,9 +139,9 @@ class JointCosmosForceWM(CosmosForceWM):
             history_channel_valid=sample['history_channel_valid'].to(self.device, torch.bool),
             observation_latents=sample['first_frame_latents'].to(self.device, self.torch_dtype))
         x = prepared['tokens']
-        groups, prefix_valid = joint_token_layout(x.shape[1], prepared['tokens_per_frame'],
+        groups, prefix_valid, branches = joint_token_layout(x.shape[1], prepared['tokens_per_frame'],
             valid, force.history_steps, force.horizon)
-        mask = grouped_attention_mask(groups, prefix_valid)
+        mask = grouped_attention_mask(groups, prefix_valid, branches)
         caches, force_layers = [], []
         for i, block in enumerate(force.blocks):
             def run(video_tokens, force_tokens, i=i, block=block):
