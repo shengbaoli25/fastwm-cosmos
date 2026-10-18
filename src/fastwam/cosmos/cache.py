@@ -30,8 +30,20 @@ def validate(root,expected=None,*,complete=True,production=True):
         raise ValueError('Camera/window encoding differs')
     if m['identity_sha256']!=cache_identity_sha256(i) or expected is not None and expected!=m['identity_sha256']:
         raise ValueError('Cache identity differs')
-    if production and (i.get('scope')!='production' or len(i['episode_lengths'])!=50 or sum(i['episode_lengths'])!=34808):
-        raise ValueError('Production requires all50 episodes/34808 anchors')
+    if production:
+        profile=i.get('dataset_profile','forcevla-wipe50')
+        scopes={'forcevla-wipe50':(50,34808),'realman-1018-test-cup-force-v1':(73,35611)}
+        if (i.get('scope')!='production' or profile not in scopes
+                or (len(i['episode_lengths']),sum(i['episode_lengths']))!=scopes[profile]):
+            raise ValueError('Production dataset profile/scope differs')
+        if profile=='realman-1018-test-cup-force-v1':
+            source=i.get('realman_source',{})
+            if (source.get('profile')!=profile or source.get('episode_lengths')!=i['episode_lengths']
+                    or cache_identity_sha256(source)!=i.get('numeric_identity')
+                    or cache_identity_sha256(source.get('files',{}))!=source.get('source_inventory_sha256')
+                    or source.get('eef_columns')!=[8,9,10,11,12,13,7]
+                    or source.get('cameras')!=['observation.images.global','observation.images.wrist']):
+                raise ValueError('RealMan source lineage differs')
     if complete and m['status']!='complete': raise ValueError('Partial cache is not trainable')
     if m['status'] not in ['complete','partial']: raise ValueError('Invalid cache status')
     rows=[(ep,f) for ep,n in enumerate(i['episode_lengths']) for f in range(n)]; stop=0
