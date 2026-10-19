@@ -140,6 +140,27 @@ class RuntimeTests(unittest.TestCase):
         runtime.attach(policy=policy, hardware=hardware)
         return runtime, policy, hardware
 
+    def test_no_reference_runtime_never_reads_or_updates_rolling_actions(self):
+        class Policy(MockPolicy):
+            reference_mode = 'none'
+
+            def infer(self, obs, normalized_reference, history):
+                self.references.append(normalized_reference)
+                return [list(obs.state)] * 32
+
+        runtime, policy, _ = self.make_runtime(Policy())
+        runtime.reference.get = Mock(side_effect=AssertionError('No rolling input'))
+        runtime.reference.update = Mock(side_effect=AssertionError('No rolling update'))
+        try:
+            runtime.start()
+            self.assertTrue(wait_until(lambda: runtime.inference_count >= 2))
+            runtime.pause()
+            self.assertTrue(all(value is None for value in policy.references))
+            self.assertEqual(runtime.status()['reference_mode'], 'none')
+            self.assertIsNone(runtime.status()['bootstrap'])
+        finally:
+            runtime.close()
+
     def test_real_async_loop_rolls_ae_chunk_into_next_world_model_input(self):
         runtime, policy, hardware = self.make_runtime()
         try:

@@ -60,7 +60,23 @@ exactly. Six 21–29 ms source intervals caused no reset. The audit is included 
 `deploy/validation/force_pipeline_20261019.json`; it is an offline replay, not a
 physical policy execution.
 
-## Rolling model input
+## No-reference joint diffusion deployment
+
+New checkpoints with schema `cosmos-noaction-vfa-diffusion28-v1` use the same
+`infer_joint` core as training, with 16 joint Video/Force/Action updates and
+request-local static O/H/text K/V caches. The runtime neither supplies nor updates
+rolling AE references for these checkpoints. Its dashboard reports the selected
+mode. Legacy checkpoints retain their existing behavior.
+
+Generate the runtime JSON from the resolved training config and exact training
+normalization using `scripts/cosmos/export_noaction_deployment.py`; see the
+[no-reference guide](../docs/cosmos/noaction-joint-diffusion.md) for arguments.
+The loader verifies normalization SHA256, model dimensions, text/data identities,
+checkpoint schema and sampling steps. It rejects the old `video_isolated_reuse`
+backend for the new model. The old CUDA Graph/compiled serial runner is not used
+by the new joint sampler; its full-model latency remains to be measured.
+
+## Legacy rolling model input
 
 The trained `JointCosmosForceWM.infer_forcewm` method takes one required clean
 `Action32x7` condition. Both the video/force world-model branches receive the

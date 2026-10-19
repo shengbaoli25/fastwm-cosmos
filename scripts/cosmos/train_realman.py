@@ -61,7 +61,8 @@ def main():
         for proc in workers:proc.wait()
         for log in logs:log.close()
     run('assemble',[*args,'--assemble'])
-    run('resolve',[ROOT/'scripts/cosmos/resolve_config.py','--task','cosmos_forcewm_joint_4gpu_30k',
+    run('resolve',[ROOT/'scripts/cosmos/resolve_config.py','--task','cosmos_noaction_joint_4gpu_30k',
+        '--normalization',work/'normalization.json',
         '--text-cache',work/'text','--feature-cache',work/'features','--checkpoint',a.checkpoint,
         '--upstream',upstream,'--output-dir',work/'config-placeholder',
         '--config-output',work/'resolved.yaml'])

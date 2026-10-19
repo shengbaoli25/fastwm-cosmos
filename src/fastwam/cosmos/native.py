@@ -177,3 +177,16 @@ def preserve_fp32_strategy(net):
         block.adaln_modulation_mlp.float()
     net.final_layer.adaln_modulation.float()
     net.final_layer.linear.float()
+
+
+def nonaction_native_imports(repo: Path):
+    torch, module, vae, _, data_type = native_imports(repo)
+    from cosmos_predict2._src.predict2.networks.minimal_v1_lvg_dit import MinimalV1LVGDiT
+    return torch, module, vae, MinimalV1LVGDiT, data_type
+
+
+def nonaction_net_config():
+    config = target_net_config()
+    del config['action_dim']
+    del config['temporal_compression_ratio']
+    return config

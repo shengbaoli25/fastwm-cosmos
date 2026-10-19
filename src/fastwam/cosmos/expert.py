@@ -23,13 +23,17 @@ class CosmosExpert(nn.Module):
     native controls; callers own the dataset-to-control temporal mapping.
     """
 
+    action_conditioned = True
+
     def __init__(self, net: nn.Module):
         super().__init__()
         required = ("prepare_embedded_sequence", "t_embedder", "t_embedding_norm", "blocks",
-                    "final_layer", "unpatchify", "action_embedder_B_D", "action_embedder_B_3D")
+                    "final_layer", "unpatchify")
+        if self.action_conditioned:
+            required += ("action_embedder_B_D", "action_embedder_B_3D")
         if any(not hasattr(net, name) for name in required):
             raise ValueError("CosmosExpert requires the native action-chunk Cosmos DiT")
-        if getattr(net, "patch_temporal", None) != 1 or getattr(net, "_num_action_per_latent_frame", None) != 4:
+        if getattr(net, "patch_temporal", None) != 1 or (self.action_conditioned and getattr(net, "_num_action_per_latent_frame", None) != 4):
             raise ValueError("CosmosExpert requires patch_temporal=1 and four controls per future latent")
         if not len(net.blocks):
             raise ValueError("CosmosExpert requires at least one transformer block")
@@ -120,7 +124,9 @@ class CosmosExpert(nn.Module):
         timestep = timestep * self.net.timestep_scale
         with self._fp32_region(self.net, latents):
             time, adaln = self.net.t_embedder(timestep)
-        if frames > 1:
+        if not self.action_conditioned and candidate_actions is not None:
+            raise ValueError("Non-action-conditioned Cosmos rejects future actions")
+        if self.action_conditioned and frames > 1:
             expected = (batch, (frames - 1) * 4, 7)
             if (candidate_actions is None or candidate_actions.shape != expected
                     or not candidate_actions.is_floating_point()
@@ -170,7 +176,7 @@ class CosmosExpert(nn.Module):
         q, k, v = block.self_attn.compute_qkv(normalized.flatten(1, 3), rope_emb=state["rope"])
         return q.transpose(1, 2), k.transpose(1, 2), v.transpose(1, 2), {"residual": x, "modulations": modulations}
 
-    def block_finish(self, layer: int, mixed: Tensor, post_state: dict, prepared: dict) -> Tensor:
+    def block_finish(self, layer: int, mixed: Tensor, post_state: dict, prepared: dict, text_kv=None) -> Tensor:
         """Apply Cosmos output projection, gated cross-attention and gated MLP."""
         block = self.net.blocks[layer]
         x = post_state["residual"]
@@ -182,8 +188,14 @@ class CosmosExpert(nn.Module):
         x = x + post_state["modulations"]["self_attn"][2] * self_output
         shift, scale, gate = post_state["modulations"]["cross_attn"]
         normalized = block.layer_norm_cross_attn(x) * (1 + scale) + shift
-        cross_output = block.cross_attn(normalized.flatten(1, 3), prepared["state"]["context"],
-                                       rope_emb=prepared["state"]["rope"]).reshape_as(x)
+        if text_kv is None:
+            cross_output = block.cross_attn(normalized.flatten(1, 3), prepared["state"]["context"],
+                                           rope_emb=prepared["state"]["rope"]).reshape_as(x)
+        else:
+            attention = block.cross_attn
+            q = attention.q_norm(attention.q_proj(normalized.flatten(1, 3)).unflatten(
+                -1, (attention.n_heads, attention.head_dim)))
+            cross_output = attention.compute_attention(q, *text_kv).reshape_as(x)
         x = x + gate * cross_output
         shift, scale, gate = post_state["modulations"]["mlp"]
         normalized = block.layer_norm_mlp(x) * (1 + scale) + shift
@@ -217,3 +229,13 @@ class CosmosExpert(nn.Module):
             mixed = F.scaled_dot_product_attention(q, k, v, attn_mask=attention_mask)
             tokens = self.block_finish(layer, mixed, state, prepared)
         return self.finish(tokens, prepared)
+
+
+class CosmosVideoExpert(CosmosExpert):
+    """Official non-action-conditioned Video2World with the same layer API."""
+    action_conditioned = False
+
+    def __init__(self, net):
+        if hasattr(net, "action_embedder_B_D"):
+            raise ValueError("Use the official non-action-conditioned network and checkpoint")
+        super().__init__(net)

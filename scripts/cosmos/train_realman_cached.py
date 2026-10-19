@@ -1,4 +1,4 @@
-"""Train the Video-isolated joint model from verified existing RealMan caches."""
+"""Train the no-reference joint diffusion model from verified existing RealMan caches."""
 import argparse
 import json
 import os
@@ -24,13 +24,13 @@ def main():
 
     import torch
     from fastwam.cosmos.cache import _atomic
-    from fastwam.cosmos.joint import JOINT_PROTOCOL, BRANCH_READS
+    from fastwam.cosmos.noaction import SCHEMA as JOINT_PROTOCOL, BRANCH_READS
     from fastwam.cosmos.realman import RealManSource
     from omegaconf import OmegaConf
     torch.set_num_threads(4)
-    if (JOINT_PROTOCOL != 'orvfa-video-isolated-native-kv-generated-refresh-v3'
+    if (JOINT_PROTOCOL != 'cosmos-noaction-vfa-diffusion28-v1'
             or BRANCH_READS != ((1, 0, 0), (1, 1, 0), (1, 1, 1))):
-        raise ValueError('The second, Video-isolated architecture is required')
+        raise ValueError('The no-reference joint diffusion architecture is required')
 
     prepared = Path(args.prepared).resolve()
     work = Path(args.work).resolve()
@@ -57,7 +57,8 @@ def main():
     with (work / 'resolve.log').open('w') as log:
         subprocess.run([
             sys.executable, '-u', str(ROOT / 'scripts/cosmos/resolve_config.py'),
-            '--task', 'cosmos_forcewm_joint_4gpu_30k',
+            '--task', 'cosmos_noaction_joint_4gpu_30k',
+            '--normalization', str(work / 'normalization.json'),
             '--text-cache', str(prepared / 'text'),
             '--feature-cache', str(prepared / 'features'),
             '--checkpoint', args.checkpoint,
@@ -68,7 +69,7 @@ def main():
     cfg = OmegaConf.load(work / 'resolved.yaml')
     if cfg.model.get('initial_checkpoint') is not None or cfg.max_steps != 30000:
         raise ValueError('Fresh official initialization and 30000 steps required')
-    print('REALMAN_VIDEO_ISOLATED_CACHE_VERIFIED', flush=True)
+    print('REALMAN_NOACTION_DIFFUSION_CACHE_VERIFIED', flush=True)
     os.execv(sys.executable, [
         sys.executable, '-u', str(ROOT / 'scripts/cosmos/distributed_chunk.py'),
         '--config', str(work / 'resolved.yaml'), '--run-root', str(run),

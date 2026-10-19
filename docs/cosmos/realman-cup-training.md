@@ -1,5 +1,10 @@
 # RealMan cup joint training
 
+> Historical action-conditioned experiment record. Since 2026-10-19 the two
+> `train_realman*.py` entry points select the new no-reference model. To reproduce
+> this recorded run, use its pinned commit/config. For new data use the
+> [current no-reference guide](noaction-joint-diffusion.md).
+
 This is an independent Video-isolated ORVFA joint run on `1018_test_cup_force`: 73 episodes,
 35611 anchors, 30 Hz, no validation split, 30000 optimizer updates on four H200s.
 The requested second architecture is inherited from `7f62575`: every Video

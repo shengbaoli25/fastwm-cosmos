@@ -274,7 +274,8 @@ class DeploymentRuntime:
                             "inference_ms=%.1f actions=%s execution_start=%.6f",
                             self.execution_mode, observation.sequence, self.input_age_at_result_ms,
                             self.latency_ms, kept, reference_stamp)
-            self.reference.update(execution, source_stamp=reference_stamp)
+            if getattr(self.policy, "reference_mode", "rolling_ae") != "none":
+                self.reference.update(execution, source_stamp=reference_stamp)
             self.inference_count += 1
             self._run_inference_count += 1
             return True
@@ -301,7 +302,8 @@ class DeploymentRuntime:
                     self._synchronous_ready_at = None
                 last_version = version
                 policy, epoch = self.policy, self.gate.current()
-                reference = self.reference.get(observation, self.normalizer)
+                reference = (None if getattr(policy, "reference_mode", "rolling_ae") == "none"
+                             else self.reference.get(observation, self.normalizer))
                 history = self._input_history
                 self._infer_active = True
             started = self.clock()
@@ -422,7 +424,11 @@ class DeploymentRuntime:
                 phase = ("executing_and_inferring" if self._infer_active else "executing") if executing else "waiting"
                 if self.execution_mode == "synchronous" and not executing:
                     phase = "inferring" if self._infer_active else "waiting_for_observation"
-            result.update(reference_mode="rolling_ae", bootstrap=self.reference.bootstrap(),
+            no_reference = getattr(self.policy, "reference_mode", "rolling_ae") == "none"
+            if no_reference:
+                result["reference_ready"] = False
+            result.update(reference_mode="none" if no_reference else "rolling_ae",
+                          bootstrap=None if no_reference else self.reference.bootstrap(),
                           inference_busy=self._infer_active, hardware=hardware,
                           execution_mode=self.execution_mode,
                           execution_phase=phase,

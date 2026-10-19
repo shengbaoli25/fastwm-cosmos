@@ -1,5 +1,17 @@
 # FastWAM · Cosmos28 · ForceWM28
 
+**Current branch: `codex/realman-cup-joint-30k` — no-reference joint diffusion.**
+The RealMan training entry points now select `task=cosmos_noaction_joint_4gpu_30k`:
+official non-action-conditioned Cosmos Video2World, AE 768/3072, Force diffusion
+768/2048, 28 layers each, and a shared layer core for training and 16-step joint
+inference. Video reads Video; Force reads Video/Force; AE reads all three.
+There is no reference trajectory or future action conditioning in either WM.
+See the [current training and deployment guide](docs/cosmos/noaction-joint-diffusion.md).
+The next run waits for the newly collected force dataset; this change launches no training.
+
+The material below documents **historical action-conditioned baselines**.
+Their configs, checkpoint loaders and experiment records remain available for reproduction.
+
 **Joint-attention comparison branch:** `codex/cosmos-force-joint-self-attention`
 adds bidirectional per-layer Cosmos/Force self-attention while keeping the original
 RealAction recipe, clean GT actions in both WMs, and noisy actions in AE. Select

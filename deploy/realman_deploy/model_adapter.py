@@ -33,7 +33,7 @@ class CosmosJointPolicy:
         self.tokenizer = None
         self.runner = None
         self.inference_backend = str(config.get("inference_backend", "reference"))
-        if self.inference_backend not in {"reference", "video_isolated_reuse"}:
+        if self.inference_backend not in {"reference", "video_isolated_reuse", "joint_static_cache"}:
             raise ValueError(f"Unknown inference_backend: {self.inference_backend}")
         self.text_index = 0
         self.inference_index = 0
@@ -68,8 +68,30 @@ class CosmosJointPolicy:
         self._resize = Resize((224, 224), interpolation=InterpolationMode.BILINEAR, antialias=True)
         if not torch.cuda.is_available() and self.device.startswith("cuda"):
             raise RuntimeError("CUDA is unavailable; connect the external GPU before loading a checkpoint")
-        from fastwam.cosmos.assets import create_joint_cosmos_forcewm, load_tokenizer
+        from fastwam.cosmos.assets import create_joint_cosmos_forcewm, create_noaction_joint_cosmos, load_tokenizer
+        from fastwam.cosmos.noaction import SCHEMA
+        payload = torch.load(self.checkpoint, map_location="cpu", weights_only=True, mmap=True)
+        self.reference_mode = "none" if payload.get("schema") == SCHEMA else "rolling_ae"
+        if self.reference_mode == "none" and self.inference_backend == "video_isolated_reuse":
+            raise ValueError("New joint diffusion uses reference or joint_static_cache backend")
+        if self.reference_mode != "none" and self.inference_backend == "joint_static_cache":
+            raise ValueError("joint_static_cache requires the no-reference diffusion checkpoint")
         kwargs = dict(self.config["model_kwargs"])
+        if self.reference_mode == "none":
+            from .preprocessing import file_sha256
+            normalization_sha = payload['manifest'].get('normalization_sha256')
+            if not normalization_sha or file_sha256(self._path(self.config['normalization_file'])) != normalization_sha:
+                raise ValueError('Use the exact normalization.json bound during this RealMan training run')
+            if int(self.config.get('joint_steps', 16)) != payload['manifest']['num_inference_steps']:
+                raise ValueError('Joint sampler step count differs from the trained configuration')
+            trained = payload["manifest"]["extra_config"]
+            for key, value in trained.items():
+                if key in kwargs and kwargs[key] != value and key != "gradient_checkpointing":
+                    raise ValueError(f"Deployment architecture differs from trained checkpoint: {key}")
+            kwargs.update(trained)
+            kwargs["expected_data_identity"] = payload["manifest"]["dataset_identity"]
+            kwargs["expected_normalization_sha256"] = normalization_sha
+        del payload
         for key in ("upstream", "checkpoint", "text_cache"):
             kwargs[key] = str(self._path(kwargs[key]))
         kwargs.update({"device": self.device})
@@ -82,15 +104,17 @@ class CosmosJointPolicy:
             raise FileNotFoundError(f"verified Reason1 text cache manifest is missing: {text_manifest_path}")
         text_manifest = json.loads(text_manifest_path.read_text())
         self.text_index = self.prompt_index(text_manifest, self.config.get("task_prompt"))
-        self.model = create_joint_cosmos_forcewm(**kwargs)
+        factory = create_noaction_joint_cosmos if self.reference_mode == "none" else create_joint_cosmos_forcewm
+        self.model = factory(**kwargs)
         self.model.load_checkpoint(self.checkpoint)
         self.model.eval()
+        self.model.gradient_checkpointing = False
         self.tokenizer = load_tokenizer(kwargs["upstream"], tokenizer_path, device=self.device)
         self._configure_inference()
         self._warmup()
 
     def _configure_inference(self) -> None:
-        if self.inference_backend == "reference":
+        if self.inference_backend in {"reference", "joint_static_cache"}:
             return
         from fastwam.cosmos.inference import JointInferenceRunner
         options = self.config.get("inference_optimization", {})
@@ -115,7 +139,8 @@ class CosmosJointPolicy:
         obs = Observation.now(0, state, force, frames)
         history = OnlineHistory(self.normalizer, 32)
         history.append(state, force)
-        reference = [self.normalizer.encode("action", state) for _ in range(32)]
+        reference = (None if getattr(self, 'reference_mode', 'rolling_ae') == 'none'
+                     else [self.normalizer.encode("action", state) for _ in range(32)])
         profiles = []
         try:
             # The second pass distinguishes initialization from cached execution.
@@ -143,7 +168,7 @@ class CosmosJointPolicy:
             images.append(tensor)
         return torch.cat(images, dim=-1).sub_(0.5).div_(0.5).unsqueeze(0).unsqueeze(2).to(self.device, torch.bfloat16)
 
-    def infer(self, observation: Observation, normalized_reference: list[list[float]],
+    def infer(self, observation: Observation, normalized_reference: list[list[float]] | None,
               history: tuple[list[list[float]], list[bool], list[list[bool]]]) -> list[list[float]]:
         if self.model is None or self.tokenizer is None:
             raise RuntimeError("Cosmos policy is not loaded with a tokenizer")
@@ -168,15 +193,23 @@ class CosmosJointPolicy:
                 "action_is_pad": torch.zeros((1, 32), device=self.device, dtype=torch.bool),
                 "cosmos_text_index": torch.tensor([self.text_index], device=self.device),
             }
-            reference = torch.tensor(normalized_reference, device=self.device,
-                                    dtype=torch.bfloat16).unsqueeze(0)
-            inference = self.runner if self.runner is not None else self.model
-            result = inference.infer_forcewm(sample, action_condition=reference,
-                                              num_inference_steps=int(self.config.get("action_steps", 16)),
-                                              seed=int(self.config.get("action_seed", self.config.get("model_kwargs", {}).get("action_seed", 42))) + self.inference_index,
-                                              video_seed=int(self.config.get("video_seed",
-                                                  self.config.get("model_kwargs", {}).get("memory_seed", 44))),
-                                              generate_action=True)
+            if getattr(self, "reference_mode", "rolling_ae") == "none":
+                result = self.model.infer_joint(sample,
+                    num_inference_steps=int(self.config.get("joint_steps", 16)),
+                    seed=int(self.config.get("action_seed", 42)) + self.inference_index,
+                    video_seed=int(self.config.get("video_seed", 44)),
+                    force_seed=int(self.config.get("force_seed", 43)),
+                    use_cache=self.inference_backend == "joint_static_cache")
+            else:
+                reference = torch.tensor(normalized_reference, device=self.device,
+                                        dtype=torch.bfloat16).unsqueeze(0)
+                inference = self.runner if self.runner is not None else self.model
+                result = inference.infer_forcewm(sample, action_condition=reference,
+                                                  num_inference_steps=int(self.config.get("action_steps", 16)),
+                                                  seed=int(self.config.get("action_seed", self.config.get("model_kwargs", {}).get("action_seed", 42))) + self.inference_index,
+                                                  video_seed=int(self.config.get("video_seed",
+                                                      self.config.get("model_kwargs", {}).get("memory_seed", 44))),
+                                                  generate_action=True)
             actions = result["action"][0].float().cpu().tolist()
             self.inference_index += 1
         finished = time.monotonic()

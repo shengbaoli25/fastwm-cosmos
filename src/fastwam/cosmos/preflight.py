@@ -18,6 +18,18 @@ def validate_config(cfg):
     if cfg['data'].get('val') is not None:
         raise ValueError('The inherited recipe has no separate validation split')
     m=cfg['model'];d=cfg['data']['train']
+    if m['_target_'] == 'fastwam.cosmos.assets.create_noaction_joint_cosmos':
+        required = dict(action_hidden=768, action_ffn=3072, force_hidden=768, force_ffn=2048,
+                        force_heads=16, force_shift=1., num_inference_steps=16,
+                        action_seed=42, force_seed=43, memory_seed=44)
+        if (any(m.get(k) != v for k, v in required.items())
+                or any(k in m for k in ('control_seed', 'initial_checkpoint', 'action_condition'))
+                or d['_target_'] != 'fastwam.cosmos.cache.CosmosCachedDataset'
+                or len(d.get('expected_identity_sha256', '')) != 64
+                or len(m.get('expected_text_identity', '')) != 64 or not d.get('require_production')
+                or m.get('expected_data_identity') != d['expected_identity_sha256']):
+            raise ValueError('Bound no-reference Cosmos/AE768/Force768 diffusion configuration required')
+        return
     if (m['_target_'] not in ('fastwam.cosmos.assets.create_cosmos_forcewm',
                               'fastwam.cosmos.assets.create_joint_cosmos_forcewm')
             or d['_target_']!='fastwam.cosmos.cache.CosmosCachedDataset'
@@ -98,7 +110,9 @@ def execute(config_path,output):
         query_gradients.append({'finite':bool(torch.isfinite(gradient).all()),
                                 'all_queries_nonzero':bool(gradient.float().abs().sum(-1).gt(0).all())})
         return gradient
-    handles.append(model.dit['force'].queries.register_hook(record_query_gradient))
+    force_probe = (model.dit['force'].force_encoder.weight if hasattr(model.dit['force'], 'force_encoder')
+                   else model.dit['force'].queries)
+    handles.append(force_probe.register_hook(record_query_gradient))
     for i,block in enumerate(model.dit['force'].blocks):
         def count(module,args,out,i=i):layer_calls[i]+=1
         handles.append(block.register_forward_hook(count))
@@ -109,6 +123,7 @@ def execute(config_path,output):
     report={'rank':rank,'world_size':4,'batch_per_rank':16,'global_batch':64,
         'actual_engine_updates':int(engine.global_steps),'scheduler':h.inspect_scheduler(trainer.scheduler),
         **h.inspect_adam(adam),'losses':losses,'updates':updates,'chunk_layer_calls':layer_calls,'query_gradients':query_gradients,
+        'force_gradient_target':'input_encoder' if hasattr(model.dit['force'], 'force_encoder') else 'learned_queries',
         'all_parameters_finite':all(h._finite(p) for p in model.parameters()),
         'startup_seconds':startup,'peak_allocated_gib':torch.cuda.max_memory_allocated()/2**30,
         'peak_reserved_gib':torch.cuda.max_memory_reserved()/2**30,

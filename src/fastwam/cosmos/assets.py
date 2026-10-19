@@ -1,4 +1,4 @@
-"""Pinned official Cosmos robot/action-cond assets. No Wan policy/AE checkpoint is loaded."""
+"""Pinned official Cosmos assets. No Wan policy/AE checkpoint is loaded."""
 from pathlib import Path
 import json
 import torch
@@ -120,3 +120,46 @@ def create_cosmos_forcewm(**kwargs):
 
 def create_joint_cosmos_forcewm(**kwargs):
     return _create_cosmos_forcewm(joint=True,**kwargs)
+
+
+NONACTION_WEIGHT_FILE = 'base/post-trained/81edfebe-bd6a-4039-8c1d-737df1a790bf_ema_bf16.pt'
+NONACTION_WEIGHT_SHA = '565bbb2c9645737327983f4461e4d32627bba465b0a8dc26447edea144e1ff47'
+
+
+def load_nonaction_video(upstream, checkpoint, *, device='cuda', dtype=torch.bfloat16):
+    from .native import nonaction_native_imports, nonaction_net_config
+    _, module, _, Net, _ = nonaction_native_imports(Path(upstream).resolve())
+    p = checked(checkpoint, NONACTION_WEIGHT_SHA)
+    config = nonaction_net_config(); config['sac_config'] = module.SACConfig(mode='none')
+    with torch.device('meta'):
+        net = Net(**config)
+    payload = torch.load(p, map_location='cpu', weights_only=True, mmap=True)
+    if not isinstance(payload, dict) or not payload or any(not k.startswith('net.') for k in payload):
+        raise ValueError('Expected official flat net.* non-action-conditioned checkpoint')
+    net.load_state_dict({k.removeprefix('net.'): v for k, v in payload.items()}, strict=True, assign=True)
+    if any(x.is_meta for x in (*net.parameters(), *net.buffers())):
+        raise ValueError('Incomplete official checkpoint materialization')
+    for k, x in net.state_dict().items():
+        if isinstance(x, torch.Tensor) and x.is_floating_point() and not bool(torch.isfinite(x).all()):
+            raise ValueError('Nonfinite official tensor ' + k)
+    net.to(device=device, dtype=dtype); preserve_fp32_strategy(net)
+    return net
+
+
+def create_noaction_joint_cosmos(*, upstream, checkpoint, text_cache, expected_text_identity, expected_data_identity,
+                                expected_normalization_sha256=None, device='cuda', **kwargs):
+    from .noaction import NoActionJointModel
+    bank, _, digest = read_text_bank(text_cache)
+    if digest != expected_text_identity:
+        raise ValueError('Pinned text cache identity differs')
+    if len(expected_data_identity) != 64:
+        raise ValueError('Verified training cache identity required')
+    if expected_normalization_sha256 is not None and len(expected_normalization_sha256) != 64:
+        raise ValueError('Training normalization SHA256 must have 64 characters')
+    net = load_nonaction_video(upstream, checkpoint, device='cpu')
+    manifest = dict(upstream=UPSTREAM_COMMIT, model=MODEL_ID, revision=REVISION,
+        video_variant='base/post-trained', video_sha256=NONACTION_WEIGHT_SHA, dataset_identity=expected_data_identity,
+        normalization_sha256=expected_normalization_sha256,
+        tokenizer_sha256=TOKENIZER_SHA, text_identity=digest,
+        extra_config=kwargs, recipe=dict(ranks=4, batch_per_rank=16, accum=1, global_batch=64, max_steps=30000))
+    return NoActionJointModel(net, manifest=manifest, text_bank=bank, **kwargs).to(device=device, dtype=torch.bfloat16)
