@@ -2,7 +2,7 @@ from pathlib import Path
 import ast, copy
 import torch
 from transformers import Qwen2_5_VLConfig
-from transformers.models.qwen2_5_vl.modeling_qwen2_5_vl import Qwen2_5_VLTextModel
+from transformers.models.qwen2_5_vl import modeling_qwen2_5_vl as hf_network
 from fastwam.cosmos.reason1_native import native_network,Reason1SDPA,full_concat
 
 ROOT=Path(__file__).resolve().parents[2]
@@ -20,7 +20,8 @@ def config():
 def test_native_text_states_match_independent_hf_implementation():
     torch.manual_seed(6)
     c=config();native=Reason1SDPA(native_network(ROOT/'third_party/cosmos-predict2.5'),c).eval()
-    hf=Qwen2_5_VLTextModel(c.text_config).eval()
+    text_type=getattr(hf_network,'Qwen2_5_VLTextModel',hf_network.Qwen2_5_VLModel)
+    hf=text_type(getattr(c,'text_config',c)).eval()
     hf.load_state_dict(native.model.state_dict(),strict=True)
     ids=torch.tensor([[1,2,5,0,0,0],[7,4,2,6,0,0]])
     with torch.no_grad():

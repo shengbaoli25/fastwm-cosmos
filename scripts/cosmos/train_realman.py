@@ -15,6 +15,8 @@ def main():
     p=argparse.ArgumentParser(description=__doc__)
     for k in ('dataset','source-sha','work','run-root','reason1-checkpoint','checkpoint','tokenizer'):
         p.add_argument('--'+k,required=True)
+    p.add_argument('--batch-size',type=int,choices=[16,32,64],default=16)
+    p.add_argument('--max-steps',type=int,choices=[1000,20000,30000],default=30000)
     a=p.parse_args()
     from distributed_fresh import clean_environment
     env=clean_environment(os.environ,ROOT)
@@ -63,12 +65,15 @@ def main():
         for log in logs:log.close()
     run('assemble',[*args,'--assemble'])
     run('resolve',[ROOT/'scripts/cosmos/resolve_config.py','--task','cosmos_noaction_joint_4gpu_30k',
+        '--batch-size',a.batch_size,'--max-steps',a.max_steps,
         '--normalization',work/'normalization.json',
         '--text-cache',work/'text','--feature-cache',work/'features','--checkpoint',a.checkpoint,
         '--upstream',upstream,'--output-dir',work/'config-placeholder',
         '--config-output',work/'resolved.yaml'])
     # The task config selects official Cosmos initialization and fresh heads,
     # optimizer and schedule. No old-data checkpoint or normalization is reused.
+    _atomic(work/'prepared.json',dict(status='complete',source_sha256=a.source_sha,
+        config=str(work/'resolved.yaml'),features=str(work/'features'),text=str(work/'text')))
     _atomic(work/'status.json',dict(phase='distributed_gate_and_train',status='running',time=time.time()))
     os.execv(sys.executable,[sys.executable,'-u',str(ROOT/'scripts/cosmos/distributed_chunk.py'),
         '--config',str(work/'resolved.yaml'),'--run-root',a.run_root,

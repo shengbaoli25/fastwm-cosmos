@@ -142,6 +142,19 @@ def test_noaction_training_config_and_model_sizes():
     with pytest.raises(ValueError):validate_config(c)
 
 
+@pytest.mark.parametrize('steps,save',[(1000,1000),(20000,5000)])
+def test_joint8_requested_batch64_schedules(steps,save):
+    with initialize_config_dir(config_dir=str(ROOT/'configs'),version_base=None):
+        cfg=compose(config_name='train',overrides=['task=cosmos_noaction_joint_4gpu_30k',
+            'batch_size=64',f'max_steps={steps}',f'save_every={save}',
+            'model.expected_text_identity='+'a'*64,'model.expected_data_identity='+'b'*64,
+            'data.train.expected_identity_sha256='+'b'*64])
+    c=OmegaConf.to_container(cfg,resolve=True,throw_on_missing=True);validate_config(c)
+    assert c['model']['training_recipe']==dict(batch_per_rank=64,max_steps=steps)
+    c['save_every']=500
+    with pytest.raises(ValueError):validate_config(c)
+
+
 def test_bf16_training_and_inference_have_finite_outputs():
     m=model().to(dtype=torch.bfloat16);s=sample(1)
     # oneDNN on AVX2 does not implement BF16 backward; use native CPU kernels.

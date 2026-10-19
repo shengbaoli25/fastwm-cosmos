@@ -1,7 +1,8 @@
 # Joint8 训练环境与资产准备
 
-范围：只准备代码、CPU 环境和权重；未启动训练，未申请 H200，未连接机械臂。
-正式训练等待新采集数据定版，再做缓存/统计和四卡检查。
+CPU 环境与全部权重已准备完成，通过完整模型加载。随后用户授权合并 50 条数据并启动
+两组新训练：4×H200、每卡尝试 batch64，一组 1000 步保存，一组上限 20000 步。
+两组使用新关节版；正式训练前仍须做对应配置的四卡更新和保存/恢复检查。
 
 ## 环境与持久化位置
 
@@ -22,7 +23,8 @@
 | Cosmos-Reason1-7B | `cosmos-reason1-upload-20261012/` | 四个完整 safetensors 分片，逐一匹配 `src/fastwam/cosmos/reason1_weights.json`，另含本地 processor/config |
 
 基础权重从公开 ModelScope 分发源下载，最终内容必须匹配仓库固定的 NVIDIA 官方 SHA。
-本地已严格加载完整 Video 官方权重并构造 Joint8 模型；远端检查进度以 `preparation/` 凭据为准。
+本地及远端均已严格加载完整 Video 官方权重并构造 Joint8 模型。
+远端凭据：`preparation/environment_assets_verified.json`；全部权重 SHA 和本地 processor 检查通过。
 
 CPU 审计入口 `scripts/cosmos/prepare_environment.py`：验证依赖、官方资产 SHA、固定上游代码、
 Reason1 本地 processor 和 512 token 输入、完整非 action-cond Video 严格加载，并构造 Joint8 模型。
@@ -32,9 +34,12 @@ Reason1 本地 processor 和 512 token 输入、完整非 action-cond Video 严�
 
 - 七个实测关节角和实际下发目标均为弧度；加夹爪开度后 action/state 均 8 维，history 14 维。
 - 使用 `observation.force_filtered`，与采集端 Q×48 因果滤波合同一致；不重复滤波。
-- 当前采集中的 `1020_cup` 只做过只读格式检查，未冻结数据身份、未生成最终归一化统计。
-- 新数据完成后，冻结目录并生成清单身份；导出文本/视频/numeric 缓存与 normalization，再做四卡两步 Adam、保存/恢复检查。
-- 原定训练为 4×H200、每卡 batch16、双视角、30000 步、每 5000 步保存；新模型显存与可提升 batch 尚未实测。
+- `1020_cup` 的 43 条和 `rm71d_20261020_032019` 的 7 条已生成独立合并副本 `1020_cup_merged50`。
+- 共 28,992 帧、27,783 个有效窗口起点；源清单 SHA256 为 `e4feb413686fdcc44e1bc046e4510250d187ef0bd6ae1dc6c1c32e1aad02d60d`。
+- 七轴动作、滤波力及视频内容保持原样，仅重新编号 episode/global index 并更新元数据；源目录不变。
+- 远端数据：`realman-noaction-joint8/data/1020_cup_merged50`；导出一次共享缓存，分别重新初始化两组模型和优化器。
+- 新配方：4×H200、每卡尝试 batch64/global256、双视角；短训 1000 步/save1000/warmup50，长训 20000 步/save5000/warmup1000。
+- 如实际更新检查 OOM，需根据记录降低 microbatch；不把梯度累积视作物理 batch64 成功。
 
 本地验证：156 项测试通过；Reason1 原生测试需在含 Transformers 的远端环境补验。
 详细架构、输入和训练/部署入口见 [实现说明](noaction-joint-diffusion.md)。

@@ -15,7 +15,7 @@ def sha(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
-def complete_state(output, log, *, final=False):
+def complete_state(output, log, *, final=False, max_steps=30000, save_every=5000):
     output, log = Path(output), Path(log)
     text = log.read_text(errors="replace")
     text = re.sub(r"\x1b\[[0-9;]*m", "", text)
@@ -23,16 +23,16 @@ def complete_state(output, log, *, final=False):
     compact = re.sub(r"\s+", "", text)
     compact = re.sub(r"trainer\.py:\d+", "", compact)
     saved = set()
-    for step in range(5000, 30001, 5000):
+    for step in sorted(set(range(save_every, max_steps+1, save_every)) | {max_steps}):
         marker = (f"step={step}weights={output}/checkpoints/weights/step_{step:06d}.pt"
                   f"state={output}/checkpoints/state/step_{step:06d}")
         if marker in compact:
             saved.add(step)
     # At 30000 the native trainer overwrites the periodic checkpoint once more.
     # Require the final save's log, not merely the earlier periodic-save marker.
-    if "max_stepsreachedstep=30000weights=" not in compact:
-        saved.discard(30000)
-    if not final and 30000 in saved:
+    if f"max_stepsreachedstep={max_steps}weights=" not in compact:
+        saved.discard(max_steps)
+    if not final and max_steps in saved:
         raise ValueError("This run already logged its final save; verify completion instead of resuming")
     rejected = []
     for state in sorted((output / "checkpoints/state").glob("step_[0-9]*"), reverse=True):
@@ -40,7 +40,7 @@ def complete_state(output, log, *, final=False):
             if not re.fullmatch(r"step_\d{6}", state.name):
                 continue
             step = int(state.name[5:])
-            if step not in saved or step % 5000 or step <= 0 or step > (30000 if final else 25000):
+            if step not in saved or (step % save_every and step != max_steps) or step <= 0 or step > (max_steps if final else max_steps-1):
                 continue
             data = json.loads((state / "trainer_state.json").read_text())
             if any(type(data.get(k)) is not int or data[k] < 0

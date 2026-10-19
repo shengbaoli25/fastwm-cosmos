@@ -147,7 +147,7 @@ def load_nonaction_video(upstream, checkpoint, *, device='cuda', dtype=torch.bfl
 
 
 def create_noaction_joint_cosmos(*, upstream, checkpoint, text_cache, expected_text_identity, expected_data_identity,
-                                expected_normalization_sha256=None, device='cuda', **kwargs):
+                                expected_normalization_sha256=None, training_recipe=None, device='cuda', **kwargs):
     from .noaction import NoActionJointModel
     bank, _, digest = read_text_bank(text_cache)
     if digest != expected_text_identity:
@@ -157,9 +157,12 @@ def create_noaction_joint_cosmos(*, upstream, checkpoint, text_cache, expected_t
     if expected_normalization_sha256 is not None and len(expected_normalization_sha256) != 64:
         raise ValueError('Training normalization SHA256 must have 64 characters')
     net = load_nonaction_video(upstream, checkpoint, device='cpu')
+    recipe=dict(batch_per_rank=16,max_steps=30000)
+    recipe.update(training_recipe or {})
+    recipe.update(ranks=4,accum=1,global_batch=4*int(recipe['batch_per_rank']))
     manifest = dict(upstream=UPSTREAM_COMMIT, model=MODEL_ID, revision=REVISION,
         video_variant='base/post-trained', video_sha256=NONACTION_WEIGHT_SHA, dataset_identity=expected_data_identity,
         normalization_sha256=expected_normalization_sha256,
         tokenizer_sha256=TOKENIZER_SHA, text_identity=digest,
-        extra_config=kwargs, recipe=dict(ranks=4, batch_per_rank=16, accum=1, global_batch=64, max_steps=30000))
+        extra_config=kwargs, recipe=recipe)
     return NoActionJointModel(net, manifest=manifest, text_bank=bank, **kwargs).to(device=device, dtype=torch.bfloat16)

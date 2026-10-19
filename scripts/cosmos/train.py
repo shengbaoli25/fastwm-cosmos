@@ -42,11 +42,11 @@ def main():
     model=instantiate(cfg.model,device=f'cuda:{torch.cuda.current_device()}')
     ds,val=build_probe_datasets(cfg.data);trainer=Wan22Trainer(model,ds,val,cfg=cfg)
     engine=trainer.model
-    if (engine.train_micro_batch_size_per_gpu(),engine.gradient_accumulation_steps(),engine.train_batch_size())!=(16,1,64):raise ValueError('Actual engine batch differs')
+    if (engine.train_micro_batch_size_per_gpu(),engine.gradient_accumulation_steps(),engine.train_batch_size())!=(cfg.batch_size,1,4*cfg.batch_size):raise ValueError('Actual engine batch differs')
     if acc.is_main_process:OmegaConf.save(cfg,str(out/'config.yaml'))
     receipt['status']='running';origin.write_text(json.dumps(receipt,indent=2))
     trainer.train()
-    if trainer.global_step!=30000:raise RuntimeError('Formal run did not complete30000')
+    if trainer.global_step!=cfg.max_steps:raise RuntimeError('Formal run did not complete configured steps')
     receipt.update(status='complete',global_step=trainer.global_step)
     origin.write_text(json.dumps(receipt,indent=2));acc.wait_for_everyone()
     torch.distributed.destroy_process_group()

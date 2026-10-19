@@ -5,20 +5,24 @@ def run_two_updates(trainer, *, synchronize, clock=time.monotonic):
     """Bound only this loop; retain the stock trainer's full scheduler horizon."""
     import torch
 
-    if trainer.max_steps != 30000 or trainer.global_step != 0:
-        raise ValueError("Probe requires a fresh trainer with the complete 30000-update schedule")
+    horizon=trainer.max_steps
+    if horizon not in (1000,20000,30000) or trainer.global_step != 0:
+        raise ValueError("Probe requires a fresh trainer with the complete configured schedule")
     accelerator = trainer.accelerator
+    train_model = (trainer.model if hasattr(trainer.model, 'training_loss')
+                   else accelerator.unwrap_model(trainer.model))
+    batch=trainer.batch_size;action_dim=getattr(train_model,'action_dim',7)
     iterator = iter(trainer.train_loader)
     updates, losses = [], []
     for _ in range(2):
         synchronize()
         started = clock()
         sample = next(iterator)
-        if ("video" in sample or "image" in sample or tuple(sample["video_latents"].shape) != (16, 16, 3, 28, 56)
-                or tuple(sample["first_frame_latents"].shape) != (16, 16, 1, 28, 56)
-                or tuple(sample["action"].shape) != (16, 32, 7)
-                or tuple(sample["proprio"].shape) != (16, 32, 8)):
-            raise ValueError("Each rank must consume the exact feature-only batch16 cache contract")
+        if ("video" in sample or "image" in sample or tuple(sample["video_latents"].shape) != (batch, 16, 3, 28, 56)
+                or tuple(sample["first_frame_latents"].shape) != (batch, 16, 1, 28, 56)
+                or tuple(sample["action"].shape) != (batch, 32, action_dim)
+                or tuple(sample["proprio"].shape) != (batch, 32, action_dim+1)):
+            raise ValueError("Each rank must consume the configured feature-only batch and action space")
         trainer.batch_in_epoch += 1
         with accelerator.accumulate(trainer.model):
             train_model = (trainer.model if hasattr(trainer.model, "training_loss")
@@ -46,11 +50,11 @@ def run_two_updates(trainer, *, synchronize, clock=time.monotonic):
         synchronize()
         losses.append({"loss": float(loss.detach().item()), **components})
         updates.append({"update": trainer.global_step, "seconds": clock() - started,
-                        "batch_size": 16, "microbatches": 1, "global_loss": global_loss,
+                        "batch_size": batch, "microbatches": 1, "global_loss": global_loss,
                         "global_components": global_components, "gradient_norm": norm,
                         "optimizer_step_was_skipped": skipped,
                         "lr": [float(group["lr"]) for group in trainer.optimizer.param_groups],
                         "sample_indices": sample["sample_index"].detach().cpu().tolist()})
-    if trainer.max_steps != 30000:
+    if trainer.max_steps != horizon:
         raise RuntimeError("The preflight shortened the formal scheduler horizon")
     return losses, updates

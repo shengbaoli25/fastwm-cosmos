@@ -27,15 +27,16 @@ def main():
         raise ValueError('Explicit original absolute .venv/bin/python invocation required')
     if Path(cfg.output_dir).exists():raise FileExistsError('Fresh formal output required')
     free=shutil.disk_usage(Path(cfg.output_dir).parent).free
-    required=int(r['checkpoint_bytes']*6*1.1)
+    saves=(int(cfg.max_steps)+int(cfg.save_every)-1)//int(cfg.save_every)
+    required=int(r['checkpoint_bytes']*saves*1.1)
     if free<required:raise ValueError('Insufficient disk for six full checkpoints plus10% margin')
     command=[str(native),'-m','accelerate.commands.launch','--config_file',str(root/'scripts/accelerate_configs/accelerate_zero1_ds_4gpu.yaml'),
         str(root/'scripts/cosmos/train.py'),'--config',str(Path(a.config).absolute()),'--preflight',str(Path(a.preflight).absolute()),
         '--preflight-outer',str(Path(a.preflight_outer).absolute()),'--restore',str(Path(a.restore).absolute()),
         '--restore-outer',str(Path(a.restore_outer).absolute()),'--execute']
     plan={'argv':command,'resource':resource,'gate':gate,'user_time_cap':None,'free_disk_bytes':free,
-        'six_checkpoint_bytes_with_margin':required,'training_seconds_estimate':r['warm_seconds_per_step']*30000,
-        'six_saves_seconds_estimate':r['max_save_seconds']*6,'evaluation_seconds_measured':None}
+        'checkpoint_bytes_with_margin':required,'training_seconds_estimate':r['warm_seconds_per_step']*int(cfg.max_steps),
+        'saves_seconds_estimate':r['max_save_seconds']*saves,'evaluation_seconds_measured':None}
     print(json.dumps(plan,indent=2),flush=True)
     if not a.execute:return
     os.environ['PYTHONPATH']=str(root/'src')+':'+str(root)+(':'+os.environ['PYTHONPATH'] if os.environ.get('PYTHONPATH') else '')

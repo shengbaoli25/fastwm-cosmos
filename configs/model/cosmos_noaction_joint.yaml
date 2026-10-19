@@ -18,3 +18,6 @@ force_ffn: 2048
 force_heads: 16
 force_shift: 1.0
 fps: 7.5
+training_recipe:
+  batch_per_rank: ${batch_size}
+  max_steps: ${max_steps}

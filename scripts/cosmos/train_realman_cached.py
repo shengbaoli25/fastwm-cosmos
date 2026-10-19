@@ -14,6 +14,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     for name in ('dataset', 'source-sha', 'prepared', 'work', 'run-root', 'checkpoint'):
         parser.add_argument('--' + name, required=True)
+    parser.add_argument('--batch-size',type=int,choices=[16,32,64],default=16)
+    parser.add_argument('--max-steps',type=int,choices=[1000,20000,30000],default=30000)
     args = parser.parse_args()
     from distributed_fresh import clean_environment
     env = clean_environment(os.environ, ROOT)
@@ -60,6 +62,7 @@ def main():
         subprocess.run([
             sys.executable, '-u', str(ROOT / 'scripts/cosmos/resolve_config.py'),
             '--task', 'cosmos_noaction_joint_4gpu_30k',
+            '--batch-size',str(args.batch_size),'--max-steps',str(args.max_steps),
             '--normalization', str(work / 'normalization.json'),
             '--text-cache', str(prepared / 'text'),
             '--feature-cache', str(prepared / 'features'),
@@ -69,8 +72,8 @@ def main():
             '--config-output', str(work / 'resolved.yaml'),
         ], check=True, cwd=ROOT, stdout=log, stderr=subprocess.STDOUT)
     cfg = OmegaConf.load(work / 'resolved.yaml')
-    if cfg.model.get('initial_checkpoint') is not None or cfg.max_steps != 30000:
-        raise ValueError('Fresh official initialization and 30000 steps required')
+    if cfg.model.get('initial_checkpoint') is not None or cfg.max_steps != args.max_steps:
+        raise ValueError('Fresh official initialization and the requested complete schedule required')
     print('REALMAN_NOACTION_DIFFUSION_CACHE_VERIFIED', flush=True)
     os.execv(sys.executable, [
         sys.executable, '-u', str(ROOT / 'scripts/cosmos/distributed_chunk.py'),

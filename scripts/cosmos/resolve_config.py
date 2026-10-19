@@ -16,12 +16,19 @@ def main():
                    default='cosmos_forcewm_4gpu_30k')
     for key in ('text-cache','feature-cache','checkpoint','upstream','output-dir','config-output'):p.add_argument('--'+key,required=True)
     p.add_argument('--normalization', help='Exact RealMan normalization exported for this training cache')
+    p.add_argument('--batch-size',type=int,choices=[16,32,64])
+    p.add_argument('--max-steps',type=int,choices=[1000,20000,30000])
     a=p.parse_args();bank,tm,td=read_text_bank(a.text_cache);del bank
     fm=validate(a.feature_cache);checked(a.checkpoint,NONACTION_WEIGHT_SHA if a.task == 'cosmos_noaction_joint_4gpu_30k' else WEIGHT_SHA);verify_upstream(Path(a.upstream))
     if fm['identity']['text_identity']!=td:raise ValueError('Feature/text identities differ')
     root=Path(__file__).resolve().parents[2]
     with initialize_config_dir(config_dir=str(root/'configs'),version_base=None):
         cfg=compose(config_name='train',overrides=['task='+a.task])
+    if a.batch_size is not None or a.max_steps is not None:
+        if a.task != 'cosmos_noaction_joint_4gpu_30k':raise ValueError('Overrides require the new joint8 model')
+        if a.batch_size is not None:cfg.batch_size=a.batch_size
+        if a.max_steps is not None:cfg.max_steps=a.max_steps
+        cfg.save_every=1000 if cfg.max_steps == 1000 else 5000
     cfg.model.expected_text_identity=td;cfg.model.text_cache=str(Path(a.text_cache).resolve())
     cfg.model.checkpoint=str(Path(a.checkpoint).resolve());cfg.model.upstream=str(Path(a.upstream).resolve())
     cfg.data.train.cache_root=str(Path(a.feature_cache).resolve());cfg.data.train.expected_identity_sha256=fm['identity_sha256']

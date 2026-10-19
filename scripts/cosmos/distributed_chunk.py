@@ -81,16 +81,17 @@ def main():
         # Native ranks and supervisor verify completion; also require final full-state save.
         sys.path.insert(0, str(ROOT/'scripts/resume'))
         from checks import complete_state
-        state, step = complete_state(run/'training', run/'formal-watch/training.log', final=True)
-        if step != 30000:
-            raise ValueError('Final complete 30000-step save is absent')
+        state, step = complete_state(run/'training', run/'formal-watch/training.log', final=True,
+                                    max_steps=int(cfg.max_steps),save_every=int(cfg.save_every))
+        if step != cfg.max_steps:
+            raise ValueError('Final complete configured-step save is absent')
         for rank in range(4):
             origin=json.loads((run/'training/origins'/f'rank_{rank:03d}.json').read_text())
-            if (origin.get('rank') != rank or origin.get('global_step') != 30000
+            if (origin.get('rank') != rank or origin.get('global_step') != cfg.max_steps
                     or origin.get('status') != 'complete' or origin.get('resource') != resource):
                 raise ValueError('All four completed original training ranks required')
         journal['final_state'] = str(state)
-        update('complete', 'completed_30000')
+        update('complete', 'completed_'+str(cfg.max_steps))
     except BaseException as error:
         journal['error'] = str(error); update(journal.get('phase', 'dispatch'), 'failed'); raise
 

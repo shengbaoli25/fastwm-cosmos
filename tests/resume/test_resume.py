@@ -77,6 +77,15 @@ def test_final_needs_second_save_and_done(tmp_path):
     with pytest.raises(ValueError): complete_state(out,log)
 
 
+@pytest.mark.parametrize('steps,save',[(1000,1000),(20000,5000)])
+def test_configured_joint8_final_checkpoint_requires_completed_full_save(tmp_path,steps,save):
+    out=tmp_path/'out';state=checkpoint(out,steps);log=tmp_path/'log'
+    log.write_text(save_line(out,steps))
+    with pytest.raises(ValueError):complete_state(out,log,final=True,max_steps=steps,save_every=save)
+    log.write_text(save_line(out,steps,'[done] max_steps reached'))
+    assert complete_state(out,log,final=True,max_steps=steps,save_every=save)==(state,steps)
+
+
 def test_platform_and_environment():
     with pytest.raises(ValueError): platform_identity({})
     with pytest.raises(ValueError): platform_identity({'TRAIN_JOB_ID':'job-1234','PET_NNODES':'2'})

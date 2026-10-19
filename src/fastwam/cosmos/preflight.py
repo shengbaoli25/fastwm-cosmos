@@ -10,11 +10,16 @@ ROOT=Path(__file__).resolve().parents[3]
 
 
 def validate_config(cfg):
-    expected={'batch_size':16,'gradient_accumulation_steps':1,'max_steps':30000,
-        'save_every':5000,'learning_rate':1e-4,'weight_decay':.01,'mixed_precision':'bf16',
+    noaction = cfg['model']['_target_'] == 'fastwam.cosmos.assets.create_noaction_joint_cosmos'
+    batch,steps = cfg.get('batch_size'),cfg.get('max_steps')
+    if noaction and (batch not in (16,32,64) or steps not in (1000,20000,30000)):
+        raise ValueError('Joint8 requires an authorized batch16/32/64 and 1000/20000/30000 schedule')
+    expected={'batch_size':batch if noaction else 16,'gradient_accumulation_steps':1,
+        'max_steps':steps if noaction else 30000,'save_every':1000 if noaction and steps == 1000 else 5000,
+        'learning_rate':1e-4,'weight_decay':.01,'mixed_precision':'bf16',
         'seed':42,'resume':None,'lr_scheduler_type':'cosine','eval_every':0}
     if any(cfg.get(k)!=v for k,v in expected.items()):
-        raise ValueError('Exact B16/accum1/30000 original recipe required')
+        raise ValueError('Exact configured batch/accum1/schedule/save recipe required')
     if cfg['data'].get('val') is not None:
         raise ValueError('The inherited recipe has no separate validation split')
     m=cfg['model'];d=cfg['data']['train']
@@ -97,14 +102,16 @@ def execute(config_path,output):
     trainer=Wan22Trainer(model,train_ds,val_ds,cfg=cfg)
     engine=trainer.model
     zero=trainer.accelerator.state.deepspeed_plugin.deepspeed_config['zero_optimization']
-    if (zero['stage']!=1 or engine.train_micro_batch_size_per_gpu()!=16
-            or engine.gradient_accumulation_steps()!=1 or engine.train_batch_size()!=64
+    batch,steps=int(cfg.batch_size),int(cfg.max_steps)
+    if (zero['stage']!=1 or engine.train_micro_batch_size_per_gpu()!=batch
+            or engine.gradient_accumulation_steps()!=1 or engine.train_batch_size()!=4*batch
             or any(zero.get(k,{}).get('device','none')!='none' for k in ('offload_optimizer','offload_param'))):
-        raise RuntimeError('Actual engine differs from four-rank global64 original ZeRO1')
+        raise RuntimeError('Actual engine differs from configured four-rank batch and ZeRO1')
     h=helpers();adam=h.unwrap_optimizer(trainer.optimizer)
     if not isinstance(adam,torch.optim.AdamW):raise RuntimeError('Actual AdamW required')
-    if h.inspect_scheduler(trainer.scheduler)!={'last_epoch':0,'warmup_milestones':[1500],'cosine_steps':28500}:
-        raise RuntimeError('Complete 30k learning rate schedule required')
+    warmup=int(steps*.05)
+    if h.inspect_scheduler(trainer.scheduler)!={'last_epoch':0,'warmup_milestones':[warmup],'cosine_steps':steps-warmup}:
+        raise RuntimeError('Complete configured learning rate schedule required')
     layer_calls=[0]*28;handles=[];query_gradients=[]
     def record_query_gradient(gradient):
         query_gradients.append({'finite':bool(torch.isfinite(gradient).all()),
@@ -120,7 +127,7 @@ def execute(config_path,output):
     from .probe_updates import run_two_updates
     losses,updates=run_two_updates(trainer,synchronize=torch.cuda.synchronize)
     for handle in handles:handle.remove()
-    report={'rank':rank,'world_size':4,'batch_per_rank':16,'global_batch':64,
+    report={'rank':rank,'world_size':4,'batch_per_rank':batch,'global_batch':4*batch,'max_steps':steps,
         'actual_engine_updates':int(engine.global_steps),'scheduler':h.inspect_scheduler(trainer.scheduler),
         **h.inspect_adam(adam),'losses':losses,'updates':updates,'chunk_layer_calls':layer_calls,'query_gradients':query_gradients,
         'force_gradient_target':'input_encoder' if hasattr(model.dit['force'], 'force_encoder') else 'learned_queries',
@@ -159,7 +166,7 @@ def execute(config_path,output):
         accepted=all(r['accepted'] for r in ranks) and all(r['memory_rng_state']==ranks[0]['memory_rng_state'] for r in ranks)
         warm=max(r['updates'][-1]['seconds'] for r in ranks)
         result={'binding':binding(config_path),'resource':report['resource'],'status':'two_adam_verified' if accepted else 'failed','ranks':ranks,
-            'warm_seconds_per_step':warm,'training_only_30000_seconds_estimate':warm*30000,
+            'warm_seconds_per_step':warm,'training_seconds_estimate':warm*steps,
             'save_eval_budget_verified':False,'formal_training_started':False,
             'checkpoint_saved':True,'distributed_resume_verified':False}
         result['checkpoint_bytes']=sum(p.stat().st_size for p in (output/'checkpoint').rglob('*') if p.is_file())
