@@ -45,7 +45,8 @@ dependencies = [
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["fastwam*"]
+include = ["fastwam*", "realman_force*"]
 
 [tool.setuptools.package-data]
 "fastwam.cosmos" = ["reason1_weights.json"]
+"realman_force" = ["SOURCE_HASHES.json"]

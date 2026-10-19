@@ -40,6 +40,7 @@ def main():
         raise ValueError('Use fresh work/run directories outside the immutable cache')
     work.mkdir(parents=True, exist_ok=False)
     source = RealManSource(args.dataset, args.source_sha)
+    source.export_normalization(work/'normalization.json')
     manifest = json.loads((prepared / 'features/manifest.json').read_text())
     if (manifest['status'] != 'complete'
             or manifest['completed_samples'] != len(source)

@@ -1,0 +1,44 @@
+{
+  "device": "cuda",
+  "execution_mode": "timestamped",
+  "normalization_file": "normalization.example.json",
+  "hardware_factory": "realman_deploy.hardware:make_hardware",
+  "hardware_config": "realman_hardware.example.json",
+  "tokenizer": "/models/cosmos/tokenizer.pth",
+  "camera_order": [
+    "global",
+    "wrist"
+  ],
+  "camera_width": 640,
+  "camera_height": 480,
+  "action_steps": 16,
+  "model_kwargs": {
+    "upstream": "../third_party/cosmos-predict2.5",
+    "checkpoint": "/models/cosmos/robot-action-cond.pt",
+    "text_cache": "/models/cosmos/realman-text",
+    "expected_text_identity": "f56fc752e5b9a3ac3190c34f27a9a2ca0878b43f605e6d99140ee86a5c63852d",
+    "action_seed": 42,
+    "force_seed": 43,
+    "memory_seed": 44,
+    "control_seed": 45,
+    "generated_video_steps": 16,
+    "gradient_checkpointing": false,
+    "action_hidden": 1024,
+    "action_ffn": 4096,
+    "force_hidden": 1280,
+    "force_ffn": 4608,
+    "force_heads": 16,
+    "fps": 7.5,
+    "memory_width": 512,
+    "memory_heads": 8
+  },
+  "task_prompt": "1018_test_cup_force",
+  "checkpoint_directory": "~/桌面/checkpoints",
+  "inference_backend": "video_isolated_reuse",
+  "inference_optimization": {
+    "cuda_graph": true,
+    "compile_future": true,
+    "compile_mode": "max-autotune-no-cudagraphs",
+    "compile_threads": 2
+  }
+}

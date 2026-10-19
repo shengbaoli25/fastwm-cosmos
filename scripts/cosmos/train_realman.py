@@ -29,6 +29,7 @@ def main():
     torch.set_num_threads(4)
     s=RealManSource(a.dataset,a.source_sha)
     _atomic(work/'source_audit.json',dict(identity=s.identity,timing=s.timing))
+    s.export_normalization(work/'normalization.json')
     _atomic(work/'prompts.json',sorted(set(s.prompts))); del s
     def run(phase,args,extra=None):
         _atomic(work/'status.json',dict(phase=phase,status='running',time=time.time()))

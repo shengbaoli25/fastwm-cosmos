@@ -1,0 +1,48 @@
+{
+  "status": "passed",
+  "capture": "segment_144200_f2b08717",
+  "source_sha256": "5926aaf684319a3c0c7ed72e9b559339e12a4bb596b334f1d190cb86ed735ab9",
+  "native_samples": 14563,
+  "native_samples_before_last_grid": 14561,
+  "duration_s": 72.87527697100086,
+  "output_grid_hz": 30,
+  "grid_rows": 2187,
+  "warmup_rows": 16,
+  "compared_rows": 2171,
+  "short_gaps_over_20ms": 6,
+  "filter_epochs": 1,
+  "maximum_source_age_ms": 19.968169999629026,
+  "maximum_force_difference": 0.0,
+  "maximum_normalized_difference": 0.0,
+  "force_preprocessing_id": "7cec963511f173d71bbd67ce56d03a5df5c366130dc79f5af184c1c91f397dde",
+  "calibration_id": "2c89319c6642d4635543cd93e60de65e997b2b0f23dde1ada56ec94bf9bfdfd3",
+  "config": {
+    "type": "kalman",
+    "model": "random_walk",
+    "measurement_variance": [
+      0.25,
+      0.25,
+      0.25,
+      0.0004,
+      0.0004,
+      0.0004
+    ],
+    "process_variance_per_s": [
+      0.000762939453125,
+      0.000762939453125,
+      0.000762939453125,
+      1.220703125e-06,
+      1.220703125e-06,
+      1.220703125e-06
+    ],
+    "sample_rate_hz": 200.0,
+    "warmup_s": 0.5,
+    "max_gap_s": 0.03
+  },
+  "shared_source_sha256": {
+    "__init__.py": "00357fd441771672e7cbf11bc22e7ba632307f0423bdea7b8e67ddcc7622b60d",
+    "contract.py": "85b533884aee510290e7c96f75036f7117c68531f47b0027e420dbeff5c6ad62",
+    "force_filter.py": "4411d52196584ddf21b7915d303f9bf56feda2895dc1476677d29a1786bdd50b",
+    "force_calibration.py": "7ca45806fb8475c705311d9989914cf98baf6f0c042495f23214633555141da1"
+  }
+}

@@ -33,19 +33,33 @@ class RealManSource:
         require(expected_source is None or self.source_sha == expected_source,
                 'Raw dataset inventory SHA differs')
         info = json.loads((self.root/'meta/info.json').read_text())
-        require((info['codebase_version'], info['total_episodes'], info['total_frames'], info['fps'])
-                == ('v3.0', 73, 35611, 30), 'Wrong RealMan dataset scope')
+        force_path = self.root/'meta/force.json'
+        force_meta = json.loads(force_path.read_text()) if force_path.is_file() else {}
+        self.force_contract = force_meta.get('model_input')
+        filtered = self.force_contract is not None
+        if filtered:
+            require(force_meta.get('schema') == 'realman_force_v4', 'Unknown force preprocessing metadata')
+            require((info['codebase_version'], info['fps']) == ('v3.0', 30), 'Wrong RealMan dataset format/rate')
+            require(self.force_contract.get('field') == 'observation.force_filtered', 'Wrong model force field')
+        else:
+            require((info['codebase_version'], info['total_episodes'], info['total_frames'], info['fps'])
+                    == ('v3.0', 73, 35611, 30), 'Wrong legacy RealMan dataset scope')
+        force_field = 'observation.force_filtered' if filtered else 'observation.force'
         episodes = []
         for p in sorted((self.root/'meta/episodes').rglob('*.parquet')):
             episodes.extend(pq.read_table(p).to_pylist())
         self.episodes = sorted(episodes, key=lambda x: x['episode_index'])
-        require([e['episode_index'] for e in self.episodes] == list(range(73)),
+        require([e['episode_index'] for e in self.episodes] == list(range(info['total_episodes'])),
                 'Missing/duplicate episodes')
         self.lengths = [int(e['length']) for e in self.episodes]
-        require(sum(self.lengths) == 35611, 'Missing source rows')
+        require(sum(self.lengths) == info['total_frames'], 'Missing source rows')
         self.rows, raw, prompts, timing = [], [], [], []
         cursor = 0
         for ep, e in enumerate(self.episodes):
+            if filtered:
+                from realman_force.contract import validate_contract
+                calibration = json.loads((self.root/'meta/force_sessions'/f'episode_{ep:06d}.json').read_text())
+                validate_contract(self.force_contract, calibration)
             n = e['length']
             require((e['dataset_from_index'], e['dataset_to_index']) == (cursor, cursor+n),
                     'Episode global indices differ')
@@ -61,15 +75,22 @@ class RealManSource:
                     'Source timeline differs')
             state = np.asarray(t['observation.state'], dtype=np.float32)
             action = np.asarray(t['action'], dtype=np.float32)
-            force = np.asarray(t['observation.force'], dtype=np.float32)
+            force = np.asarray(t[force_field], dtype=np.float32)
             require(state.shape == (n,20) and action.shape == (n,14) and force.shape == (n,6),
                     'Source field dimensions differ')
             require(all(np.isfinite(x).all() for x in (state, action, force)), 'Nonfinite numeric source')
             require(np.array_equal(state[:,14:20], force), 'State/wrench correspondence differs')
             require(all(((x[:,7] >= 0)&(x[:,7] <= 1)).all() for x in (state, action)),
                     'Gripper must be in [0,1]')
-            ft = np.asarray(t['observation.force_timestamp_s'])
-            require(np.array_equal(ft, t['observation.robot_timestamp_s']), 'Force/robot callback mismatch')
+            ft = np.asarray(t['observation.force_timestamp_s'], dtype=np.float64).reshape(n)
+            if filtered:
+                require(np.array_equal(ft, np.asarray(t['observation.force_filter_timestamp_s']).reshape(n)),
+                        'Filtered force timestamp differs from source force')
+                grid = np.asarray(t['observation.monotonic_time_s'], dtype=np.float64).reshape(n)
+                require(np.isfinite(grid).all() and np.all(np.diff(grid) > 0)
+                        and np.all((grid-ft >= 0) & (grid-ft <= .03)),
+                        'Force sample missing/stale/future on the 30 Hz grid')
+            require(np.array_equal(ft, np.asarray(t['observation.robot_timestamp_s']).reshape(n)), 'Force/robot callback mismatch')
             require(np.all(np.diff(ft) >= 0), 'Nonmonotonic force samples')
             for key in ('action.timestamp_s','observation.gripper_timestamp_s',
                         'action.gripper_timestamp_s','observation.camera.arrival_time_s'):
@@ -104,10 +125,23 @@ class RealManSource:
             action_offsets=list(range(32)), force_offsets=list(range(1,33)),
             history_offsets=list(range(-31,1)), image_offsets=list(range(0,33,4)))
         self.identity_sha256 = cache_identity_sha256(self.identity)
+        if filtered:
+            self.identity.update(profile='realman-filtered-force-v1',
+                                 wrench='calibrated_causal_Kalman_World_N_Nm',
+                                 force_preprocessing=self.force_contract)
+            self.identity_sha256 = cache_identity_sha256(self.identity)
         self.timing = timing
         self._video_episode = None
         self._frames = None
         self.info = info
+
+    def export_normalization(self, path):
+        """Ship field/processing identity with the statistics used by training."""
+        payload = dict(profile=self.identity['profile'], statistics=self.stats,
+                       source_identity_sha256=self.identity_sha256)
+        if self.force_contract is not None:
+            payload['force_preprocessing'] = self.force_contract
+        Path(path).write_text(json.dumps(payload, indent=2)+'\n')
 
     def __len__(self):
         return len(self.rows)

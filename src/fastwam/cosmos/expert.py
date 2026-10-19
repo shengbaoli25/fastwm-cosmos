@@ -59,9 +59,10 @@ class CosmosExpert(nn.Module):
 
     def prepare(self, latents: Tensor, sigma_video: Tensor, reason1_context: Tensor,
                 candidate_actions: Tensor | None = None, observed_only: bool = False,
-                fps: float | Tensor = 30, *, observed_time: str = "native_global", context_is_projected: bool = False) -> dict:
+                fps: float | Tensor = 30, *, observed_time: str = "native_global", context_is_projected: bool = False,
+                validate_values: bool = True) -> dict:
         if (latents.ndim != 5 or min(latents.shape) < 1 or not latents.is_floating_point()
-                or not torch.isfinite(latents).all()):
+                or (validate_values and not torch.isfinite(latents).all())):
             raise ValueError("Cosmos latents must be finite floating [B,C,T,H,W]")
         batch, channels, frames, height, width = latents.shape
         if channels != self.net.out_channels or height % self.patch_size[1] or width % self.patch_size[2]:
@@ -70,9 +71,10 @@ class CosmosExpert(nn.Module):
             raise ValueError("observed_only requires exactly one observed latent frame and no candidate actions")
         if not isinstance(sigma_video, Tensor) or sigma_video.shape != (batch,):
             raise ValueError("sigma_video must be [B] in the normalized [0,1] RF convention")
-        if not sigma_video.is_floating_point() or not torch.isfinite(sigma_video).all() or torch.any((sigma_video < 0) | (sigma_video > 1)):
+        if not sigma_video.is_floating_point() or (validate_values and (
+                not torch.isfinite(sigma_video).all() or torch.any((sigma_video < 0) | (sigma_video > 1)))):
             raise ValueError("sigma_video must be finite floating values in [0,1]")
-        if observed_only and torch.count_nonzero(sigma_video):
+        if observed_only and validate_values and torch.count_nonzero(sigma_video):
             raise ValueError("Observed-only K/V prefill requires sigma_video=0")
         if observed_time not in {"clean_zero", "native_global"}:
             raise ValueError("observed_time must be clean_zero or native_global")
@@ -80,7 +82,7 @@ class CosmosExpert(nn.Module):
             raise ValueError("Observed-only K/V prefill requires clean_zero observed time")
         if (reason1_context.ndim != 3 or reason1_context.shape[0] not in (1, batch)
                 or reason1_context.shape[1] < 1 or not reason1_context.is_floating_point()
-                or not torch.isfinite(reason1_context).all()):
+                or (validate_values and not torch.isfinite(reason1_context).all())):
             raise ValueError("Reason1 context must be finite floating [B,L,D], with B or one batch")
         expected_context = (self.net.crossattn_proj_in_channels if self.net.use_crossattn_projection and not context_is_projected
                             else self.net.blocks[0].cross_attn.k_proj.in_features)
@@ -92,7 +94,7 @@ class CosmosExpert(nn.Module):
             frame_rate = fps.to(device=latents.device, dtype=torch.float32)
         else:
             frame_rate = torch.full((batch,), float(fps), device=latents.device)
-        if not torch.isfinite(frame_rate).all() or torch.any(frame_rate <= 0):
+        if validate_values and (not torch.isfinite(frame_rate).all() or torch.any(frame_rate <= 0)):
             raise ValueError("fps must be finite and positive")
 
         net_dtype = next(self.net.x_embedder.parameters()).dtype
@@ -121,7 +123,8 @@ class CosmosExpert(nn.Module):
         if frames > 1:
             expected = (batch, (frames - 1) * 4, 7)
             if (candidate_actions is None or candidate_actions.shape != expected
-                    or not candidate_actions.is_floating_point() or not torch.isfinite(candidate_actions).all()):
+                    or not candidate_actions.is_floating_point()
+                    or (validate_values and not torch.isfinite(candidate_actions).all())):
                 raise ValueError("Explicit finite native controls [B,4*(T_latent-1),7] required")
             dtype = next(self.net.action_embedder_B_D.parameters()).dtype
             actions = candidate_actions.to(device=latents.device, dtype=dtype).reshape(batch, frames-1, 28)

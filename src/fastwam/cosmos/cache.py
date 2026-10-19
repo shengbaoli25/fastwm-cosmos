@@ -33,10 +33,13 @@ def validate(root,expected=None,*,complete=True,production=True):
     if production:
         profile=i.get('dataset_profile','forcevla-wipe50')
         scopes={'forcevla-wipe50':(50,34808),'realman-1018-test-cup-force-v1':(73,35611)}
-        if (i.get('scope')!='production' or profile not in scopes
-                or (len(i['episode_lengths']),sum(i['episode_lengths']))!=scopes[profile]):
+        filtered = profile == 'realman-filtered-force-v1'
+        lengths = i['episode_lengths']
+        if (i.get('scope')!='production' or (not filtered and (profile not in scopes
+                or (len(lengths),sum(lengths))!=scopes[profile]))
+                or not lengths or any(type(n) is not int or n <= 0 for n in lengths)):
             raise ValueError('Production dataset profile/scope differs')
-        if profile=='realman-1018-test-cup-force-v1':
+        if filtered or profile=='realman-1018-test-cup-force-v1':
             source=i.get('realman_source',{})
             if (source.get('profile')!=profile or source.get('episode_lengths')!=i['episode_lengths']
                     or cache_identity_sha256(source)!=i.get('numeric_identity')
@@ -44,6 +47,11 @@ def validate(root,expected=None,*,complete=True,production=True):
                     or source.get('eef_columns')!=[8,9,10,11,12,13,7]
                     or source.get('cameras')!=['observation.images.global','observation.images.wrist']):
                 raise ValueError('RealMan source lineage differs')
+            if filtered:
+                from realman_force.contract import validate_contract_identity
+                validate_contract_identity(source.get('force_preprocessing', {}))
+                if source.get('fps') != 30:
+                    raise ValueError('RealMan force grid differs')
     if complete and m['status']!='complete': raise ValueError('Partial cache is not trainable')
     if m['status'] not in ['complete','partial']: raise ValueError('Invalid cache status')
     rows=[(ep,f) for ep,n in enumerate(i['episode_lengths']) for f in range(n)]; stop=0

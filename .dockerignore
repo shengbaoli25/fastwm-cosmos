@@ -1,0 +1,13 @@
+.git
+.venv
+.venv_*
+__pycache__
+*.py[cod]
+*.pt
+*.pth
+data
+outputs
+runs
+cache
+logs
+third_party/RoboTwin
