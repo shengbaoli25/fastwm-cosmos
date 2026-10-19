@@ -3,6 +3,7 @@ import argparse
 import hashlib
 import json
 from pathlib import Path
+import re
 import time
 
 
@@ -19,6 +20,11 @@ def digest(path):
     return value.hexdigest()
 
 
+def final_save_completed(text):
+    # Rich consumes the optional [done] markup in rendered training logs.
+    return re.search(r'\bmax_steps\s+reached\s+step=1000\b', text) is not None
+
+
 def capture(runbase, output, *, timeout=14400):
     runbase = Path(runbase).resolve(); output = Path(output).resolve()
     weight = runbase / 'short/training/checkpoints/weights/step_001000.pt'
@@ -26,6 +32,9 @@ def capture(runbase, output, *, timeout=14400):
     cached_signature = cached_sha = None
     started = time.monotonic()
     while time.monotonic() - started < timeout:
+        exit_file = runbase / 'short_exit.json'
+        if exit_file.is_file() and json.loads(exit_file.read_text()).get('returncode') != 0:
+            raise RuntimeError('Short training exited unsuccessfully; no final receipt issued')
         if weight.is_file() and not weight.with_suffix('.pt.tmp').exists():
             before = signature(weight)
             if before != cached_signature:
@@ -36,7 +45,7 @@ def capture(runbase, output, *, timeout=14400):
                 print('STABLE_WEIGHT_HASHED', before[1], sha, flush=True)
             # This marker follows the final weight AND full optimizer save.
             text = log.read_text() if log.is_file() else ''
-            final = '[done] max_steps reached step=1000' in text
+            final = final_save_completed(text)
             if final and signature(weight) == cached_signature:
                 receipt = dict(schema='joint8-step1000-download-v1', step=1000,
                     training_complete=True, size_bytes=cached_signature[1], sha256=cached_sha,
@@ -48,9 +57,6 @@ def capture(runbase, output, *, timeout=14400):
                 temporary.replace(output)
                 print('FINAL_DOWNLOAD_RECEIPT', str(output), flush=True)
                 return receipt
-        exit_file = runbase / 'short_exit.json'
-        if exit_file.is_file() and json.loads(exit_file.read_text()).get('returncode') != 0:
-            raise RuntimeError('Short training exited unsuccessfully; no final receipt issued')
         time.sleep(1)
     raise TimeoutError('Final step1000 save was not completed within the bounded wait')
 

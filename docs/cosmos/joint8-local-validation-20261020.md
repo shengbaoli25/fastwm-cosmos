@@ -1,6 +1,30 @@
 # Joint8 step1000 本地验证
 
-本地准备于 2026-10-20 完成。正式 step1000 权重尚未保存，不能将下列运行预检解释为训练后拟合结果。
+正式step1000权重已于2026-10-20下载并校验，本地runtime、力预处理绑定和模型目录已导出。
+05:54的正式回放通过4个窗口的CPU输入对齐检查，随后因本地CUDA不可用而停止；尚无正式权重的采样拟合结果。
+下列step0运行预检不能解释为训练后拟合结果。
+
+## 正式权重与当前阻塞
+
+- 训练05:31:22达到1000步，05:32:22最终保存完成并以returncode=0退出。
+- 末步训练FM loss：Action 0.0072、Force 0.0197、Video 0.0407、总计0.0676。
+- 下载文件位于`/home/jaylen/文档/step_001000.pt`，已安装到资产目录`weights/step_001000.pt`。
+- 文件6,038,120,329字节，下载及安装后的SHA256均与远端两次稳定记录一致：
+  `38c402207973b9da74488ccf7475cd9a9f7b9280db1f700c9fda582ae4e2a425`。
+- checkpoint的step1000和schema检查通过；`runtime.local.json`、`checkpoint_catalog.json`及`.force.json`绑定已导出，固定16轮联合采样。
+- 正式记录：资产目录`validation-20261020-055411/report.json`，输入对齐通过；推理因驱动要求Reset而失败，模型尚未加载到GPU。
+- 当前不能给出正式动作/力拟合曲线、部署与直接模型的输出差异、显存或延时。需要用户恢复驱动后继续离线验证。
+
+自动凭据监视误将Rich渲染日志中已消失的`[done]`作为必需标记。
+已下载最终训练日志、退出码和两次远端稳定哈希，保存在资产目录`training-completion/`。
+凭据明确标记为本地依据这些远端证据重建，未声称由远端自动生成；脚本修复及7项相关测试通过。
+
+驱动恢复后执行（不会连接或运动机器人）：
+
+```bash
+bundle='/home/jaylen/桌面/checkpoints/realman_joint8_merged50_step001000_assets'
+"$bundle/finish_local.sh" "$bundle/weights/step_001000.pt" "$bundle/checkpoint-download-receipt.json"
+```
 
 ## 已完成
 
@@ -21,13 +45,13 @@
 内核在05:05:15报告Xid119（GSP RPC超时），05:05:27报告Xid154（GPU Reset Required）。
 完整推理输出在该进程内已完成并保存在上述报告中，但不能据此声称当前显卡仍可使用。
 桌面Xorg/WebKit等仍打开设备，且当前无免密管理员权限；本轮没有重置显卡或终止桌面程序。
-正式权重仍可下载、校验和导出，GPU回放需要用户恢复驱动/重启后再执行。
+正式权重已下载、校验和导出，GPU回放需要用户恢复驱动后再执行。本轮没有重启系统。
 相关测试首次44项通过；驱动异常后的复跑为43项通过、1项CUDA测试跳过。
 
-## 权重到达后
+## 下载与复跑流程
 
 只下载 `short/training/checkpoints/weights/step_001000.pt`，不下载约43GiB的完整优化器状态。
-训练在 save_every 和 max_steps 处会再次保存同名文件，必须等最终 `[done] max_steps reached step=1000`，
+训练在 save_every 和 max_steps 处会再次保存同名文件，必须等最终`max_steps reached step=1000`（原始日志可能含`[done]`），
 没有 `.pt.tmp` 且最终保存结束，再生成并下载凭据：
 
 ```json
