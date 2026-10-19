@@ -155,7 +155,7 @@ CUDA Graph/串行编译逻辑不适用于新模型，加载时明确拒绝。
 本地还使用官方结构的缩小模型检查 CPU BF16 和 CUDA BF16 前向/反向。
 它们验证实现，不能代表新数据拟合、完整模型显存、延迟或真机性能。
 
-本次执行结果：**156 passed**，命令为：
+本次执行结果：**159 passed**，命令为：
 
 ```bash
 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 PYTHONPATH=src:deploy python -m pytest -q \
@@ -164,11 +164,13 @@ PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 PYTHONPATH=src:deploy python -m pytest -q \
 ```
 
 使用 `realman_deploy` 环境（Torch 2.7.1+cu128、PyArrow 24）。本地缺少 Transformers，
-Reason1 原生测试另在远端环境验证；其余选中测试全部通过。新增覆盖关节 8 维训练/部署、
+Reason1 原生测试在远端环境补验，**3 passed in 4.63s**；其余选中测试全部通过。新增覆盖关节 8 维训练/部署、
 关节弧度与 SDK 度转换、不经 IK 下发、采集断点/无效行、原始帧索引与缓存 mask 验证。
 CUDA 检查使用 RTX 3080、2 层缩小模型和 3 轮采样；缓存开关的 action/force/video
 最大绝对差在这一次 BF16 检查中均为 0。CPU FP32 缓存对照使用数值容差检查。
 
 本机已下载官方非 action-cond 权重，通过固定 SHA256、完整 strict state_dict 加载及有限值检查。
 远端环境、资产和准备凭据见 `joint8-environment-preparation-20261020.md`。
-新数据仍在采集；数据定版、缓存和统计导出、四卡预检、正式训练和新模型离线拟合评估待后续执行。
+50 条新数据已定版，1000 步和 20000 步两组四卡 H200 任务已提交排队；缓存、四卡预检、
+正式训练和新模型离线拟合评估仍待 GPU 启动后执行。详见
+[本轮训练记录](experiments/realman-joint8-merged50-20261020.md)。

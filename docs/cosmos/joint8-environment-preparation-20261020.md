@@ -7,11 +7,11 @@ CPU 环境与全部权重已准备完成，通过完整模型加载。随后用�
 ## 环境与持久化位置
 
 - 镜像：`docker.sii.shaipower.online/inspire-studio/dualwm:1.0`。
-- 本轮准备实例：`realman-joint8-prep-1020`，ID `fdea7d62-e501-492d-8455-cd1df355f393`；4 CPU / 16 GB，2 小时自动停止。
+- 本轮准备实例：`realman-joint8-prep-1020`，ID `fdea7d62-e501-492d-8455-cd1df355f393`；4 CPU / 16 GB；准备完成后已执行停止，资产均位于持久化共享目录。
 - 共享根目录：`/inspire/hdd/project/long-range-embodied-collaborative-intelligence/ky26340`，下文路径均相对此目录。
 - Python：`realman-fastwam/.venv/bin/python`，3.12.11。
 - 主要依赖已实测导入：Torch 2.7.1+cu128、Transformers 4.49.0、Accelerate 1.12.0、DeepSpeed 0.18.7、PyArrow 24.0.0。
-- 本轮目录：`realman-noaction-joint8/`；独立代码目录 `code/`、新底座 `assets/`、日志/凭据 `preparation/`。
+- 本轮目录：`realman-noaction-joint8/`；训练固定使用 `code-82cb9d2/`，新底座 `assets/`、日志/凭据 `preparation/`。
 - 复用原有环境与完整 Reason1/tokenizer 文件，不改动旧项目、旧训练或采集数据。
 
 ## 资产
@@ -41,5 +41,7 @@ Reason1 本地 processor 和 512 token 输入、完整非 action-cond Video 严�
 - 新配方：4×H200、每卡尝试 batch64/global256、双视角；短训 1000 步/save1000/warmup50，长训 20000 步/save5000/warmup1000。
 - 如实际更新检查 OOM，需根据记录降低 microbatch；不把梯度累积视作物理 batch64 成功。
 
-本地验证：156 项测试通过；Reason1 原生测试需在含 Transformers 的远端环境补验。
+本地相关完整测试：159 项通过；远端 Reason1 原生测试：3 项通过（4.63 秒）。
+两组训练于 2026-10-20 03:48（北京时间）提交，目前排队，batch64 的四卡显存预检尚未执行。
+任务链接、冻结版本、日志及保存路径见 [50 条数据训练记录](experiments/realman-joint8-merged50-20261020.md)。
 详细架构、输入和训练/部署入口见 [实现说明](noaction-joint-diffusion.md)。
