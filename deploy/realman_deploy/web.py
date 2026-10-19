@@ -23,7 +23,7 @@ main{max-width:1100px;margin:40px auto;padding:0 22px}.head{display:flex;justify
 <div class="grid">
 <section class="card"><h2>模型 checkpoint</h2><div class="row"><select id="checkpoint"></select><button id="refresh" class="secondary">刷新列表</button></div><div class="row" style="margin-top:10px"><button id="download" class="secondary">下载到桌面 checkpoints</button><button id="load" class="primary">加载模型</button></div><p id="modelHint" class="muted">目录：<code>~/桌面/checkpoints</code></p><div id="downloadProgress" class="log"></div></section>
 <section class="card"><h2>真机状态</h2><div class="metrics"><div class="metric"><small>机械臂</small><strong id="robot">未连接</strong></div><div class="metric"><small>双相机</small><strong id="cameras">未连接</strong></div><div class="metric"><small>六轴力</small><strong id="force">未连接</strong></div><div class="metric"><small>夹爪</small><strong id="gripper">未连接</strong></div><div class="metric"><small>CUDA</small><strong id="cuda">未连接</strong></div><div class="metric"><small>模型延迟</small><strong id="latency">—</strong></div></div><div class="row" style="margin-top:13px"><button id="connect" class="secondary">连接硬件</button><button id="reload" class="secondary">重载状态</button></div></section>
-<section class="card wide"><h2>闭环控制</h2><div class="row"><button id="start" class="primary">开始推理与控制</button><button id="pause" class="secondary">暂停 / 缓停</button><button id="estop" class="danger">急停</button></div><p id="modeHint" class="muted">正在读取调度模式…</p><div id="warning" class="note">启动前请确认工作区无障碍、机械臂处于可控状态。首轮 WM 使用当前 TCP 位姿保持作为 bootstrap，后续 WM 接收上一轮 AE 预测动作。</div></section>
+<section class="card wide"><h2>闭环控制</h2><div class="row"><button id="start" class="primary">开始推理与控制</button><button id="pause" class="secondary">暂停 / 缓停</button><button id="estop" class="danger">急停</button></div><p id="modeHint" class="muted">正在读取调度模式…</p><div id="warning" class="note">启动前请确认工作区无障碍、机械臂处于可控状态。</div></section>
 <section class="card wide"><h2>运行指标</h2><div class="metrics"><div class="metric"><small>状态 / epoch</small><strong id="state">idle / 0</strong></div><div class="metric"><small>观测序号</small><strong id="sequence">—</strong></div><div class="metric"><small>动作缓冲</small><strong id="queue">0</strong></div><div class="metric"><small>丢弃结果</small><strong id="discarded">0</strong></div><div class="metric"><small>执行模式</small><strong id="executionMode">—</strong></div><div class="metric"><small>执行阶段</small><strong id="executionPhase">—</strong></div><div class="metric"><small>模型计算</small><strong id="inferencePhase">空闲</strong></div><div class="metric"><small>输入观测至结果返回</small><strong id="inputAge">—</strong></div></div><p id="error" class="log"></p></section>
 </div><div class="foot">服务默认只监听本机。急停按钮调用硬件适配器的独立停止通道；无法确认时应立即使用控制柜物理急停。</div></main>
 <script>
@@ -36,6 +36,7 @@ async function refreshStatus(){
   try{
     const s=await api('/api/status');
     $('modelMode').textContent=`双视角观测 · ${s.model_ready?(s.reference_mode==='none'?'无参考轨迹':'滚动 AE 参考'):'模型未加载'} · 30 Hz 动作接口`;
+    $('warning').textContent='启动前请确认工作区无障碍、机械臂处于可控状态。'+(s.model_ready?(s.reference_mode==='none'?'当前模型不使用参考轨迹，Video、Force、AE 联合采样。':'首轮 WM 使用当前状态保持作为参考，后续 WM 接收上一轮 AE 预测动作。'):'');
     $('state').textContent=`${s.state} / ${s.epoch}`;
     $('sequence').textContent=s.observation_sequence<0?'—':s.observation_sequence;
     $('queue').textContent=s.action_queue;
