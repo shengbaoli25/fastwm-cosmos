@@ -1,4 +1,4 @@
-"""RealMan 1018 normalization and online history assembly."""
+"""Recorded RealMan normalization and online history assembly."""
 from __future__ import annotations
 
 from collections import deque
@@ -7,6 +7,7 @@ import math
 from pathlib import Path
 from typing import Sequence
 from struct import pack, unpack
+from .contracts import action_width
 
 
 def _f32(value: float) -> float:
@@ -16,13 +17,15 @@ def _f32(value: float) -> float:
 class DatasetNormalizer:
     """Matches the recorded FP32 population z-score and [-5, 5] clip."""
 
-    def __init__(self, stats: dict, force_preprocessing=None):
+    def __init__(self, stats: dict, force_preprocessing=None, action_space='eef_pose7'):
         self.stats = stats
+        self.action_space = action_space
+        self.action_dim = self.state_dim = action_width(action_space)
         self.force_preprocessing = force_preprocessing
         if force_preprocessing is not None:
             from realman_force.contract import validate_contract_identity
             validate_contract_identity(force_preprocessing)
-        for key, width in (("state", 7), ("action", 7), ("force", 6)):
+        for key, width in (("state", self.state_dim), ("action", self.action_dim), ("force", 6)):
             item = stats.get(key)
             if not isinstance(item, dict) or len(item.get("mean", [])) != width or len(item.get("std", [])) != width:
                 raise ValueError(f"missing {key} normalization statistics")
@@ -34,7 +37,11 @@ class DatasetNormalizer:
     @classmethod
     def from_json(cls, path: str | Path) -> "DatasetNormalizer":
         payload = json.loads(Path(path).read_text())
-        return cls(payload.get("statistics", payload), payload.get('force_preprocessing'))
+        space = payload.get('action_space','eef_pose7')
+        if space == 'joint8' and (payload.get('action_units') != ['rad']*7+['openness_0_1']
+                                 or payload.get('state_columns') != [0,1,2,3,4,5,6,19]):
+            raise ValueError('Joint normalization requires radians, measured joints and final gripper')
+        return cls(payload.get("statistics", payload), payload.get('force_preprocessing'),space)
 
     def _transform(self, name, values, *, inverse=False):
         item = self.stats[name]
@@ -68,7 +75,7 @@ class DatasetNormalizer:
 
 
 class OnlineHistory:
-    """Builds the exact [state7, force6] history expected by Force WM."""
+    """Builds the [measured state, force6] history for the selected action space."""
 
     def __init__(self, normalizer: DatasetNormalizer, length: int = 32):
         self.normalizer = normalizer
@@ -87,5 +94,6 @@ class OnlineHistory:
     def tensors(self) -> tuple[list[list[float]], list[bool], list[list[bool]]]:
         state = list(self._state); force = list(self._force)
         pad = max(0, self.length - len(state))
-        rows = [[0.0] * 13 for _ in range(pad)] + [s + f for s, f in zip(state, force)]
-        return rows[-self.length:], [True] * pad + [False] * len(state), [[not x] * 13 for x in ([True] * pad + [False] * len(state))][-self.length:]
+        width = self.normalizer.state_dim+6
+        rows = [[0.0] * width for _ in range(pad)] + [s + f for s, f in zip(state, force)]
+        return rows[-self.length:], [True] * pad + [False] * len(state), [[not x] * width for x in ([True] * pad + [False] * len(state))][-self.length:]

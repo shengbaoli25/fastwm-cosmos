@@ -11,6 +11,7 @@ memory_seed: 44
 num_inference_steps: 16
 gradient_checkpointing: true
 action_hidden: 768
+action_space: joint8
 action_ffn: 3072
 force_hidden: 768
 force_ffn: 2048

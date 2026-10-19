@@ -11,6 +11,12 @@ import time
 from typing import Any, Mapping, Sequence
 
 
+def action_width(action_space: str) -> int:
+    if action_space not in ('eef_pose7', 'joint8'):
+        raise ValueError('Explicit eef_pose7 or joint8 action space required')
+    return 8 if action_space == 'joint8' else 7
+
+
 def _finite_vector(value: Sequence[float], size: int, name: str) -> tuple[float, ...]:
     if len(value) != size:
         raise ValueError(f"{name} must contain {size} values")
@@ -37,15 +43,16 @@ class Observation:
     frames: Mapping[str, bytes]
     frame_meta: Mapping[str, Mapping[str, Any]] = field(default_factory=dict)
     force_meta: Mapping[str, Any] = field(default_factory=dict)
+    action_space: str = 'eef_pose7'
 
     def __post_init__(self) -> None:
         if not math.isfinite(self.stamp) or self.stamp <= 0:
             raise ValueError("observation stamp must be a positive monotonic time")
         if type(self.sequence) is not int or self.sequence < 0:
             raise ValueError("observation sequence must be a non-negative integer")
-        object.__setattr__(self, "state", _finite_vector(self.state, 7, "state"))
+        object.__setattr__(self, "state", _finite_vector(self.state, action_width(self.action_space), "state"))
         force = _finite_vector(self.force, 6, "force")
-        if not 0 <= self.state[6] <= 1:
+        if not 0 <= self.state[-1] <= 1:
             raise ValueError("gripper opening must be in [0, 1]")
         object.__setattr__(self, "force", force)
         if not self.frames or any(not isinstance(k, str) or not isinstance(v, bytes)
@@ -54,8 +61,9 @@ class Observation:
 
     @classmethod
     def now(cls, sequence: int, state: Sequence[float], force: Sequence[float],
-            frames: Mapping[str, bytes], frame_meta: Mapping[str, Mapping[str, Any]] | None = None) -> "Observation":
-        return cls(time.monotonic(), sequence, tuple(state), tuple(force), dict(frames), frame_meta or {})
+            frames: Mapping[str, bytes], frame_meta: Mapping[str, Mapping[str, Any]] | None = None,
+            *, action_space: str = 'eef_pose7') -> "Observation":
+        return cls(time.monotonic(), sequence, tuple(state), tuple(force), dict(frames), frame_meta or {}, action_space=action_space)
 
 
 @dataclass(frozen=True)
@@ -67,6 +75,7 @@ class ActionChunk:
     epoch: int
     actions: tuple[tuple[float, ...], ...]
     created_stamp: float = field(default_factory=time.monotonic)
+    action_space: str = 'eef_pose7'
 
     def __post_init__(self) -> None:
         if type(self.source_sequence) is not int or self.source_sequence < 0:
@@ -77,8 +86,8 @@ class ActionChunk:
             raise ValueError("action timestamps must be finite")
         if not 1 <= len(self.actions) <= 32:
             raise ValueError("an action chunk must contain 1..32 actions")
-        normalized = tuple(_finite_vector(action, 7, "action") for action in self.actions)
-        if any(not 0 <= action[6] <= 1 for action in normalized):
+        normalized = tuple(_finite_vector(action, action_width(self.action_space), "action") for action in self.actions)
+        if any(not 0 <= action[-1] <= 1 for action in normalized):
             raise ValueError("gripper opening must be in [0, 1]")
         object.__setattr__(self, "actions", normalized)
 

@@ -7,7 +7,8 @@ from pathlib import Path
 import torch
 from safetensors.torch import save_file
 from fastwam.cache.latent import cache_identity_sha256, file_sha256
-from fastwam.cosmos.realman import RealManSource, require
+from fastwam.cosmos.realman import require
+from fastwam.cosmos.realman_joint import open_realman_source
 from fastwam.cosmos.assets import load_tokenizer, read_text_bank, TOKENIZER_SHA
 from fastwam.cosmos.native import verify_upstream
 from fastwam.cosmos.cache import SCHEMA, VIDEO_SHAPE, FIRST_SHAPE, _atomic, validate
@@ -20,7 +21,7 @@ def main():
     p.add_argument('--rank',type=int)
     p.add_argument('--assemble',action='store_true')
     a=p.parse_args(); torch.set_num_threads(4)
-    s=RealManSource(a.dataset,a.source_sha)
+    s=open_realman_source(a.dataset,a.source_sha)
     bank,tm,td=read_text_bank(a.text_cache); del bank
     require([x['prompt'] for x in tm['texts']]==sorted(set(s.prompts)), 'Recorded prompt mismatch')
     i=dict(schema=SCHEMA,scope='production',dataset_profile=s.identity['profile'],

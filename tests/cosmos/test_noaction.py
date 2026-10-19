@@ -27,7 +27,7 @@ def net(depth=2):
 def model(checkpointing=False):
     torch.manual_seed(7)
     return NoActionJointModel(net(), manifest={'scope':'test'}, action_hidden=24, action_ffn=48,
-        force_hidden=24, force_ffn=48, force_heads=2, gradient_checkpointing=checkpointing)
+        force_hidden=24, force_ffn=48, force_heads=2, gradient_checkpointing=checkpointing, action_space='eef_pose7')
 
 
 def core_inputs(m):
@@ -164,3 +164,18 @@ def test_cuda_bf16_checkpointing_and_cached_sampling():
         torch.testing.assert_close(a[key],b[key],atol=.04,rtol=.04)
     print({'gpu':torch.cuda.get_device_name(),'bf16_loss':float(loss),
            'cache_max_abs':{k:float((a[k]-b[k]).abs().max()) for k in a}})
+
+
+def test_joint8_training_sampling_and_checkpoint_reject_eef(tmp_path):
+    m=NoActionJointModel(net(),manifest={'scope':'test'},action_hidden=24,action_ffn=48,
+        force_hidden=24,force_ffn=48,force_heads=2,gradient_checkpointing=True,action_space='joint8')
+    s=sample(1)
+    s.update(action=torch.randn(1,32,8),proprio=torch.randn(1,32,9),
+        history=torch.randn(1,32,14),history_channel_valid=torch.ones(1,32,14,dtype=torch.bool))
+    loss,_=m.training_loss(s);loss.backward();assert torch.isfinite(loss)
+    a=m.infer_joint(s,num_inference_steps=2,use_cache=True)
+    b=m.infer_joint(s,num_inference_steps=2,use_cache=False)
+    assert a['action'].shape==(1,32,8) and a['force'].shape==(1,32,6)
+    for key in a:torch.testing.assert_close(a[key],b[key],atol=3e-6,rtol=3e-5)
+    path=tmp_path/'joint.pt';m.save_checkpoint(path,None,0)
+    with pytest.raises(ValueError):model().load_checkpoint(path)

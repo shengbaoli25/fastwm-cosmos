@@ -6,6 +6,9 @@ official non-action-conditioned Cosmos Video2World, AE 768/3072, Force diffusion
 768/2048, 28 layers each, and a shared layer core for training and 16-step joint
 inference. Video reads Video; Force reads Video/Force; AE reads all three.
 There is no reference trajectory or future action conditioning in either WM.
+The next RealMan run uses seven absolute joint angles in radians plus gripper
+openness (8D); measured joints form the state, and recorded Q×48 filtered force is
+read without filtering twice. Training, normalization and deployment share this contract.
 See the [current training and deployment guide](docs/cosmos/noaction-joint-diffusion.md).
 The next run waits for the newly collected force dataset; this change launches no training.
 

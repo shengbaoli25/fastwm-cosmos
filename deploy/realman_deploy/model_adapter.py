@@ -85,6 +85,9 @@ class CosmosJointPolicy:
             if int(self.config.get('joint_steps', 16)) != payload['manifest']['num_inference_steps']:
                 raise ValueError('Joint sampler step count differs from the trained configuration')
             trained = payload["manifest"]["extra_config"]
+            if (payload['manifest']['action_space'] != self.normalizer.action_space
+                    or payload['manifest']['action_dim'] != self.normalizer.action_dim):
+                raise ValueError('Checkpoint and normalization action space differ')
             for key, value in trained.items():
                 if key in kwargs and kwargs[key] != value and key != "gradient_checkpointing":
                     raise ValueError(f"Deployment architecture differs from trained checkpoint: {key}")
@@ -136,7 +139,7 @@ class CosmosJointPolicy:
                   for name in self.config.get("camera_order", ["global", "wrist"])}
         state = tuple(self.normalizer.stats["state"]["mean"])
         force = tuple(self.normalizer.stats["force"]["mean"])
-        obs = Observation.now(0, state, force, frames)
+        obs = Observation.now(0, state, force, frames, action_space=self.normalizer.action_space)
         history = OnlineHistory(self.normalizer, 32)
         history.append(state, force)
         reference = (None if getattr(self, 'reference_mode', 'rolling_ae') == 'none'
@@ -172,6 +175,8 @@ class CosmosJointPolicy:
               history: tuple[list[list[float]], list[bool], list[list[bool]]]) -> list[list[float]]:
         if self.model is None or self.tokenizer is None:
             raise RuntimeError("Cosmos policy is not loaded with a tokenizer")
+        if observation.action_space != self.normalizer.action_space:
+            raise ValueError('Observation and policy action space differ')
         import torch
         started = time.monotonic()
         pixels = self._encode_image(observation)
@@ -219,9 +224,9 @@ class CosmosJointPolicy:
                    "total_ms": round((finished - started) * 1000, 1)}
         self.diagnostics = {**self.diagnostics, "last_inference": profile}
         logger.info("Inference sequence=%s timings=%s", observation.sequence, profile)
-        if (len(actions) != 32 or any(len(row) != 7 for row in actions)
+        if (len(actions) != 32 or any(len(row) != self.normalizer.action_dim for row in actions)
                 or not all(math.isfinite(float(value)) for row in actions for value in row)):
-            raise ValueError("AE output must be a finite Action32x7 chunk")
+            raise ValueError(f"AE output must be a finite Action32x{self.normalizer.action_dim} chunk")
         return actions
 
     def close(self) -> None:

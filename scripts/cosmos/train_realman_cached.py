@@ -25,10 +25,10 @@ def main():
     import torch
     from fastwam.cosmos.cache import _atomic
     from fastwam.cosmos.noaction import SCHEMA as JOINT_PROTOCOL, BRANCH_READS
-    from fastwam.cosmos.realman import RealManSource
+    from fastwam.cosmos.realman_joint import open_realman_source
     from omegaconf import OmegaConf
     torch.set_num_threads(4)
-    if (JOINT_PROTOCOL != 'cosmos-noaction-vfa-diffusion28-v1'
+    if (JOINT_PROTOCOL != 'cosmos-noaction-vfa-diffusion28-joint8-v2'
             or BRANCH_READS != ((1, 0, 0), (1, 1, 0), (1, 1, 1))):
         raise ValueError('The no-reference joint diffusion architecture is required')
 
@@ -39,7 +39,9 @@ def main():
             or run.exists()):
         raise ValueError('Use fresh work/run directories outside the immutable cache')
     work.mkdir(parents=True, exist_ok=False)
-    source = RealManSource(args.dataset, args.source_sha)
+    source = open_realman_source(args.dataset, args.source_sha)
+    if source.identity.get('action_space') != 'joint8':
+        raise ValueError('The new cached training entrypoint requires joint8 demonstrations')
     source.export_normalization(work/'normalization.json')
     manifest = json.loads((prepared / 'features/manifest.json').read_text())
     if (manifest['status'] != 'complete'

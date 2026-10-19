@@ -26,6 +26,12 @@ def runtime_config(config, manifest, *, checkpoint, normalization, tokenizer,
             raise ValueError('Training config and checkpoint differ: ' + config_key)
     if file_sha256(normalization) != manifest['normalization_sha256']:
         raise ValueError('Normalization differs from the training-bound file')
+    from realman_deploy.normalization import DatasetNormalizer
+    normalizer = DatasetNormalizer.from_json(normalization)
+    hardware = json.loads(Path(hardware_config).read_text())
+    if (manifest.get('action_space') != 'joint8' or model.get('action_space') != 'joint8'
+            or normalizer.action_space != 'joint8' or hardware.get('action_space') != 'joint8'):
+        raise ValueError('Joint8 checkpoint, normalization and hardware configuration required')
     for key, value in manifest['extra_config'].items():
         if model.get(key) != value:
             raise ValueError('Training model settings differ: ' + key)

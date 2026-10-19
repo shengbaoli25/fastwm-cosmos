@@ -26,7 +26,7 @@ import threading
 import time
 from typing import Any, Mapping, Sequence
 
-from .contracts import Observation
+from .contracts import Observation, action_width
 from .gripper import Ctag2F120Worker
 
 
@@ -388,6 +388,8 @@ class RealManHardwareAdapter:
         result.setdefault("gripper_deadband", 0.02)
         result.setdefault("gripper_required", True)
         result.setdefault("initial_gripper", 0.5); result.setdefault("model_arm_dof", 7)
+        result.setdefault('action_space','eef_pose7')
+        action_width(result['action_space'])
         if not 0 < float(result["camera_max_age_s"]) <= 0.5:
             raise ValueError("camera_max_age_s must be in (0, 0.5]")
         if not 0 < float(result["camera_pair_skew_s"]) <= 0.5:
@@ -469,6 +471,7 @@ class RealManHardwareAdapter:
         cameras_ready = bool(cameras) and all(item["ready"] for item in cameras)
         return {
             "connected": connected,
+            "action_space": self.config['action_space'],
             "robot_ready": bool(robot.get("ready")),
             "force_ready": bool(robot.get("ready")),
             "force_preprocessing": feedback.force_contract if feedback else None,
@@ -529,11 +532,12 @@ class RealManHardwareAdapter:
             feedback_stamp, float(self.config.get("gripper_feedback_max_age_s", 0.5))) if self.gripper else None
         if gripper is None:
             raise RuntimeError("CTAG2F120 夹爪反馈未连接")
-        state = tuple(pose) + (gripper,)
+        state = ((tuple(math.radians(x) for x in q) if self.config['action_space'] == 'joint8'
+                  else tuple(pose)) + (gripper,))
         with self.lock:
             sequence = self.sequence
             self.sequence += 1
-        return Observation(anchor, sequence, state, force, frames, metadata, force_meta)
+        return Observation(anchor, sequence, state, force, frames, metadata, force_meta,self.config['action_space'])
 
     def _limited_pose(self, target: Sequence[float], current: Sequence[float]) -> tuple[float, ...]:
         target = _finite(target, 6, "action pose")
@@ -566,6 +570,8 @@ class RealManHardwareAdapter:
         return limited
 
     def command(self, action: tuple[float, ...]) -> None:
+        if self.config['action_space'] == 'joint8':
+            return self._command_joint(action)
         action = _finite(action, 7, "action")
         if not 0 <= action[6] <= 1:
             raise ValueError("gripper opening must be in [0, 1]")
@@ -612,6 +618,42 @@ class RealManHardwareAdapter:
         if self.gripper is None:
             raise RuntimeError("CTAG2F120 夹爪 worker 未连接")
         self.gripper.command(action[6])
+
+    def _command_joint(self, action):
+        """Absolute radians inside the model; degrees only at the SDK boundary."""
+        action = _finite(action,8,'joint action')
+        if not 0 <= action[-1] <= 1:
+            raise ValueError('gripper opening must be in [0, 1]')
+        if not self.connected or self.sdk is None or self.feedback is None:
+            raise RuntimeError('RM75 未连接')
+        if not self.armed or self.closed or self.estop_latched:
+            raise RuntimeError('硬件已停机、未 arm 或急停已锁存')
+        q,_,_,stamp = self.feedback.snapshot(float(self.config['feedback_max_age_s']))
+        target = tuple(math.degrees(x) for x in action[:7])
+        if self.joint_min is None or self.joint_max is None:
+            raise RuntimeError('RM75 关节软限位尚未验证')
+        margin = float(self.config.get('joint_limit_margin_deg',2.))
+        if any(x < lo+margin or x > hi-margin for x,lo,hi in zip(target,self.joint_min,self.joint_max)):
+            raise ValueError('RM75 目标触及关节软限位保护区')
+        jump = max(abs(x-old) for x,old in zip(target,q))
+        limit = self.config['max_joint_step_deg']
+        if limit is not None and jump > limit:
+            raise ValueError(f'RM75 关节跳变过大 ({jump:.2f}°)')
+        if self.gripper is None:
+            raise RuntimeError('CTAG2F120 夹爪 worker 未连接')
+        if self.closed or not self.armed or self.estop_latched:
+            raise RuntimeError('硬件已停机或未 arm')
+        code = self.sdk.rm_movej_canfd(list(target),bool(self.config['follow']),expand=0.,
+            trajectory_mode=int(self.config['trajectory_mode']),radio=int(self.config['trajectory_radio']))
+        if code != 0:
+            raise RuntimeError(f'RM75 关节指令失败: {code}')
+        with self.lock:
+            self.last_command = tuple(action)
+        if self.config.get('log_motion_trace',False):
+            logger.info('Motion trace %s',json.dumps(dict(stamp=time.monotonic(),feedback_stamp=stamp,
+                action_space='joint8',measured_joints_deg=list(q),requested_joints_rad=list(action[:7]),
+                sent_joints_deg=list(target),joint_jump_deg=jump,gripper=action[-1]),allow_nan=False))
+        self.gripper.command(action[-1])
 
     def _stop(self, emergency: bool) -> None:
         if emergency:

@@ -21,7 +21,7 @@ def validate_config(cfg):
     if m['_target_'] == 'fastwam.cosmos.assets.create_noaction_joint_cosmos':
         required = dict(action_hidden=768, action_ffn=3072, force_hidden=768, force_ffn=2048,
                         force_heads=16, force_shift=1., num_inference_steps=16,
-                        action_seed=42, force_seed=43, memory_seed=44)
+                        action_seed=42, force_seed=43, memory_seed=44, action_space='joint8')
         if (any(m.get(k) != v for k, v in required.items())
                 or any(k in m for k in ('control_seed', 'initial_checkpoint', 'action_condition'))
                 or d['_target_'] != 'fastwam.cosmos.cache.CosmosCachedDataset'

@@ -31,11 +31,12 @@ class ForceDiffusionBlock(nn.Module):
 
 class ForceDiffusionExpert(nn.Module):
     def __init__(self, *, hidden_dim=768, ffn_dim=2048, num_layers=28,
-                 width=2048, num_heads=16, text_dim=1024, horizon=32, history_steps=32):
+                 width=2048, num_heads=16, text_dim=1024, horizon=32, history_steps=32, state_dim=7):
         super().__init__()
         self.hidden_dim, self.horizon, self.history_steps = hidden_dim, horizon, history_steps
         self.num_heads = num_heads
-        self.history_encoder = nn.Linear(26, hidden_dim)
+        self.history_dim = state_dim + 6
+        self.history_encoder = nn.Linear(2 * self.history_dim, hidden_dim)
         self.force_encoder = nn.Linear(6, hidden_dim)
         self.text_encoder = nn.Linear(text_dim, hidden_dim)
         self.position = nn.Parameter(torch.randn(history_steps + horizon, hidden_dim) / hidden_dim**.5)
@@ -46,8 +47,8 @@ class ForceDiffusionExpert(nn.Module):
 
     def prepare_history(self, history, is_pad, channel_valid, context):
         h, valid = mask_invalid_channels(history, is_pad, channel_valid)
-        if h.shape[1:] != (self.history_steps, 13):
-            raise ValueError('Measured History32x13 required')
+        if h.shape[1:] != (self.history_steps, self.history_dim):
+            raise ValueError(f'Measured History32x{self.history_dim} required')
         text = self.text_encoder(context.mean(1))[:, None]
         x = self.history_encoder(torch.cat((h, valid.to(h.dtype)), -1)) + text + self.position[:self.history_steps]
         return torch.where(valid.any(-1)[..., None], x, 0), valid.any(-1)

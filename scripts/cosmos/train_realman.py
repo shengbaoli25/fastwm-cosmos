@@ -23,11 +23,12 @@ def main():
     require(bool(os.environ.get('TRAIN_JOB_ID')), 'Platform distributed training job required')
     work=Path(a.work);work.mkdir(parents=True,exist_ok=False)
     upstream=ROOT/'third_party/cosmos-predict2.5'
-    from fastwam.cosmos.realman import RealManSource
+    from fastwam.cosmos.realman_joint import open_realman_source
     from fastwam.cosmos.cache import _atomic
     import torch
     torch.set_num_threads(4)
-    s=RealManSource(a.dataset,a.source_sha)
+    s=open_realman_source(a.dataset,a.source_sha)
+    require(s.identity.get('action_space') == 'joint8', 'This training entrypoint requires joint8 demonstrations')
     _atomic(work/'source_audit.json',dict(identity=s.identity,timing=s.timing))
     s.export_normalization(work/'normalization.json')
     _atomic(work/'prompts.json',sorted(set(s.prompts))); del s

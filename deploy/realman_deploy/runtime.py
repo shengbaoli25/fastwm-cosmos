@@ -86,6 +86,7 @@ class DeploymentRuntime:
             if policy is not None:
                 self._validate_policy_normalizer(policy)
             if hardware is not None:
+                self._validate_hardware_space(hardware.status())
                 actual = hardware.status().get('force_preprocessing')
                 expected = self.normalizer.force_preprocessing
                 if actual != expected:
@@ -105,8 +106,13 @@ class DeploymentRuntime:
     def _validate_policy_normalizer(self, policy) -> None:
         normalizer = getattr(policy, 'normalizer', self.normalizer)
         if (normalizer.stats != self.normalizer.stats
+                or normalizer.action_space != self.normalizer.action_space
                 or normalizer.force_preprocessing != self.normalizer.force_preprocessing):
             raise ValueError('模型与运行时 normalization.json 不一致；请使用同一训练导出文件重启服务')
+
+    def _validate_hardware_space(self,status):
+        if status.get('action_space','eef_pose7') != self.normalizer.action_space:
+            raise ValueError('Hardware and policy action space differ; joint8 requires joint commands in radians')
 
     def load_policy_async(self, factory: Callable[[str], PolicyAdapter], checkpoint: str) -> None:
         with self.lock:
@@ -145,6 +151,7 @@ class DeploymentRuntime:
             if self.require_cuda and not self._cuda_status().get("available"):
                 raise RuntimeError("CUDA 未就绪；禁止在无 GPU 环境下启动闭环控制")
             status = self.hardware.status()
+            self._validate_hardware_space(status)
             self._validate_policy_normalizer(self.policy)
             if status.get('force_preprocessing') != self.normalizer.force_preprocessing:
                 raise ValueError('硬件力预处理与模型不一致，请重新连接匹配的配置')
@@ -226,6 +233,8 @@ class DeploymentRuntime:
                         with self.lock:
                             if self.state == "running" and self.gate.accepts(epoch):
                                 expected = self.normalizer.force_preprocessing
+                                if observation.action_space != self.normalizer.action_space:
+                                    raise ValueError('Observation action space differs from training')
                                 if expected is not None and observation.force_meta.get('preprocessing_id') != expected['id']:
                                     raise ValueError('观测力预处理版本与训练版本不一致')
                                 self._history.append(observation.state, observation.force)
@@ -244,13 +253,13 @@ class DeploymentRuntime:
 
     def _publish(self, normalized_actions, observation, epoch: int, started: float) -> bool:
         # Shape/finite checks precede decoding; no NaN can be hidden by clipping.
-        if len(normalized_actions) != 32 or any(len(row) != 7 for row in normalized_actions):
-            raise ValueError("AE output must be Action32x7")
+        if len(normalized_actions) != 32 or any(len(row) != self.normalizer.action_dim for row in normalized_actions):
+            raise ValueError(f"AE output must be Action32x{self.normalizer.action_dim}")
         predicted = self.normalizer.decode("action", normalized_actions)
-        execution = [row[:6] + [max(0.0, min(1.0, row[6]))] for row in predicted]
+        execution = [row[:-1] + [max(0.0, min(1.0, row[-1]))] for row in predicted]
         finished = self.clock()
         chunk = ActionChunk(observation.sequence, observation.stamp, epoch,
-                            tuple(tuple(row) for row in execution), finished)
+                            tuple(tuple(row) for row in execution), finished, self.normalizer.action_space)
         with self.lock:
             # A stopped run still needs its actual latency for diagnosis.
             self.latency_ms = round((finished - started) * 1000.0, 1)

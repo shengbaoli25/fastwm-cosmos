@@ -33,7 +33,8 @@ def validate(root,expected=None,*,complete=True,production=True):
     if production:
         profile=i.get('dataset_profile','forcevla-wipe50')
         scopes={'forcevla-wipe50':(50,34808),'realman-1018-test-cup-force-v1':(73,35611)}
-        filtered = profile == 'realman-filtered-force-v1'
+        joint = profile == 'realman-leader-joint8-filtered-v1'
+        filtered = profile == 'realman-filtered-force-v1' or joint
         lengths = i['episode_lengths']
         if (i.get('scope')!='production' or (not filtered and (profile not in scopes
                 or (len(lengths),sum(lengths))!=scopes[profile]))
@@ -44,7 +45,7 @@ def validate(root,expected=None,*,complete=True,production=True):
             if (source.get('profile')!=profile or source.get('episode_lengths')!=i['episode_lengths']
                     or cache_identity_sha256(source)!=i.get('numeric_identity')
                     or cache_identity_sha256(source.get('files',{}))!=source.get('source_inventory_sha256')
-                    or source.get('eef_columns')!=[8,9,10,11,12,13,7]
+                    or (not joint and source.get('eef_columns')!=[8,9,10,11,12,13,7])
                     or source.get('cameras')!=['observation.images.global','observation.images.wrist']):
                 raise ValueError('RealMan source lineage differs')
             if filtered:
@@ -52,9 +53,24 @@ def validate(root,expected=None,*,complete=True,production=True):
                 validate_contract_identity(source.get('force_preprocessing', {}))
                 if source.get('fps') != 30:
                     raise ValueError('RealMan force grid differs')
+            if joint and (source.get('action_space') != 'joint8' or source.get('state_columns') != [0,1,2,3,4,5,6,19]
+                          or source.get('action_units') != ['rad']*7+['openness_0_1']
+                          or (source.get('action_dim'),source.get('state_dim'),source.get('history_dim')) != (8,8,14)):
+                raise ValueError('Joint action/state semantics differ')
     if complete and m['status']!='complete': raise ValueError('Partial cache is not trainable')
     if m['status'] not in ['complete','partial']: raise ValueError('Invalid cache status')
-    rows=[(ep,f) for ep,n in enumerate(i['episode_lengths']) for f in range(n)]; stop=0
+    joint = i.get('dataset_profile') == 'realman-leader-joint8-filtered-v1'
+    rows=[(ep,f,0,n) for ep,n in enumerate(i['episode_lengths']) for f in range(n)]
+    if joint:
+        segments=i['realman_source'].get('segments',[]);rows=[];previous=(-1,0)
+        for ep,lo,hi in segments:
+            if (not all(type(x) is int for x in (ep,lo,hi)) or not 0 <= ep < len(i['episode_lengths'])
+                    or not 0 <= lo < hi <= i['episode_lengths'][ep] or hi-lo < 2
+                    or ep < previous[0] or ep == previous[0] and lo < previous[1]):
+                raise ValueError('Invalid continuous source segments')
+            rows.extend((ep,f,lo,hi) for f in range(lo,hi));previous=(ep,hi)
+        if not rows:raise ValueError('Missing joint training anchors')
+    stop=0
     for e in m['shards']:
         if e['start']!=stop or e['stop']<=stop or e['stop']>len(rows): raise ValueError('Cache gaps/overlap')
         p=_path(root,e['path'])
@@ -70,19 +86,22 @@ def validate(root,expected=None,*,complete=True,production=True):
         if q['sample_index'].tolist()!=list(range(e['start'],e['stop'])): raise ValueError('Anchor permutation')
         ids=q['cosmos_text_index']
         if ids.shape!=(n,) or ids.dtype!=torch.int64 or bool((ids<0).any() | (ids>=len(i['prompts'])).any()): raise ValueError('Bad Cosmos prompt index')
-        required={'action':(32,7),'proprio':(32,8),'history':(32,13),'wrench_future':(32,6),
+        width=8 if joint else 7;history_width=width+6
+        required={'action':(32,width),'proprio':(32,width+1),'history':(32,history_width),'wrench_future':(32,6),
             'action_is_pad':(32,),'image_is_pad':(9,),'history_is_pad':(32,),'force_is_pad':(32,),
-            'history_channel_valid':(32,13),'wrench_valid':(32,6),'raw_wrench_future64':(32,6)}
+            'history_channel_valid':(32,history_width),'wrench_valid':(32,6),'raw_wrench_future64':(32,6)}
         for k,shape in required.items():
             if k not in q or q[k].shape!=(n,*shape): raise ValueError('Missing/wrong numeric feature '+k)
         for k in ['action_is_pad','image_is_pad','history_is_pad','force_is_pad','history_channel_valid','wrench_valid']:
             if q[k].dtype!=torch.bool: raise ValueError('Invalid Boolean mask '+k)
         if q['raw_wrench_future64'].dtype!=torch.float64: raise ValueError('FP64 future force required')
-        for local,(ep,anchor) in enumerate(rows[e['start']:e['stop']]):
-            length=i['episode_lengths'][ep]
+        for local,(ep,anchor,lo,hi) in enumerate(rows[e['start']:e['stop']]):
             for key,offsets in [('force_is_pad',torch.arange(1,33)),('history_is_pad',torch.arange(-31,1)),('action_is_pad',torch.arange(32)),('image_is_pad',torch.arange(0,33,4))]:
                 t=anchor+offsets
-                if not torch.equal(q[key][local],(t<0)|(t>=length)): raise ValueError('Temporal alignment/padding differs')
+                if not torch.equal(q[key][local],(t<lo)|(t>=hi)): raise ValueError('Temporal alignment/padding differs')
+            if joint and (not torch.equal(q['history_channel_valid'][local],(~q['history_is_pad'][local,None].T).expand(-1,14))
+                          or not torch.equal(q['wrench_valid'][local],(~q['force_is_pad'][local,None].T).expand(-1,6))):
+                raise ValueError('Joint temporal/channel validity differs')
         stop=e['stop']
     if stop!=m['completed_samples'] or m['status']=='complete' and stop!=len(rows): raise ValueError('Incomplete inventory')
     expected_files={'manifest.json',*[e['path'] for e in m['shards']]}

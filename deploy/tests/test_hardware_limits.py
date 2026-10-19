@@ -66,6 +66,24 @@ class JointStepLimitTests(unittest.TestCase):
             hardware.command((0.001, 0, 0, 0, 0, 0, 0.5))
         hardware.sdk.rm_movep_canfd.assert_not_called()
 
+    def test_joint8_uses_radians_and_sdk_joint_command_without_ik(self):
+        import math
+        hardware=self.hardware(20.)
+        hardware.config.update(action_space='joint8',trajectory_mode=2,trajectory_radio=17)
+        hardware.sdk.rm_movej_canfd.return_value=0
+        action=(math.radians(10),0.,0.,0.,0.,0.,0.,.6)
+        hardware.command(action)
+        hardware.sdk.rm_algo_inverse_kinematics.assert_not_called()
+        hardware.sdk.rm_movep_canfd.assert_not_called()
+        args,kwargs=hardware.sdk.rm_movej_canfd.call_args
+        self.assertAlmostEqual(args[0][0],10.)
+        self.assertEqual(kwargs,dict(expand=0.,trajectory_mode=2,radio=17))
+        hardware.gripper.command.assert_called_once_with(.6)
+        hardware.config['max_joint_step_deg']=5.
+        with self.assertRaisesRegex(ValueError,'跳变过大'):hardware.command(action)
+        hardware.config['max_joint_step_deg']=None
+        with self.assertRaisesRegex(ValueError,'软限位'):hardware.command((math.pi,0,0,0,0,0,0,.6))
+
     def test_limit_requires_positive_finite_number_or_explicit_null(self):
         config = self.config()
         config.pop("max_joint_step_deg", None)

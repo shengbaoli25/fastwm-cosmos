@@ -29,12 +29,17 @@ def main():
         cfg.model.expected_data_identity=fm['identity_sha256']
         source=fm['identity'].get('realman_source')
         if source is not None:
+            if source.get('action_space') != cfg.model.action_space or source.get('action_dim') != 8:
+                raise ValueError('Training cache must contain joint8 action targets and state')
             if a.normalization is None:
                 raise ValueError('RealMan no-reference training requires --normalization')
             norm=json.loads(Path(a.normalization).read_text())
             if (norm.get('source_identity_sha256') != cache_identity_sha256(source)
                     or norm.get('statistics') != source['statistics']
-                    or norm.get('force_preprocessing') != source.get('force_preprocessing')):
+                    or norm.get('force_preprocessing') != source.get('force_preprocessing')
+                    or norm.get('action_space') != source['action_space']
+                    or norm.get('action_units') != source['action_units']
+                    or norm.get('state_columns') != source['state_columns']):
                 raise ValueError('Normalization and force preprocessing differ from training source')
             cfg.model.expected_normalization_sha256=file_sha256(a.normalization)
     cfg.output_dir=str(Path(a.output_dir).absolute())

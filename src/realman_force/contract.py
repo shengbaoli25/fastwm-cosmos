@@ -9,7 +9,8 @@ from .force_filter import make_manifest, validate_manifest
 SELECTED_CONFIG = {
     'type': 'kalman', 'model': 'random_walk',
     'measurement_variance': [.25, .25, .25, .0004, .0004, .0004],
-    'process_variance_per_s': [.000762939453125] * 3 + [.000001220703125] * 3,
+    # Selected pink cup preview: Q x48 relative to the 2026-10-19 setting.
+    'process_variance_per_s': [.03662109375] * 3 + [.00005859375] * 3,
     'sample_rate_hz': 200., 'warmup_s': .5, 'max_gap_s': .03,
 }
 

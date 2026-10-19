@@ -1,6 +1,6 @@
 # RealMan 无参考轨迹联合扩散版本
 
-日期：2026-10-19。分支：`codex/realman-cup-joint-30k`。
+日期：2026-10-20。分支：`codex/realman-cup-joint-30k`。
 本次更新搭建代码，等待新采集的力优化数据集；未启动训练、未连接或控制机械臂。
 
 ## 架构与输入
@@ -8,12 +8,12 @@
 | 分支 | 实现 | 隐藏维度 / FFN | 层数 | 参数量 |
 |---|---|---|---|---|
 | Video | 官方 Cosmos-Predict2.5-2B **base/post-trained Video2World** | 2048 / 原生配置 | 28 | 2,059,174,912 |
-| AE | ActionDiT，联合注意力＋独立文本/当前状态 cross-attention | 768 / 3072 | 28 | 491,058,951 |
+| AE | ActionDiT，联合注意力＋独立文本/当前状态 cross-attention | 768 / 3072 | 28 | 491,060,488 |
 | AE 源噪声时间编码 | `tV,tF` → AE 调制量 | 768 | — | 3,937,536 |
-| Force | 未来六维力/力矩 flow matching diffusion | 768 / 2048 | 28 | 270,039,302 |
-| 当前状态投影 | state8 → context | 1024 | — | 9,216 |
+| Force | 未来六维力/力矩 flow matching diffusion | 768 / 2048 | 28 | 270,040,838 |
+| 当前状态投影 | state8＋占位维 → context | 1024 | — | 10,240 |
 
-总计 2,824,219,917 参数；参数量来自完整配置的模块计数，不是加载训练权重后的质量验证。
+总计 2,824,224,014 参数；已在 CPU 严格加载完整官方 Video 权重并构造联合模型，参数计数不代表预测质量。
 AE 合计约 4.95 亿参数，Force 约 2.70 亿。三个专家联合注意力的 Q/K/V
 均投影到 **16 heads × 128 = 2048**，因此隐藏维度 768 不等于注意力投影宽度 768。
 Video 保留原生位置编码、三路 AdaLN 与需要 FP32 的模块。
@@ -51,7 +51,7 @@ Video 保留原生位置编码、三路 AdaLN 与需要 FP32 的模块。
 - 每个推理请求缓存逐层 O/H 和固定文本 K/V；V/F/A 每轮重算。
   缓存在请求内有效，新的观测请求重新构建；训练不使用推理缓存。
 - `infer_joint` 和 `infer_forcewm` 返回 `action,force,video_latents`。
-  `action` 是归一化的 `[B,32,7]`，`force` 是归一化的 `[B,32,6]`。
+  `action` 是归一化的 `[B,32,8]`，`force` 是归一化的 `[B,32,6]`。
   有参考参数的调用会报错，避免静默使用错误输入。
 
 新 Force FM loss 与旧直接回归 Force MSE 的含义不同，不能直接以数值大小比较预测质量。
@@ -62,11 +62,17 @@ Video 保留原生位置编码、三路 AdaLN 与需要 FP32 的模块。
 双视角、30 Hz 的数据接口保持现有约定：H[-31..0]、A[0..31]、F[1..32]，
 图像偏移 0,4,…,32；主相机在左、腕部相机在右，各 224²，拼接为 224×448。
 视频缓存是 `[16,3,28,56]`，观测帧独立编码为 `[16,1,28,56]`。
-动作/state 使用 `[x,y,z,rx,ry,rz,gripper]` 的绝对末端量。
+动作/state 使用 `[q1,q2,q3,q4,q5,q6,q7,gripper]`：七轴角度为弧度，夹爪为 0–1 开度。
+action 是采集时**实际下发的绝对关节目标**；state 从原始 20 维观测的 `[0..6,19]`
+列提取实测关节角和夹爪。proprio 为 8 维状态＋一个历史兼容占位维，history 为 state8＋force6。
 
-新采集数据采用现有 `realman_force_v4` 元数据，`meta/force.json` 的
-`model_input.field=observation.force_filtered`，并包含每条 episode 的校准记录。
-读取经过原有因果滤波的六维力，训练与部署采用相同校准、滤波、采样及归一化。
+新数据 profile 为 `realman-leader-joint8-filtered-v1`，原始 schema 为
+`realman_leader_force_gripper_v2`。读取 `observation.force_filtered` 已校准滤波的六维力，
+不重复滤波。当前采集与部署配置均采用选定的 Q×48、200 Hz 实际 dt 的因果滤波，
+预热 0.5 秒、最大包间隔 30 ms；训练验证每条 episode 的校准与处理身份。
+采样仅保留四路 freshness 均有效、动作实际执行、滤波已预热且力反馈不陈旧的行；
+按真实单调时钟的间断、滤波重置、跟随会话及锚点变化分段，窗口不跨段。
+保留原始视频/episode 行号，在段边界重复边界帧并屏蔽相应监督，不能删除行后重新编号。
 不新增人工标注，不生成参考轨迹。新数据需要正常导出视频/text/numeric 缓存与统计；
 只有数据来源、官方 tokenizer 和文本身份均一致的现有完整缓存才可复用。
 
@@ -107,7 +113,7 @@ SHA256=`565bbb2c9645737327983f4461e4d32627bba465b0a8dc26447edea144e1ff47`。
 
 ## 部署导出
 
-新模型使用新 schema `cosmos-noaction-vfa-diffusion28-v1`。部署加载器自动识别，
+新模型使用新 schema `cosmos-noaction-vfa-diffusion28-joint8-v2`。部署加载器自动识别，
 恢复训练的结构参数并停用滚动参考。旧模型继续使用旧加载路径。
 
 训练得到新检查点后，在部署主机上执行：
@@ -118,7 +124,7 @@ python scripts/cosmos/export_noaction_deployment.py \
   --checkpoint /models/new-cup/step_005000.pt \
   --normalization /runs/new-cup-prepared/normalization.json \
   --tokenizer /models/cosmos/tokenizer.pth \
-  --hardware-config /path/to/matching-realman-hardware.json \
+  --hardware-config ./deploy/realman_hardware.joint8.example.json \
   --upstream ./third_party/cosmos-predict2.5 \
   --base-checkpoint /models/cosmos/base-post-trained.pt \
   --text-cache /models/new-cup/text \
@@ -131,6 +137,10 @@ python deploy/serve_realman.py --config /models/new-cup/runtime.noaction.json
 `--upstream/--base-checkpoint/--text-cache` 用于迁移到部署主机后的路径替换。
 默认沿用同步分段控制；可以显式指定 `--execution-mode async_relaxed`。
 控制循环时序与模型内部的联合采样是两回事。该脚本只生成配置，不启动网页或控制。
+
+关节部署链路将实测 SDK 角度转成弧度后归一化；预测反归一化后仅在 SDK 边界转回度，
+直接下发七轴目标，不做末端 IK。normalization、模型及硬件 action_space 必须一致。
+示例控制为 30 Hz 低跟随；采集端原有 200 Hz 高跟随与此控制节奏不同，真机需另行验证。
 
 新采样器后端为 `joint_static_cache`；`reference` 是不使用缓存的数值对照后端，
 这里的英文 backend 名称不代表输入参考轨迹。旧 `video_isolated_reuse` 与其
@@ -145,21 +155,20 @@ CUDA Graph/串行编译逻辑不适用于新模型，加载时明确拒绝。
 本地还使用官方结构的缩小模型检查 CPU BF16 和 CUDA BF16 前向/反向。
 它们验证实现，不能代表新数据拟合、完整模型显存、延迟或真机性能。
 
-本次执行结果：**146 passed**，命令为：
+本次执行结果：**156 passed**，命令为：
 
 ```bash
 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 PYTHONPATH=src:deploy python -m pytest -q \
   tests/cosmos deploy/tests \
-  --ignore=tests/cosmos/test_realman.py \
-  --ignore=tests/cosmos/test_realman_filtered.py \
   --ignore=tests/cosmos/test_reason1_native.py
 ```
 
-使用 `realman_deploy` 环境（Torch 2.7.1+cu128）。三个现有测试模块因环境缺少
-pyarrow/transformers 未运行，其余选中测试全部通过。
+使用 `realman_deploy` 环境（Torch 2.7.1+cu128、PyArrow 24）。本地缺少 Transformers，
+Reason1 原生测试另在远端环境验证；其余选中测试全部通过。新增覆盖关节 8 维训练/部署、
+关节弧度与 SDK 度转换、不经 IK 下发、采集断点/无效行、原始帧索引与缓存 mask 验证。
 CUDA 检查使用 RTX 3080、2 层缩小模型和 3 轮采样；缓存开关的 action/force/video
 最大绝对差在这一次 BF16 检查中均为 0。CPU FP32 缓存对照使用数值容差检查。
 
-本机官方非 action-cond 权重下载返回访问拒绝，尚未验证完整官方权重加载。
-训练前需在有该资产访问权限的环境准备文件，通过 SHA 与 strict state_dict 检查。
-新数据、四卡预检、正式训练和新模型离线拟合评估均待后续执行。
+本机已下载官方非 action-cond 权重，通过固定 SHA256、完整 strict state_dict 加载及有限值检查。
+远端环境、资产和准备凭据见 `joint8-environment-preparation-20261020.md`。
+新数据仍在采集；数据定版、缓存和统计导出、四卡预检、正式训练和新模型离线拟合评估待后续执行。

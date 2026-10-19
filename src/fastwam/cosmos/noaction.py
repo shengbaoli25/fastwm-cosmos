@@ -17,7 +17,7 @@ from fastwam.models.wan22.action_dit import ActionDiT
 from fastwam.models.wan22.wan_video_dit import sinusoidal_embedding_1d, modulate
 from fastwam.models.wan22.schedulers.scheduler_continuous import WanContinuousFlowMatchScheduler
 
-SCHEMA = 'cosmos-noaction-vfa-diffusion28-v1'
+SCHEMA = 'cosmos-noaction-vfa-diffusion28-joint8-v2'
 BRANCH_READS = ((1, 0, 0), (1, 1, 0), (1, 1, 1))
 
 
@@ -46,10 +46,14 @@ class NoActionJointModel(CosmosForceWM):
     def __init__(self, net, *, manifest, text_bank=None, action_hidden=768, action_ffn=3072,
                  force_hidden=768, force_ffn=2048, force_heads=16, action_seed=42,
                  force_seed=43, memory_seed=44, num_inference_steps=16,
-                 force_shift=1., gradient_checkpointing=True, fps=7.5):
+                 force_shift=1., gradient_checkpointing=True, fps=7.5, action_space='joint8'):
         nn.Module.__init__(self)
         self.gradient_checkpointing = gradient_checkpointing
         self.num_inference_steps, self.fps = int(num_inference_steps), float(fps)
+        if action_space not in ('joint8', 'eef_pose7'):
+            raise ValueError('Explicit joint8 or legacy eef_pose7 action space required')
+        self.action_space = action_space
+        self.action_dim = self.state_dim = 8 if action_space == 'joint8' else 7
         if self.num_inference_steps < 1:
             raise ValueError('Positive joint sampling steps required')
         video = CosmosVideoExpert(net)
@@ -59,14 +63,15 @@ class NoActionJointModel(CosmosForceWM):
         text_dim = net.blocks[0].cross_attn.k_proj.in_features
         with torch.random.fork_rng(devices=[]):
             torch.manual_seed(action_seed)
-            action = ActionDiT(hidden_dim=action_hidden, action_dim=7, ffn_dim=action_ffn,
+            action = ActionDiT(hidden_dim=action_hidden, action_dim=self.action_dim, ffn_dim=action_ffn,
                 text_dim=text_dim, freq_dim=256, eps=1e-6, num_heads=video.num_heads,
                 attn_head_dim=video.attn_head_dim, num_layers=self.depth)
-            self.proprio_encoder = nn.Linear(8, text_dim)
+            self.proprio_encoder = nn.Linear(self.state_dim + 1, text_dim)
             source_time = nn.Sequential(nn.Linear(512, action_hidden), nn.SiLU(), nn.Linear(action_hidden, 6 * action_hidden))
             torch.manual_seed(force_seed)
             force = ForceDiffusionExpert(hidden_dim=force_hidden, ffn_dim=force_ffn,
-                num_layers=self.depth, width=video.hidden_dim, num_heads=force_heads, text_dim=text_dim)
+                num_layers=self.depth, width=video.hidden_dim, num_heads=force_heads, text_dim=text_dim,
+                state_dim=self.state_dim)
         self.manifest = dict(manifest, schema=SCHEMA, joint_protocol=SCHEMA, reference_mode='none',
             branch_reads=BRANCH_READS, loss='video/action/force FM, sigma0 clean, target noise-clean',
             clocks=dict(video_shift=5., action_shift=1., force_shift=float(force_shift)),
@@ -74,6 +79,9 @@ class NoActionJointModel(CosmosForceWM):
                 force_hidden=force_hidden, force_ffn=force_ffn, heads=video.num_heads, head_dim=video.attn_head_dim),
             initialization='official non-action-conditioned Video2World; fresh AE/Force',
             num_inference_steps=self.num_inference_steps)
+        self.manifest.update(action_space=action_space, action_dim=self.action_dim,
+            state_dim=self.state_dim, history_dim=self.state_dim + 6,
+            action_units='7 absolute joint radians + gripper openness' if action_space == 'joint8' else 'xyz metres + Euler radians + gripper openness')
         self.dit = nn.ModuleDict(dict(video=video, action=action, force=force, action_source_time=source_time,
                                      runtime=ForceRuntimeState(memory_seed, self.manifest)))
         self.register_buffer('text_bank', text_bank, persistent=False)
@@ -92,6 +100,27 @@ class NoActionJointModel(CosmosForceWM):
             sample['history_is_pad'].to(self.device, torch.bool),
             sample['history_channel_valid'].to(self.device, torch.bool), context)
         return raw, context, cmask, history, hvalid
+
+    def _contexts(self, sample):
+        # The native text projection is unchanged; state width is an explicit contract.
+        if 'cosmos_context' in sample:
+            raw = sample['cosmos_context'].to(self.device, self.torch_dtype)
+        else:
+            if self.text_bank is None:
+                raise ValueError('Verified Cosmos Reason1 text bank required')
+            ids = sample['cosmos_text_index'].to(self.device, torch.long).reshape(-1)
+            if bool((ids < 0).any() | (ids >= len(self.text_bank)).any()):
+                raise ValueError('Text index outside pinned bank')
+            raw = self.text_bank[ids[0]].unsqueeze(0) if bool((ids == ids[0]).all()) else self.text_bank[ids]
+        text = self.video.net.crossattn_proj(raw) if self.video.net.use_crossattn_projection else raw
+        proprio = sample['proprio'].to(self.device, self.torch_dtype)
+        text = text.expand(proprio.shape[0], -1, -1)
+        if proprio.ndim == 3:
+            proprio = proprio[:, 0]
+        if proprio.shape != (text.shape[0], self.state_dim + 1):
+            raise ValueError('Current proprio width differs from the action-space contract')
+        context = torch.cat((text, self.proprio_encoder(proprio)[:, None]), 1)
+        return text, context, torch.ones(context.shape[:2], device=self.device, dtype=torch.bool)
 
     def _video_prepare(self, video, tv, raw):
         return self.video.prepare(video, tv.float() / 1000, raw, fps=self.fps,
@@ -190,8 +219,8 @@ class NoActionJointModel(CosmosForceWM):
         first = sample['first_frame_latents'].to(self.device, self.torch_dtype)
         action = sample['action'].to(self.device, self.torch_dtype)
         force = sample['wrench_future'].to(self.device, self.torch_dtype)
-        if clean.shape[1:3] != (16, 3) or first.shape != (*clean.shape[:2], 1, *clean.shape[3:]) or action.shape[1:] != (32, 7) or force.shape[1:] != (32, 6):
-            raise ValueError('Expected Video16x3, independent first frame, Action32x7, Force32x6')
+        if clean.shape[1:3] != (16, 3) or first.shape != (*clean.shape[:2], 1, *clean.shape[3:]) or action.shape[1:] != (32, self.action_dim) or force.shape[1:] != (32, 6):
+            raise ValueError(f'Expected Video16x3, independent first frame, Action32x{self.action_dim}, Force32x6')
         conditions = self._conditions(sample)
         tv, tf, ta = (s.sample_training_t(len(clean), self.device, self.torch_dtype)
                       for s in (self.v_scheduler, self.f_scheduler, self.a_scheduler))
@@ -227,7 +256,7 @@ class NoActionJointModel(CosmosForceWM):
                 return torch.randn(shape, generator=torch.Generator(device='cpu').manual_seed(seed)).to(self.device, self.torch_dtype)
             v = noise((*first.shape[:2], 3, *first.shape[3:]), video_seed); v[:, :, :1] = first
             f = noise((len(first), 32, 6), force_seed)
-            a = noise((len(first), 32, 7), seed)
+            a = noise((len(first), 32, self.action_dim), seed)
             static = self.prefill_static(first, conditions) if use_cache else None
             schedules = [s.build_inference_schedule(steps, self.device, self.torch_dtype) for s in (self.v_scheduler, self.f_scheduler, self.a_scheduler)]
             for i in range(steps):

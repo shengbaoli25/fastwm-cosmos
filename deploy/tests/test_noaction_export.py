@@ -12,16 +12,20 @@ spec.loader.exec_module(export)
 
 
 def fixture(tmp_path):
-    normalization=tmp_path/'normalization.json';normalization.write_text('{"statistics": {}}')
+    normalization=tmp_path/'normalization.json'
+    normalization.write_text(json.dumps(dict(statistics={k:dict(mean=[0.]*n,std=[1.]*n) for k,n in [('state',8),('action',8),('force',6)]},
+        action_space='joint8',action_units=['rad']*7+['openness_0_1'],state_columns=[0,1,2,3,4,5,6,19])))
+    (tmp_path/'hardware.json').write_text('{"action_space":"joint8"}')
     text=tmp_path/'text';text.mkdir()
     (text/'manifest.json').write_text(json.dumps({'texts':[{'prompt':'new-cup-task'}]}))
     sha=export.file_sha256(normalization)
     model=dict(_target_='fastwam.cosmos.assets.create_noaction_joint_cosmos',
         expected_data_identity='a'*64,expected_text_identity='b'*64,expected_normalization_sha256=sha,
         upstream=str(tmp_path/'upstream'),checkpoint=str(tmp_path/'base.pt'),text_cache=str(text),
-        action_hidden=768,force_hidden=768,num_inference_steps=16)
+        action_hidden=768,force_hidden=768,num_inference_steps=16,action_space='joint8')
     manifest=dict(dataset_identity='a'*64,text_identity='b'*64,normalization_sha256=sha,
-        extra_config=dict(action_hidden=768,force_hidden=768,num_inference_steps=16),num_inference_steps=16)
+        extra_config=dict(action_hidden=768,force_hidden=768,num_inference_steps=16,action_space='joint8'),
+        num_inference_steps=16,action_space='joint8')
     paths=dict(checkpoint=tmp_path/'trained.pt',normalization=normalization,
         tokenizer=tmp_path/'tokenizer.pth',hardware_config=tmp_path/'hardware.json')
     return {'model':model},manifest,paths
