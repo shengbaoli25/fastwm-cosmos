@@ -280,6 +280,7 @@ class RealManHardwareAdapter:
         result.setdefault("trajectory_mode", 0); result.setdefault("trajectory_radio", 0)
         result.setdefault("gripper_max_width_m", 0.07); result.setdefault("gripper_inverted", False)
         result.setdefault("gripper_deadband", 0.02)
+        result.setdefault("gripper_close_deadband", 0.002)
         result.setdefault("gripper_required", True)
         result.setdefault("initial_gripper", 0.5); result.setdefault("model_arm_dof", 7)
         result.setdefault('action_space','eef_pose7')

@@ -148,3 +148,105 @@ def test_failed_target_write_is_not_reported_as_acknowledged():
     with pytest.raises(RuntimeError, match='下发夹爪位置'):
         worker._send_target(sdk, lambda *args: args, .5, .5, .4, 1, 'manual')
     assert worker.sent_target is None
+
+
+def ready_worker(config=None, opening=0.):
+    worker = Ctag2F120Worker(config or {})
+    worker.mapping_min, worker.mapping_max = 0, 12000
+    worker.state = dict(ready=True, opening=opening, received=time.monotonic())
+    return worker
+
+
+def send_next(worker, commanded, sdk):
+    target = worker._next_target(commanded)
+    assert target is not None
+    requested, bounded, sequence, source = target
+    worker._send_target(sdk, lambda *args: args, requested, bounded, commanded, sequence, source)
+    return bounded
+
+
+def test_live_small_open_then_close_correction_reaches_the_register_target():
+    # Actual 2026-10-23 sequence: old 2% symmetric deadband swallowed
+    # the 1.871% closing correction, leaving the fingers at ~2.18%.
+    worker = ready_worker()
+    sdk = Mock()
+    sdk.rm_write_registers.return_value = 0
+    worker.command(.021803585812449455)
+    commanded = send_next(worker, 0., sdk)
+    worker.command(.003093393985182047)
+    commanded = send_next(worker, commanded, sdk)
+    assert commanded == .003093393985182047
+    payload = sdk.rm_write_registers.call_args.args[1]
+    assert int.from_bytes(bytes(payload[:4]), 'big', signed=True) == 11963
+    assert worker.sent_target['direction'] == 'close'
+    assert worker._next_target(commanded) is None
+    assert sdk.rm_write_registers.call_count == 2
+
+
+@pytest.mark.parametrize('opening,endpoint,raw', [(.001, 0., 12000), (.999, 1., 0)])
+def test_manual_endpoint_below_deadband_is_sent_once(opening, endpoint, raw):
+    worker = ready_worker(opening=opening)
+    worker.command(endpoint, source='manual')
+    sdk = Mock()
+    sdk.rm_write_registers.return_value = 0
+    commanded = send_next(worker, opening, sdk)
+    assert worker.sent_target['raw_target'] == raw
+    assert worker.sent_target['source'] == 'manual'
+    assert worker._next_target(commanded) is None
+    assert sdk.rm_write_registers.call_count == 1
+
+
+@pytest.mark.parametrize('start,target', [(.2, .0489), (.2, .3511)])
+def test_accepted_ramp_sends_final_segment_smaller_than_deadband(start, target):
+    worker = ready_worker(opening=start)
+    worker.command(target)
+    sdk = Mock()
+    sdk.rm_write_registers.return_value = 0
+    commanded = send_next(worker, start, sdk)
+    assert abs(commanded - start) == pytest.approx(.15)
+    assert abs(target - commanded) < .002
+    commanded = send_next(worker, commanded, sdk)
+    assert commanded == target
+    assert worker.ramp_target is None
+    assert worker._next_target(commanded) is None
+
+
+def test_contact_position_does_not_block_legitimate_release_or_snap_policy_target():
+    worker = ready_worker(opening=.6)
+    worker.command(.6579501032829285)
+    # Keep max step relative to last sent target, even when contact is wider.
+    assert worker._next_target(.021803585812449455)[1] == pytest.approx(.17180358581244945)
+    worker.command(.004964413121342659)
+    assert worker._next_target(.15496441312134265)[1] == .004964413121342659
+    worker.command(.61)
+    assert worker._next_target(.6) is None  # opening noise still uses 2%
+    worker.command(.599)
+    assert worker._next_target(.6) is None  # closing noise below 0.2%
+
+
+def test_register_resolution_deduplicates_even_with_zero_deadbands():
+    worker = ready_worker(dict(gripper_deadband=0, gripper_close_deadband=0))
+    worker.command(.5 + 1e-6)
+    assert worker._next_target(.5) is None
+
+
+def test_hold_during_sdk_write_does_not_revive_ramp_or_send_the_remainder():
+    worker = ready_worker(opening=.5)
+    worker.command(0.)
+    sdk = Mock()
+    sdk.rm_write_registers.side_effect = lambda *_: (worker.hold(), 0)[1]
+    send_next(worker, .5, sdk)
+    assert worker.ramp_target is None
+    assert worker._next_target(.35) is None
+    assert worker.status()['requested_opening'] is None
+    assert sdk.rm_write_registers.call_count == 1
+
+
+@pytest.mark.parametrize('key,value', [
+    ('gripper_deadband', float('nan')), ('gripper_deadband', -1),
+    ('gripper_close_deadband', True), ('gripper_close_deadband', 1.1),
+    ('max_gripper_step', 0), ('max_gripper_step', float('inf')),
+])
+def test_invalid_target_filter_settings_are_rejected(key, value):
+    with pytest.raises(ValueError, match=key):
+        Ctag2F120Worker({key: value})

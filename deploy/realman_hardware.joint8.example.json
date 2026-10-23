@@ -39,6 +39,7 @@
   "gripper_max_width_m": 0.07,
   "gripper_inverted": false,
   "gripper_deadband": 0.02,
+  "gripper_close_deadband": 0.002,
   "initial_gripper": 0.5,
   "connect_timeout_ms": 1000,
   "stop_timeout_ms": 1000,

@@ -29,6 +29,14 @@ def _signed32(high: int, low: int) -> int:
 class Ctag2F120Worker:
     def __init__(self, config: Mapping[str, Any]):
         self.config = dict(config)
+        for key, default in (("gripper_deadband", 0.02), ("gripper_close_deadband", 0.002),
+                             ("max_gripper_step", 0.15)):
+            value = self.config.get(key, default)
+            if isinstance(value, bool) or not math.isfinite(float(value)) or not 0 <= float(value) <= 1:
+                raise ValueError(f"{key} must be finite and in [0, 1]")
+            if key == "max_gripper_step" and float(value) == 0:
+                raise ValueError("max_gripper_step must be positive")
+            self.config[key] = float(value)
         self.lock = threading.Lock()
         self.stop = threading.Event()
         self.wake = threading.Event()
@@ -42,6 +50,7 @@ class Ctag2F120Worker:
         self.command_sequence = 0
         self.command_source = None
         self.sent_target = None
+        self.ramp_target: float | None = None
 
     def start(self) -> None:
         if self.thread is not None:
@@ -177,9 +186,36 @@ class Ctag2F120Worker:
             future.cancel()
             raise RuntimeError("夹爪使能操作超时；请刷新确认实际状态") from exc
 
-    def _send_target(self, sdk, factory, requested, bounded, previous, sequence, source):
+    def _raw_target(self, opening: float) -> int:
         lower, upper = self.mapping_min, self.mapping_max
-        raw_target = round(lower + (1.0 - bounded) * (upper - lower))
+        return round(lower + (1.0 - opening) * (upper - lower))
+
+    def _next_target(self, commanded: float):
+        """Filter against the last sent target, never the contact position.
+
+        Closing corrections use a smaller deadband. Exact endpoints and the
+        remaining part of an accepted ramp must reach their requested target;
+        register equality prevents redundant writes. No endpoint snapping.
+        """
+        with self.lock:
+            requested = self.desired
+            if requested is None:
+                return None
+            delta = requested - commanded
+            deadband = self.config["gripper_deadband"]
+            if delta < 0:
+                deadband = min(deadband, self.config["gripper_close_deadband"])
+            continuing = self.ramp_target == requested
+            if abs(delta) < deadband and requested not in (0.0, 1.0) and not continuing:
+                return None
+            step = self.config["max_gripper_step"]
+            bounded = requested if abs(delta) <= step else commanded + math.copysign(step, delta)
+            if self._raw_target(bounded) == self._raw_target(commanded):
+                return None
+            return requested, bounded, self.command_sequence, self.command_source
+
+    def _send_target(self, sdk, factory, requested, bounded, previous, sequence, source):
+        raw_target = self._raw_target(bounded)
         payload = list(raw_target.to_bytes(4, "big", signed=True))
         payload.extend([byte for item in (int(self.config.get("gripper_speed", 30)),
             int(self.config.get("gripper_torque", 50)), 100, 100, 1)
@@ -189,6 +225,9 @@ class Ctag2F120Worker:
         completed = time.monotonic()
         with self.lock:
             measured = self.state.get('opening')
+            # A hold or a newer target may arrive while the SDK write is in
+            # flight. Its acknowledgement must not revive the cancelled ramp.
+            self.ramp_target = requested if self.desired == requested and bounded != requested else None
             self.sent_target = dict(sequence=sequence, source=source, requested_opening=requested,
                 opening=bounded, previous_opening=previous, raw_target=raw_target,
                 acknowledged_at=completed, direction='open' if bounded > previous else 'close')
@@ -223,7 +262,6 @@ class Ctag2F120Worker:
 
             period = float(self.config.get("gripper_poll_s", 0.10))
             min_command_interval = float(self.config.get("gripper_command_interval_s", 0.10))
-            max_opening_step = float(self.config.get("max_gripper_step", 0.15))
             last_command = -math.inf
             commanded = opening
             next_poll = time.monotonic()
@@ -251,21 +289,21 @@ class Ctag2F120Worker:
                             with self.lock:
                                 self.state.update(ready=False, error=str(exc))
                             future.set_exception(exc)
-                with self.lock:
-                    requested = self.desired
-                    sequence, source = self.command_sequence, self.command_source
                 now = time.monotonic()
-                if requested is not None and now - last_command >= min_command_interval:
-                    delta = requested - commanded
-                    bounded = commanded + max(-max_opening_step, min(max_opening_step, delta))
-                    if abs(bounded - commanded) >= float(self.config.get("gripper_deadband", 0.02)):
+                if now - last_command >= min_command_interval:
+                    if self._next_target(commanded) is not None:
                         if self._read(sdk, rm_peripheral_read_write_params_t, 0x0610, 3)[2] != 0:
                             raise RuntimeError("夹爪反馈出现报警")
                         if self._read(sdk, rm_peripheral_read_write_params_t, 0x0100, 3)[0] != 1:
                             raise RuntimeError("夹爪意外失能")
-                        last_command = self._send_target(sdk, rm_peripheral_read_write_params_t,
-                            requested, bounded, commanded, sequence, source)
-                        commanded = bounded
+                        # RTU reads take time; honour a hold or a newer policy
+                        # target received during those existing safety checks.
+                        target = self._next_target(commanded)
+                        if target is not None:
+                            requested, bounded, sequence, source = target
+                            last_command = self._send_target(sdk, rm_peripheral_read_write_params_t,
+                                requested, bounded, commanded, sequence, source)
+                            commanded = bounded
 
                 if time.monotonic() < next_poll:
                     continue
@@ -290,6 +328,7 @@ class Ctag2F120Worker:
                                   "error": None if ready else (f"夹爪报警 0x{alarm:04x}" if alarm else "夹爪未使能，请点击夹爪使能")}
                     if not ready:
                         self.desired = None
+                        self.ramp_target = None
                         commanded = opening
                     trace = dict(stamp=received, read_started=read_started, opening=opening,
                         position=raw_position, enabled=enabled, alarm=alarm,
@@ -354,6 +393,7 @@ class Ctag2F120Worker:
             trace = dict(stamp=time.monotonic(), cancelled_opening=self.desired,
                 measured_opening=self.state.get('opening'), last_sent=self.sent_target)
             self.desired = None
+            self.ramp_target = None
         if trace['cancelled_opening'] is not None:
             logger.info('Gripper cancel pending %s', json.dumps(trace, allow_nan=False))
 
