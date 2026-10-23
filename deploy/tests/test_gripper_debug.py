@@ -24,6 +24,7 @@ class FakeSDK:
                      0x0301: 0, 0x0302: 0, 0x0303: 0, 0x0304: 3000,
                      0x0601: 0, 0x0602: 1, 0x060D: 0, 0x060E: position, 0x0612: alarm}
         self.writes = []
+        self.write_methods = []
         self.threads = []
         self.auto_arrive = True
         self.enable_applies = True
@@ -62,11 +63,24 @@ class FakeSDK:
         return 0, [byte for value in values for byte in value.to_bytes(2, 'big')]
 
     def rm_write_registers(self, params, raw):
-        self.note()
+        if params.num == 1:
+            raise AssertionError('control word must use single-register write')
         values = [raw[i]*256+raw[i+1] for i in range(0, len(raw), 2)]
+        self.write_methods.append(('multiple', params.address))
+        return self._apply_write(params, values)
+
+    def rm_write_single_register(self, params, value):
+        self.write_methods.append(('single', params.address))
+        return self._apply_write(params, [value])
+
+    def _apply_write(self, params, values):
+        self.note()
         self.writes.append((params.address, values))
         if self.on_write:
             self.on_write(params, values)
+        # Real firmware retains the last trigger even after a zero/no-op.
+        if params.address == 0x0108 and values == [0]:
+            return 0
         if params.address == 0x0100:
             if values[0] == 1 and not self.enable_applies:
                 return 0
@@ -77,6 +91,10 @@ class FakeSDK:
             self.regs[params.address+i] = value
         if params.address == 0x0403 and self.reset_applies:
             self.regs[0x0612] = 0
+        if (params.address == 0x0100 and values == [1]
+                and self.regs[0x0108] == 1 and self.auto_arrive):
+            # Retained trigger can reactivate the previous target on enable.
+            self.regs[0x060D], self.regs[0x060E] = self.regs[0x0102], self.regs[0x0103]
         if params.address == 0x0108 and values == [1] and self.auto_arrive:
             self.regs[0x060D], self.regs[0x060E] = self.regs[0x0102], self.regs[0x0103]
             self.regs[0x0602] = 1
@@ -134,19 +152,38 @@ class GripperDebugTests(unittest.TestCase):
         self.assertEqual(state['alarm_labels'], ['过温', '堵转'])
         self.assertEqual(sdk.writes, [])
 
-    def test_enable_replaces_retained_target_clears_trigger_then_confirms(self):
+    def test_enable_replaces_retained_target_with_trigger_still_latched(self):
         worker, sdk = self.worker(FakeSDK(enabled=0, position=2401))
+        def no_trigger_read(params):
+            if params.address == 0x0108:
+                raise AssertionError('trigger is not an enable readiness flag')
+        sdk.on_read = no_trigger_read
         state = worker.debug_command('enable')
         self.assertTrue(state['ready'])
         self.assertTrue(state['command_completed'])
-        self.assertEqual(sdk.writes, [(0x0108, [0]), (0x0102, [0, 2401]), (0x0100, [1])])
+        self.assertEqual(sdk.writes, [(0x0102, [0, 2401]), (0x0100, [1])])
+        self.assertEqual(sdk.write_methods, [('multiple', 0x0102), ('single', 0x0100)])
+        self.assertEqual(sdk.regs[0x0108], 1)
         self.assertEqual(sdk.regs[0x060E], 2401)
         self.assertEqual(set(sdk.threads), {worker.thread.ident})
+
+    def test_enable_target_readback_mismatch_never_enables_or_triggers(self):
+        worker, sdk = self.worker(FakeSDK(enabled=0, position=2401))
+        def corrupt_readback(params):
+            if params.address == 0x0102:
+                sdk.regs[0x0103] = 10000
+        sdk.on_read = corrupt_readback
+        with self.assertRaisesRegex(RuntimeError, '保持位置回读不一致'):
+            worker.debug_command('enable')
+        self.assertFalse(any(a == 0x0100 and v == [1] for a, v in sdk.writes))
+        self.assertFalse(any(a == 0x0108 for a, v in sdk.writes))
+        self.assertFalse(worker.status()['enabled'])
 
     def test_clear_error_disables_before_single_reset_and_never_enables(self):
         worker, sdk = self.worker(FakeSDK(alarm=2))
         result = worker.debug_command('clear_error')
         self.assertEqual(sdk.writes, [(0x0100, [0]), (0x0403, [1])])
+        self.assertEqual(sdk.write_methods, [('single', 0x0100), ('single', 0x0403)])
         self.assertFalse(result['enabled'])
         self.assertEqual(result['alarm'], 0)
         self.assertTrue(result['operation_result']['reset_written'])
@@ -322,8 +359,8 @@ class GripperDebugTests(unittest.TestCase):
         worker, sdk = self.worker(sdk)
         result = worker.debug_command('open')
         self.assertTrue(result['operation_result']['force_hold_released'])
-        self.assertEqual(sdk.writes[:4], [
-            (0x0100, [0]), (0x0108, [0]), (0x0102, [0, 6000]), (0x0100, [1])])
+        self.assertEqual(sdk.writes[:3], [
+            (0x0100, [0]), (0x0102, [0, 6000]), (0x0100, [1])])
         self.assertEqual(sum(a == 0x0100 and v == [1] for a, v in sdk.writes), 1)
         self.assertEqual(result['opening'], 1)
 

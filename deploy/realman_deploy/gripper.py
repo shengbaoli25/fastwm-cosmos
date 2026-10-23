@@ -132,8 +132,14 @@ class Ctag2F120Worker:
     def _write(self, sdk, factory, address: int, values: list[int]) -> None:
         if not values or any(type(value) is not int or not 0 <= value <= 65535 for value in values):
             raise ValueError("夹爪寄存器写入值无效")
-        raw = [byte for value in values for byte in value.to_bytes(2, "big")]
         params = self._params(factory, address, len(values))
+        if len(values) == 1:
+            # Match the vendor and verified collection driver: control words
+            # (enable, reset, trigger) use the single-register 0x06 command.
+            self._code(sdk.rm_write_single_register(params, values[0]),
+                       f"写入夹爪寄存器 0x{address:04x}")
+            return
+        raw = [byte for value in values for byte in value.to_bytes(2, "big")]
         self._code(sdk.rm_write_registers(params, raw), f"写入夹爪寄存器 0x{address:04x}")
 
     def _configure_bus(self, sdk) -> None:
@@ -323,14 +329,14 @@ class Ctag2F120Worker:
         self._require_motion_state(state, enabled=False)
         if state["enabled"]:
             return
-        # Retained target/trigger can reactivate an old close goal.
-        self._debug_write(sdk, factory, request, 0x0108, [0])
+        # 0x0108 is an action command, not a readable idle/ready latch. This
+        # unit retains 1 after arrival/disable; writing 0 means no action and
+        # need not clear that value. Replace and verify the retained target
+        # while disabled, as in the verified collection driver, before enable.
         raw = int(state["position"]) & 0xffffffff
         self._debug_write(sdk, factory, request, 0x0102, [raw >> 16, raw & 0xffff])
         if _signed32(*self._read(sdk, factory, 0x0102, 2)) != state["position"]:
             raise RuntimeError("使能前保持位置回读不一致；未使能")
-        if self._read(sdk, factory, 0x0108, 1)[0] != 0:
-            raise RuntimeError("使能前触发寄存器未清零；未使能")
         if self._read(sdk, factory, 0x0612, 1)[0] != 0:
             raise RuntimeError("使能前夹爪出现报警；未使能")
         self._debug_write(sdk, factory, request, 0x0100, [1])
@@ -400,7 +406,6 @@ class Ctag2F120Worker:
                 if raw_target == state["position"] and abs(raw_target-final_position) > tolerance:
                     raise RuntimeError("夹爪调试步长小于设备位置分辨率")
                 unsigned = raw_target & 0xffffffff
-                self._debug_write(sdk, factory, request, 0x0108, [0])
                 self._debug_write(sdk, factory, request, 0x0102,
                                   [unsigned >> 16, unsigned & 0xffff, request.speed, request.torque, 100, 100])
                 if _signed32(*self._read(sdk, factory, 0x0102, 2)) != raw_target:
