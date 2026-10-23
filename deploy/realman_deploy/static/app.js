@@ -11,11 +11,19 @@
     let pausePending = false, estopPending = false, localEstop = false, interval = null;
     let actionError = '', stopError = '', statusError = '', settingsError = '', catalogError = '';
     let statusPromise = null, catalogPromise = null, settingsPromise = null;
+    let gripperDebug = null, gripperBusy = false, gripperError = '', gripperFeedback = '';
+    let gripperPromise = null;
     let draft = {sampling_profile: '161616', execution_mode: 'synchronous'};
+    const gripperActions = {gripperConnect: 'connect', gripperRead: 'status', gripperEnable: 'enable',
+      gripperDisable: 'disable', gripperClear: 'clear_error', gripperOpen: 'open', gripperClose: 'close', gripperMove: 'move'};
+    const gripperLabels = {connect: '连接夹爪', status: '读取状态', enable: '使能', disable: '失能',
+      clear_error: '清除报警', open: '打开', close: '闭合', move: '移动到目标开度'};
     const text = (id, value) => { $(id).textContent = value; };
     function badge(id, label, kind = '') { text(id, label); $(id).className = `badge ${kind}`; }
     const inactive = () => online && status && !status.inference_busy &&
       ['idle', 'ready', 'paused', 'error'].includes(status.state) && !localEstop;
+    const gripperPending = () => gripperBusy || Boolean(status?.gripper_debug_busy) || Boolean(gripperDebug?.busy);
+    const occupied = () => busy || Boolean(status?.hardware_connecting) || gripperPending();
     const changed = () => settings && (draft.sampling_profile !== settings.sampling_profile ||
       draft.execution_mode !== settings.execution_mode);
     const milliseconds = value => value == null || !Number.isFinite(Number(value)) ? '—' : `${Number(value).toFixed(1)} ms`;
@@ -48,7 +56,7 @@
       text('profileHint', draft.sampling_profile === '4416'
         ? 'Video / Force 各采样 4 步，Action 采样 16 步；可选同步或异步执行。实际延迟随设备与输入变化。'
         : 'Video / Force / Action 各采样 16 步，用于基准对照。');
-      const locked = !settings || settings.supported === false || busy || !inactive() || pausePending || estopPending;
+      const locked = !settings || settings.supported === false || occupied() || !inactive() || pausePending || estopPending;
       $('samplingProfile').disabled = locked;
       $('executionSelect').disabled = locked;
       $('applySettings').disabled = locked || !changed();
@@ -59,9 +67,9 @@
     }
     function renderButtons() {
       const selected = checkpoints.find(item => item.id === $('checkpoint').value);
-      const locked = busy || !inactive() || pausePending || estopPending;
-      $('checkpoint').disabled = busy || !checkpoints.length || !inactive();
-      $('download').disabled = busy || !selected || selected.installed || selected.source === 'local' || localEstop;
+      const locked = occupied() || !inactive() || pausePending || estopPending;
+      $('checkpoint').disabled = occupied() || !checkpoints.length || !inactive();
+      $('download').disabled = occupied() || !selected || selected.installed || selected.source === 'local' || localEstop;
       $('load').disabled = locked || !selected?.installed || !status?.cuda?.available || !settings || changed();
       $('connect').disabled = locked;
       $('start').disabled = locked || !settings || !status?.model_ready || !status?.robot_ready || !status?.cameras_ready ||
@@ -72,8 +80,49 @@
       $('pause').textContent = pausePending ? '正在暂停…' : status?.state === 'error' ? '复位错误 / 保持停止' : '暂停 / 缓停';
       $('estop').disabled = estopPending || status?.state === 'estop';
       $('estop').textContent = estopPending ? '正在急停…' : '软件急停';
-      $('refresh').disabled = Boolean(catalogPromise) || busy;
-      renderSettings();
+      $('refresh').disabled = Boolean(catalogPromise) || occupied();
+      renderSettings(); renderGripper();
+    }
+    function renderGripper() {
+      const g = gripperDebug;
+      const supported = g?.supported === true, connected = g?.connected === true;
+      const pending = gripperPending();
+      const locked = occupied() || !inactive() || pausePending || estopPending || !supported;
+      const alarmClear = Number.isFinite(g?.alarm) && g.alarm === 0;
+      const motionLocked = locked || !connected || g?.enabled !== true || !alarmClear || g?.moving === true;
+      badge('gripperDebugBadge', !online ? '服务离线' : !g ? '未读取' : !supported ? '不支持' : pending ? '操作中'
+        : g.error || g.command_error || g.last_command_error || (connected && !alarmClear) ? '需检查' : connected ? '已连接' : '未连接',
+        g?.error || g?.command_error || g?.last_command_error || (connected && !alarmClear) ? 'bad' : connected && !pending ? 'good' : 'warn');
+      text('gripperConnection', connected ? '已连接' : g ? '未连接' : '—');
+      text('gripperEnabled', !connected || typeof g?.enabled !== 'boolean' ? '—' : g.enabled ? '已使能' : '已失能');
+      text('gripperOpening', connected && Number.isFinite(g?.opening) ? `${(g.opening * 100).toFixed(1)}%` : '—');
+      text('gripperPosition', connected && Number.isFinite(g?.position) ? String(g.position) : '—');
+      text('gripperMotion', pending ? '操作处理中' : !connected ? '—' : g.moving === true ? '运动中' : g.moving === false ? '静止' : '待确认');
+      text('gripperAlarm', connected && Number.isFinite(g?.alarm) ? `${g.alarm_hex || `0x${g.alarm.toString(16).toUpperCase().padStart(4, '0')}`} (${g.alarm})` : '—');
+      $('gripperAlarm').className = connected && !alarmClear ? 'bad' : '';
+      text('gripperAlarmLabels', !connected ? '连接后读取报警反馈' : Array.isArray(g.alarm_labels) && g.alarm_labels.length
+        ? g.alarm_labels.join('；') : alarmClear ? '无报警' : '报警状态待确认');
+      $('gripperConnect').disabled = locked;
+      if (!gripperBusy) text('gripperConnect', connected ? '重新连接夹爪' : '连接夹爪');
+      for (const id of ['gripperRead', 'gripperDisable', 'gripperClear']) $(id).disabled = locked || !connected;
+      $('gripperEnable').disabled = locked || !connected || !alarmClear || g?.enabled === true;
+      for (const id of ['gripperOpen', 'gripperClose', 'gripperMove', 'gripperTarget', 'gripperSpeed', 'gripperTorque']) $(id).disabled = motionLocked;
+      text('gripperGuard', !online ? '服务连接中断，调试暂不可用。'
+        : !supported ? '等待服务提供夹爪调试状态。'
+        : localEstop || status?.state === 'estop' ? '软件急停已锁定，夹爪调试不可用。'
+        : !inactive() || pausePending || estopPending ? '请先暂停推理，等待加载、停止或当前推理完成。'
+        : pending ? '正在等待夹爪反馈；暂停和软件急停仍可使用。'
+        : busy || status?.hardware_connecting ? '其他操作或硬件连接进行中，稍后可调试夹爪。'
+        : !connected ? '先连接夹爪。此连接无需模型、GPU 或双相机就绪。'
+        : !alarmClear ? '请检查报警并清除；清除后保持失能，再手动使能。'
+        : g.enabled !== true ? '夹爪已连接；手动使能后可执行开合。'
+        : g.moving ? '夹爪仍在运动，请等待反馈或暂停。'
+        : '0% 为闭合，100% 为完全打开；命令完成以硬件反馈为准。');
+      const operation = typeof g?.operation === 'string' ? (gripperLabels[g.operation] || g.operation)
+        : g?.operation?.message || g?.operation?.action && (gripperLabels[g.operation.action] || g.operation.action);
+      text('gripperFeedback', gripperFeedback || (operation ? `最近操作：${operation}` : ''));
+      const error = [gripperError, g?.error, g?.command_error, g?.last_command_error].filter(Boolean).filter((x, i, a) => a.indexOf(x) === i).join('\n');
+      text('gripperError', error); $('gripperError').hidden = !error;
     }
     function renderStatus() {
       const s = status;
@@ -107,7 +156,7 @@
       if (s.execution_mode === 'async_relaxed' && s.latency_ms > 32 / 30 * 1000) {
         text('modeHint', $('modeHint').textContent + ' 当前模型延迟超过一块动作约 1.07 秒的时长，可能出现等待间隔。');
       }
-      text('diagnostics', JSON.stringify({model: diagnostic, cuda: s.cuda, hardware: s.hardware}, null, 2));
+      text('diagnostics', JSON.stringify({model: diagnostic, cuda: s.cuda, hardware: s.hardware, gripper: gripperDebug}, null, 2));
       $('estopNotice').hidden = !(localEstop || s.state === 'estop');
       renderButtons(); showErrors();
     }
@@ -118,6 +167,7 @@
           const value = await api('/api/status');
           if (!value || typeof value.state !== 'string') throw new Error('服务状态响应缺少运行状态');
           status = value; online = true; statusError = '';
+          if (value.gripper_debug && typeof value.gripper_debug.supported === 'boolean') gripperDebug = value.gripper_debug;
           if (status.state === 'estop') localEstop = true;
           text('updated', `更新于 ${now().toLocaleTimeString('zh-CN', {hour12: false})}`);
         } catch (error) {
@@ -168,7 +218,7 @@
       try { await task; } finally { settingsPromise = null; renderStatus(); }
     }
     async function action(id, path, body = {}, after) {
-      if (busy || $(id).disabled) return;
+      if (occupied() || $(id).disabled) return;
       busy = true; actionError = ''; const label = $(id).textContent;
       text(id, {connect: '正在连接…', load: '正在加载…', download: '正在下载…', applySettings: '正在应用…'}[id] || '处理中…');
       renderButtons(); showErrors();
@@ -177,6 +227,67 @@
         if (after) await after(result);
       } catch (error) { actionError = error.message; }
       finally { busy = false; text(id, label); await refreshStatus(true); renderButtons(); showErrors(); }
+    }
+    async function refreshGripper() {
+      if (gripperPromise) return gripperPromise;
+      const task = (async () => {
+        try {
+          const value = await api('/api/gripper');
+          if (!value || typeof value.supported !== 'boolean') throw new Error('夹爪调试状态响应无效');
+          gripperDebug = value;
+        } catch (error) { gripperError = error.message; }
+        finally { renderButtons(); }
+      })();
+      gripperPromise = task;
+      try { await task; } finally { if (gripperPromise === task) gripperPromise = null; }
+    }
+    async function gripperAction(id) {
+      if (occupied() || $(id).disabled) return;
+      const command = gripperActions[id], body = {action: command};
+      const moves = ['open', 'close', 'move'].includes(command);
+      if (moves) {
+        const speed = Number($('gripperSpeed').value), torque = Number($('gripperTorque').value);
+        const target = Number($('gripperTarget').value);
+        if (!Number.isInteger(speed) || speed < 1 || speed > 100 || !Number.isInteger(torque) || torque < 1 || torque > 100) {
+          gripperError = '速度和力度必须为 1–100 的整数。'; renderGripper(); return;
+        }
+        if (command === 'move' && (!$('gripperTarget').value.trim() || !Number.isFinite(target) || target < 0 || target > 100)) {
+          gripperError = '目标开度必须为 0–100%。'; renderGripper(); return;
+        }
+        body.speed = speed; body.torque = torque;
+        if (command === 'move') body.opening = target / 100;
+      }
+      gripperBusy = true; gripperError = '';
+      gripperFeedback = `${gripperLabels[command]}：正在等待硬件反馈…`;
+      const label = $(id).textContent; text(id, '处理中…'); renderButtons();
+      try {
+        const result = await api('/api/gripper', body, 20000);
+        if (!result || typeof result.connected !== 'boolean' || result.supported !== true) throw new Error('夹爪操作响应缺少有效反馈，请读取状态确认。');
+        gripperDebug = result;
+        const detail = result.operation_result;
+        const interrupted = result.command_completed === false || detail?.cancelled || detail?.canceled || detail?.stopped ||
+          detail?.stop_confirmed === false || detail?.error || ['cancelled', 'canceled', 'stopped', 'failed', 'error'].includes(detail?.status) ||
+          typeof detail === 'string' && /取消|中断|停止|cancel|interrupt|stop|failed|error/i.test(detail);
+        if (interrupted) throw new Error(result.command_error || result.last_command_error || detail?.error || detail?.message ||
+          (typeof detail === 'string' ? detail : '夹爪命令未完成或已被停止，请读取状态确认。'));
+        const validFeedback = result.connected && (command === 'enable' ? result.ready === true && result.enabled === true && result.alarm === 0 && !result.error
+          : command === 'disable' ? result.enabled === false
+          : command === 'clear_error' ? result.enabled === false && result.alarm === 0
+          : moves ? result.ready === true && result.enabled === true && result.alarm === 0 && !result.error
+          : true);
+        if (!validFeedback) {
+          throw new Error(result.error || `${gripperLabels[command]}未确认，请读取状态检查反馈。`);
+        } else if (result.busy || (moves && result.moving)) {
+          gripperFeedback = `${gripperLabels[command]}尚未完成，请等待硬件反馈。`;
+        } else {
+          gripperFeedback = command === 'clear_error' ? '报警已清除，夹爪保持失能（反馈已确认）。'
+            : command === 'status' ? '已读取夹爪状态。' : `${gripperLabels[command]}完成（反馈已确认）。`;
+        }
+      } catch (error) { gripperError = error.message; gripperFeedback = `${gripperLabels[command]}未确认。`; }
+      finally {
+        gripperBusy = false; text(id, label);
+        await refreshStatus(true); renderButtons(); showErrors();
+      }
     }
     async function stop(emergency) {
       if (emergency ? estopPending || status?.state === 'estop' : pausePending || localEstop) return;
@@ -215,9 +326,10 @@
     $('start').onclick = () => action('start', '/api/start');
     $('pause').onclick = () => stop(false);
     $('estop').onclick = () => stop(true);
+    for (const id of Object.keys(gripperActions)) $(id).onclick = () => gripperAction(id);
     async function init() {
       renderButtons();
-      await Promise.all([refreshCheckpoints(), refreshSettings(), refreshStatus()]);
+      await Promise.all([refreshCheckpoints(), refreshSettings(), refreshStatus(), refreshGripper()]);
       interval = setInterval(() => { void refreshStatus(); }, 1000);
     }
     return {init, refreshStatus, refreshSettings, refreshCheckpoints, dispose: () => clearInterval(interval)};

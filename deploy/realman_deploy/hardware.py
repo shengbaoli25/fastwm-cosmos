@@ -442,9 +442,11 @@ class RealManHardwareAdapter:
             configured_center = self.config.get("workspace_center_pose")
             self.workspace_center = (_finite(configured_center, 6, "workspace_center_pose")
                                      if configured_center is not None else current_pose)
-            self.gripper = Ctag2F120Worker(self.config)
+            # Keep the diagnostic channel available for explicit enable/reset.
+            # Readiness and arm() still require alarm-free enabled feedback.
+            self.gripper = Ctag2F120Worker(self.config, diagnostic=True)
             self.gripper.start()
-            self.gripper_feedback = self.gripper.wait_ready(
+            self.gripper_feedback = self.gripper.wait_connected(
                 float(self.config.get("gripper_start_timeout_s", 8.0)))
             self.cameras = [_Camera(spec, width=self.config["camera_width"],
                                      height=self.config["camera_height"], fps=self.config["camera_fps"],
@@ -688,16 +690,28 @@ class RealManHardwareAdapter:
 
     def close(self) -> None:
         with self.lock:
-            if self.closed:
-                return
+            already_closed = self.closed
             self.closed = True
             self.armed = False
             cameras, feedback, sdk = list(self.cameras), self.feedback, self.sdk
             self.connected = False
+        if already_closed:
+            # A timed-out worker keeps ownership of its SDK handle; allow a
+            # subsequent close to confirm its exit without touching arm IO.
+            if self.gripper:
+                self.gripper.close()
+            return
+        errors = []
         for camera in cameras:
-            camera.close()
+            try:
+                camera.close()
+            except Exception as exc:
+                errors.append(exc)
         if self.gripper:
-            self.gripper.close()
+            try:
+                self.gripper.close()
+            except Exception as exc:
+                errors.append(exc)
         if feedback is not None and sdk is not None:
             try:
                 feedback.restore()
@@ -709,6 +723,8 @@ class RealManHardwareAdapter:
             except Exception:
                 pass
         self._stop_pool.shutdown(wait=False, cancel_futures=True)
+        if errors:
+            raise RuntimeError('硬件关闭未完全确认: ' + '; '.join(str(exc) for exc in errors))
 
 
 def make_hardware(config_path: str | Path | None = None, **_: Any) -> RealManHardwareAdapter:

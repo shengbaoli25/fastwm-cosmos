@@ -11,11 +11,11 @@
 * { box-sizing: border-box; }
 body { margin: 0; }
 [hidden] { display: none !important; }
-button, select { font: inherit; }
+button, select, input { font: inherit; }
 button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 42px; padding: 9px 14px; color: #263430; background: #fff; border: 1px solid #cfd9d6; border-radius: 6px; cursor: pointer; touch-action: manipulation; }
 button:hover { background: #edf3f1; }
 button:disabled { opacity: .42; cursor: not-allowed; }
-button:focus-visible, select:focus-visible, summary:focus-visible { outline: 3px solid #68b5a2; outline-offset: 3px; }
+button:focus-visible, select:focus-visible, input:focus-visible, summary:focus-visible { outline: 3px solid #68b5a2; outline-offset: 3px; }
 select { width: 100%; min-width: 0; min-height: 44px; padding: 10px 12px; color: #263430; border: 1px solid #cfd9d6; border-radius: 6px; background: #fff; }
 select:disabled { background: #f3f5f4; color: var(--muted); }
 label { display: block; margin-bottom: 8px; color: var(--muted); font-size: 12px; }
@@ -70,6 +70,25 @@ h2 { font-size: 15px; font-weight: 600; }
 .panel-foot button { font-size: 12px; min-height: 36px; }
 .field { margin-top: 16px; }
 #downloadProgress:empty { display: none; }
+.gripper-panel { margin-top: 18px; border-top: 3px solid #9ac8b8; }
+.gripper-panel .section-heading { margin-bottom: 18px; }
+.gripper-summary { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 14px; padding: 16px; background: #f2f7f4; border: 1px solid #e0ebe5; border-radius: 6px; }
+.gripper-summary span { display: block; color: var(--muted); font-size: 11px; margin-bottom: 7px; }
+.gripper-summary strong { font-size: 15px; font-weight: 550; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.gripper-alarm { display: flex; flex-wrap: wrap; gap: 10px; align-items: baseline; padding: 12px 0; font-size: 12px; color: var(--muted); }
+.gripper-alarm strong { color: #354b42; font: 12px ui-monospace, monospace; }
+.gripper-alarm .bad { color: var(--red); }
+.gripper-warning { color: #876126; background: #fff7e8; border-radius: 5px; padding: 10px 12px; font-size: 12px; line-height: 1.7; margin: 0 0 20px; }
+.gripper-controls { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(250px, 1fr); gap: 24px; }
+.gripper-inputs { display: grid; grid-template-columns: 1.25fr 1fr 1fr; gap: 12px; margin-bottom: 14px; }
+.gripper-inputs input { width: 100%; min-width: 0; min-height: 42px; padding: 8px 10px; color: #263430; background: #fff; border: 1px solid #cfd9d6; border-radius: 6px; }
+.gripper-inputs input:disabled { color: var(--muted); background: #f3f5f4; opacity: .65; }
+.gripper-service-controls { border-left: 1px solid var(--line); padding-left: 24px; display: flex; flex-direction: column; justify-content: flex-end; gap: 14px; }
+.gripper-result { margin-top: 18px; border-top: 1px solid var(--line); padding-top: 10px; }
+.gripper-result .control-help { margin: 4px 0; }
+#gripperFeedback { color: var(--green); }
+#gripperFeedback:empty { display: none; }
+.gripper-error { color: var(--red); white-space: pre-line; overflow-wrap: anywhere; font-size: 12px; line-height: 1.7; margin-top: 6px; }
 .telemetry { padding: 28px 0 8px; }
 .telemetry .section-heading { margin-bottom: 20px; }
 .metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px; }
@@ -100,6 +119,8 @@ footer span:first-child { color: #9f5f65; }
   .control-band { align-items: flex-start; flex-direction: column; }
   .commands { width: 100%; }
   .commands button { flex: 1; }
+  .gripper-controls { grid-template-columns: 1fr; gap: 18px; }
+  .gripper-service-controls { border-left: 0; padding-left: 0; padding-top: 16px; border-top: 1px solid var(--line); }
 }
 @media (max-width: 650px) {
   header { padding: 12px 16px; gap: 10px; }
@@ -114,6 +135,9 @@ footer span:first-child { color: #9f5f65; }
   .device-heading { flex-direction: row; align-items: center; }
   .device p { margin-top: 8px; }
   .panel { padding: 18px; }
+  .gripper-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .gripper-inputs { grid-template-columns: 1fr; gap: 10px; }
+  .gripper-inputs label { margin-bottom: 5px; }
   .metrics { grid-template-columns: 1fr 1fr; gap: 22px 12px; }
   .metric { padding: 0 12px; }
   .metric:nth-child(odd) { padding-left: 0; border-left: 0; }

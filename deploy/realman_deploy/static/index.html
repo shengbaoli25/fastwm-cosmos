@@ -53,6 +53,31 @@
       </section>
     </div>
 
+    <section class="panel gripper-panel" aria-labelledby="gripperHeading">
+      <div class="section-heading"><div><h2 id="gripperHeading">夹爪调试</h2><p>可独立连接夹爪，无需加载模型或连接相机。</p></div><span id="gripperDebugBadge" class="badge" role="status">未读取</span></div>
+      <div class="gripper-summary">
+        <div><span>连接</span><strong id="gripperConnection">—</strong></div>
+        <div><span>使能</span><strong id="gripperEnabled">—</strong></div>
+        <div><span>当前开度</span><strong id="gripperOpening">—</strong></div>
+        <div><span>位置反馈</span><strong id="gripperPosition">—</strong></div>
+        <div><span>运动状态</span><strong id="gripperMotion">—</strong></div>
+      </div>
+      <div class="gripper-alarm"><span>报警码</span><strong id="gripperAlarm">—</strong><span id="gripperAlarmLabels">等待状态</span></div>
+      <p class="gripper-warning">调试会使夹爪运动。推理暂停后可用；清除报警后保持失能，请再次手动使能。</p>
+      <div class="gripper-controls">
+        <div class="gripper-motion-controls">
+          <div class="gripper-inputs">
+            <div><label for="gripperTarget">目标开度（0–100%）</label><input id="gripperTarget" type="number" min="0" max="100" step="1" value="100" inputmode="decimal" disabled></div>
+            <div><label for="gripperSpeed">速度（1–100）</label><input id="gripperSpeed" type="number" min="1" max="100" step="1" value="30" inputmode="numeric" disabled></div>
+            <div><label for="gripperTorque">力度（1–100）</label><input id="gripperTorque" type="number" min="1" max="100" step="1" value="50" inputmode="numeric" disabled></div>
+          </div>
+          <div class="button-row"><button id="gripperOpen" disabled>打开 · 100%</button><button id="gripperClose" disabled>闭合 · 0%</button><button id="gripperMove" class="primary" disabled>移动到目标开度</button></div>
+        </div>
+        <div class="gripper-service-controls"><div class="button-row"><button id="gripperConnect" disabled>连接夹爪</button><button id="gripperRead" disabled>读取状态</button></div><div class="button-row"><button id="gripperEnable" disabled>使能</button><button id="gripperDisable" disabled>失能</button><button id="gripperClear" disabled>清除报警</button></div></div>
+      </div>
+      <div class="gripper-result"><p id="gripperGuard" class="control-help">正在读取调试状态…</p><p id="gripperFeedback" class="control-help" role="status" aria-live="polite"></p><p id="gripperError" class="gripper-error" role="alert" hidden></p></div>
+    </section>
+
     <section class="telemetry" aria-labelledby="metricsHeading">
       <div class="section-heading"><h2 id="metricsHeading">运行指标</h2><span id="inferencePhase">模型空闲</span></div>
       <div class="metrics">

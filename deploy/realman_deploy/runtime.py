@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import math
 import threading
 import time
 from typing import Callable
@@ -63,14 +64,143 @@ class DeploymentRuntime:
         self._pending_chunk: ActionChunk | None = None
         self._synchronous_ready_at: float | None = None
         self.input_age_at_result_ms: float | None = None
+        self._debug_gripper = None
+        self._gripper_debug_busy = False
+        self._gripper_debug_operation = None
+        self._gripper_debug_error = None
+        self._gripper_debug_cancel = None
+        self._hardware_connecting = False
 
     def _require_inactive(self) -> None:
         if self._estop_latched:
             raise RuntimeError("急停已锁存；检查机械臂并在本地复位后重启部署服务")
+        if self._hardware_connecting or self.gripper_debug_status().get('busy'):
+            raise RuntimeError("硬件连接或夹爪调试正在进行，请等待完成")
         if self.state in ("running", "loading", "stopping", "stopped") or self._infer_active:
             raise RuntimeError("先暂停并等待当前推理/加载结束，再替换适配器")
         if self._load_thread and self._load_thread.is_alive():
             raise RuntimeError("上一模型仍在加载；请等待完成")
+
+    def _gripper_worker(self):
+        return getattr(self.hardware, 'gripper', None) if self.hardware else self._debug_gripper
+
+    def gripper_debug_status(self) -> dict:
+        """Cached feedback only: HTTP polling never performs Modbus I/O."""
+        with self.lock:
+            worker = self._gripper_worker()
+            state = worker.status() if worker is not None else dict(
+                connected=False, ready=False, enabled=None, alarm=None, opening=None, error=None)
+            result = dict(state)
+            result.update(supported=True, busy=self._gripper_debug_busy or bool(state.get('busy')),
+                          operation=self._gripper_debug_operation or state.get('operation'),
+                          command_error=self._gripper_debug_error)
+            return result
+
+    def debug_gripper(self, action: str, *, factory=None, opening=None, speed=None, torque=None) -> dict:
+        """Reserve the actuator without holding the runtime lock during RTU I/O."""
+        if not isinstance(action, str) or action not in {'connect', 'status', 'enable', 'disable', 'clear_error', 'open', 'close', 'move'}:
+            raise ValueError('未知夹爪调试操作')
+        if action == 'move':
+            if isinstance(opening, bool) or not isinstance(opening, (int, float)) or not math.isfinite(opening) or not 0 <= opening <= 1:
+                raise ValueError('夹爪开度必须在 [0, 1]')
+        elif opening is not None:
+            raise ValueError('只有 move 操作接受 opening')
+        for name, value in (('speed', speed), ('torque', torque)):
+            if value is not None and (type(value) is not int or not 1 <= value <= 100):
+                raise ValueError(name + ' 必须为 1..100 的整数')
+        if action not in {'move', 'open', 'close'} and (speed is not None or torque is not None):
+            raise ValueError('速度和力度只用于夹爪移动')
+        with self.lock:
+            self._require_inactive()
+            hardware = self.hardware
+            if hardware is not None:
+                hs = hardware.status()
+                if hs.get('armed') or hs.get('estop_latched'):
+                    raise RuntimeError('请先暂停机械臂；急停锁定时不可调试')
+            worker = self._gripper_worker()
+            if action != 'connect' and worker is None:
+                raise RuntimeError('请先连接夹爪')
+            if action == 'connect' and factory is None:
+                raise ValueError('缺少夹爪连接配置')
+            epoch = self.gate.current()
+            self._gripper_debug_busy = True
+            self._gripper_debug_operation = action
+            self._gripper_debug_error = None
+            cancel = self._gripper_debug_cancel = threading.Event()
+        try:
+            if action == 'connect':
+                if worker is not None:
+                    worker.close()
+                with self.lock:
+                    if not self.gate.accepts(epoch) or self._estop_latched:
+                        raise RuntimeError('夹爪连接已取消')
+                new_worker = factory()
+                with self.lock:
+                    cancelled = not self.gate.accepts(epoch) or self._estop_latched
+                    if not cancelled:
+                        worker = new_worker
+                        if hardware is not None:
+                            hardware.gripper = worker
+                        else:
+                            self._debug_gripper = worker
+                        worker.start()
+                if cancelled:
+                    new_worker.close()
+                    raise RuntimeError('夹爪连接已取消')
+                result = worker.wait_connected(timeout_s=8.0)
+            else:
+                result = worker.debug_command(action, opening=opening, speed=speed, torque=torque,
+                                              timeout_s=12.0, cancel_event=cancel)
+            with self.lock:
+                if not self.gate.accepts(epoch) or self._estop_latched:
+                    raise RuntimeError('夹爪操作已被暂停或急停取消')
+            return {**result, 'supported': True}
+        except Exception as exc:
+            with self.lock:
+                self._gripper_debug_error = str(exc)
+            raise
+        finally:
+            with self.lock:
+                self._gripper_debug_busy = False
+                self._gripper_debug_operation = None
+                self._gripper_debug_cancel = None
+
+    def connect_hardware(self, factory) -> dict:
+        """Hand standalone gripper ownership to the full adapter, never overlap."""
+        with self.lock:
+            self._require_inactive()
+            if self.hardware is not None:
+                return self.hardware.status()
+            self._hardware_connecting = True
+            standalone = self._debug_gripper
+            epoch = self.gate.current()
+        adapter = None
+        try:
+            if standalone is not None:
+                standalone.close()
+                with self.lock:
+                    self._debug_gripper = None
+            with self.lock:
+                if not self.gate.accepts(epoch) or self._estop_latched:
+                    raise RuntimeError('硬件连接已取消')
+            adapter = factory()
+            with self.lock:
+                if not self.gate.accepts(epoch) or self._estop_latched:
+                    raise RuntimeError('硬件连接已取消')
+                status = adapter.status()
+                self._validate_hardware_space(status)
+                if status.get('force_preprocessing') != self.normalizer.force_preprocessing:
+                    raise ValueError('模型归一化文件与硬件力预处理不一致')
+                self.hardware, adapter = adapter, None
+                self._invalidate('ready')
+                return self.hardware.status()
+        finally:
+            try:
+                if adapter is not None:
+                    adapter.close()
+            finally:
+                with self.lock:
+                    self._hardware_connecting = False
 
     def _invalidate(self, state: str, error: str | None = None) -> int:
         """Caller holds lock; publication and invalidation share this lock."""
@@ -214,13 +344,22 @@ class DeploymentRuntime:
 
     def pause(self) -> None:
         with self.lock:
-            if self.state in ("idle", "ready", "paused", "estop", "stopped", "stopping"):
+            if self.state in ("estop", "stopped", "stopping"):
+                return
+            if self.state in ("idle", "ready", "paused") and not (self.gripper_debug_status()['busy'] or self._hardware_connecting):
                 return
             epoch = self._invalidate("stopping")
             hardware = self.hardware
+            gripper = self._gripper_worker()
+            if self._gripper_debug_cancel is not None:
+                self._gripper_debug_cancel.set()
         self.wake.set()
         try:
-            self._stop_hardware(hardware, emergency=False)
+            try:
+                if gripper is not None:
+                    gripper.hold()
+            finally:
+                self._stop_hardware(hardware, emergency=False)
         except Exception as exc:
             with self.lock:
                 if self.gate.accepts(epoch):
@@ -235,9 +374,16 @@ class DeploymentRuntime:
             self._estop_latched = True
             epoch = self._invalidate("estop", "急停已锁存；检查机械臂并在本地复位后重启部署服务")
             hardware = self.hardware
+            gripper = self._gripper_worker()
+            if self._gripper_debug_cancel is not None:
+                self._gripper_debug_cancel.set()
         self.wake.set()
         try:
-            self._stop_hardware(hardware, emergency=True)
+            try:
+                if gripper is not None:
+                    gripper.hold()
+            finally:
+                self._stop_hardware(hardware, emergency=True)
         except Exception as exc:
             with self.lock:
                 if self.gate.accepts(epoch):
@@ -497,6 +643,9 @@ class DeploymentRuntime:
                           execution_phase=phase,
                           input_age_at_result_ms=self.input_age_at_result_ms,
                           pending_chunk=self._pending_chunk is not None,
+                          gripper_debug=self.gripper_debug_status(),
+                          gripper_debug_busy=self.gripper_debug_status()['busy'],
+                          hardware_connecting=self._hardware_connecting,
                           model_diagnostics=dict(getattr(self.policy, "diagnostics", {})))
         result["cuda"] = self._cuda_status()
         return result
@@ -511,6 +660,7 @@ class DeploymentRuntime:
             with self.lock:
                 self._invalidate("stopped")
                 policy, hardware = self.policy, self.hardware
+                debug_gripper, self._debug_gripper = self._debug_gripper, None
                 active = self._infer_active
                 self.policy = self.hardware = None
             self.stop_event.set()
@@ -523,6 +673,12 @@ class DeploymentRuntime:
             # An active inference owns its policy until it returns.
             if policy and not active:
                 policy.close()
-            if hardware:
-                hardware.close()
-            self.cuda_probe.close()
+            try:
+                if hardware:
+                    hardware.close()
+            finally:
+                try:
+                    if debug_gripper:
+                        debug_gripper.close()
+                finally:
+                    self.cuda_probe.close()

@@ -44,6 +44,17 @@ class DeploymentWeb:
     def settings(self):
         return {**settings(self.config), "supported": self.runtime.normalizer.action_space == "joint8"}
 
+    def _hardware_config_path(self):
+        path = Path(self.config['hardware_config']).expanduser()
+        return path if path.is_absolute() else self.config_path.parent / path
+
+    def _new_debug_gripper(self):
+        from .gripper import Ctag2F120Worker
+        config = json.loads(self._hardware_config_path().read_text())
+        if not isinstance(config, dict) or not config.get('robot_ip') or type(config.get('robot_port')) is not int:
+            raise ValueError('夹爪连接需要有效 robot_ip / robot_port')
+        return Ctag2F120Worker(config, diagnostic=True)
+
     def _save_config(self, config):
         """Atomic replace in the config directory, preserving all unrelated keys."""
         temporary = None
@@ -105,6 +116,8 @@ class DeploymentWeb:
                 elif self.path == "/api/settings":
                     with web.config_lock:
                         self._json(web.settings())
+                elif self.path == "/api/gripper":
+                    self._json(web.runtime.gripper_debug_status())
                 elif self.path == "/api/checkpoints":
                     self._json({"directory": str(web.store.root), "checkpoints": web.store.list()})
                 else:
@@ -113,7 +126,16 @@ class DeploymentWeb:
             def do_POST(self):
                 try:
                     self._local_origin(); body = self._body()
-                    if self.path == "/api/download":
+                    if self.path == "/api/gripper":
+                        unknown = set(body) - {'action', 'opening', 'speed', 'torque'}
+                        if unknown:
+                            raise ValueError('未知夹爪参数: ' + ', '.join(sorted(unknown)))
+                        action = body.get('action')
+                        if not isinstance(action, str):
+                            raise ValueError('缺少夹爪 action')
+                        self._json(web.runtime.debug_gripper(action, factory=web._new_debug_gripper,
+                            opening=body.get('opening'), speed=body.get('speed'), torque=body.get('torque')))
+                    elif self.path == "/api/download":
                         with web.download_lock:
                             path = web.store.download(str(body.get("id", "")))
                         self._json({"path": str(path)})
@@ -148,25 +170,13 @@ class DeploymentWeb:
                         if not factory:
                             raise RuntimeError("未配置硬件插件。设置 FASTWAM_HARDWARE_FACTORY=module:factory 后重启服务。")
                         from .adapters import load_factory
-                        hardware_config = Path(web.config["hardware_config"]).expanduser()
-                        if not hardware_config.is_absolute():
-                            hardware_config = web.config_path.parent / hardware_config
+                        hardware_config = web._hardware_config_path()
                         if not web.connect_lock.acquire(blocking=False):
                             raise RuntimeError("硬件连接正在进行")
                         try:
-                            with web.runtime.lock:
-                                web.runtime._require_inactive()
-                                existing = web.runtime.hardware
-                            if existing is not None:
-                                self._json({"state": "connected", "hardware": existing.status()})
-                                return
-                            adapter = load_factory(factory, config_path=str(hardware_config))
-                            try:
-                                web.runtime.attach(hardware=adapter)
-                            except Exception:
-                                adapter.close()
-                                raise
-                            self._json({"state": "connected", "hardware": adapter.status()})
+                            status = web.runtime.connect_hardware(
+                                lambda: load_factory(factory, config_path=str(hardware_config)))
+                            self._json({"state": "connected", "hardware": status})
                         finally:
                             web.connect_lock.release()
                     elif self.path == "/api/start":
