@@ -36,13 +36,16 @@ class CosmosJointPolicy:
         self.inference_backend = str(config.get("inference_backend", "reference"))
         if config.get("sampling_profile") is not None:
             profile_steps(config["sampling_profile"])
-            self.inference_backend = "joint_multirate"
-        if self.inference_backend not in {"reference", "video_isolated_reuse", "joint_static_cache", "joint_multirate", "joint_optimized"}:
+            if self.inference_backend != "joint_expert_schedule":
+                self.inference_backend = "joint_multirate"
+        if self.inference_backend not in {"reference", "video_isolated_reuse", "joint_static_cache", "joint_multirate", "joint_optimized", "joint_expert_schedule"}:
             raise ValueError(f"Unknown inference_backend: {self.inference_backend}")
+        if self.inference_backend == "joint_expert_schedule":
+            profile_steps(config.get("sampling_profile"))
         self.text_index = 0
         self.inference_index = 0
         self.diagnostics = {}
-        if self.inference_backend in {"video_isolated_reuse", "joint_multirate", "joint_optimized"}:
+        if self.inference_backend in {"video_isolated_reuse", "joint_multirate", "joint_optimized", "joint_expert_schedule"}:
             # These backends may import TorchInductor/Triton. Choose a cache
             # namespace before the first Torch import, scoped to this checkout
             # and selected physical CUDA device.
@@ -87,7 +90,7 @@ class CosmosJointPolicy:
         self.reference_mode = "none" if payload.get("schema") == SCHEMA else "rolling_ae"
         if self.reference_mode == "none" and self.inference_backend == "video_isolated_reuse":
             raise ValueError("New joint diffusion requires a joint backend, not video_isolated_reuse")
-        if self.reference_mode != "none" and self.inference_backend in {"joint_static_cache", "joint_multirate", "joint_optimized"}:
+        if self.reference_mode != "none" and self.inference_backend in {"joint_static_cache", "joint_multirate", "joint_optimized", "joint_expert_schedule"}:
             raise ValueError("Joint sampling profiles require a Joint8 no-reference checkpoint")
         kwargs = dict(self.config["model_kwargs"])
         if self.reference_mode == "none":
@@ -97,7 +100,7 @@ class CosmosJointPolicy:
                 raise ValueError('Use the exact normalization.json bound during this RealMan training run')
             # The trained architecture/manifest stays intact. Sampling schedules
             # are an inference choice and do not change checkpoint identity.
-            if self.inference_backend != "joint_multirate" and int(self.config.get('joint_steps', 16)) < 1:
+            if self.inference_backend not in {"joint_multirate", "joint_expert_schedule"} and int(self.config.get('joint_steps', 16)) < 1:
                 raise ValueError('Joint sampler step count must be positive')
             trained = payload["manifest"]["extra_config"]
             if (payload['manifest']['action_space'] != self.normalizer.action_space
@@ -133,6 +136,18 @@ class CosmosJointPolicy:
 
     def _configure_inference(self) -> None:
         if self.inference_backend in {"reference", "joint_static_cache"}:
+            return
+        if self.inference_backend == "joint_expert_schedule":
+            from fastwam.cosmos.expert_schedule_inference import ExpertScheduleRunner
+            options = self.config.get("inference_optimization", {})
+            if "mode" in options:
+                raise ValueError("joint_expert_schedule uses compile_layers/cuda_graph, not mode; remove mode from inference_optimization")
+            self._expert_steps = profile_steps(self.config["sampling_profile"])
+            self.runner = ExpertScheduleRunner(self.model, **self._expert_steps,
+                compile_layers=bool(options.get("compile_layers", True)),
+                cuda_graph=bool(options.get("cuda_graph", True)),
+                compile_threads=int(options.get("compile_threads", 4)))
+            self.diagnostics.update(sampling=dict(self._expert_steps), optimization=self.runner.diagnostics)
             return
         if self.inference_backend == "joint_optimized":
             from fastwam.cosmos.noaction_inference import NoActionInferenceRunner
@@ -209,6 +224,9 @@ class CosmosJointPolicy:
             raise RuntimeError("Cosmos policy is not loaded with a tokenizer")
         if observation.action_space != self.normalizer.action_space:
             raise ValueError('Observation and policy action space differ')
+        if (self.inference_backend == "joint_expert_schedule"
+                and profile_steps(self.config["sampling_profile"]) != self._expert_steps):
+            raise RuntimeError("Sampling profile changed; reload the model to rebuild the complete sampling graph")
         import torch
         started = time.monotonic()
         pixels = self._encode_image(observation)
@@ -238,6 +256,11 @@ class CosmosJointPolicy:
                     steps = profile_steps(self.config.get("sampling_profile", "161616"))
                     result = self.runner.infer(sample, **steps, **seeds)
                     self.diagnostics.update(sampling=steps, optimization=self.runner.diagnostics)
+                elif self.inference_backend == "joint_expert_schedule":
+                    # The runner owns the merged grid. joint_steps is checkpoint
+                    # metadata and must not override this profile's V/F/A counts.
+                    result = self.runner.infer_joint(sample, **seeds)
+                    self.diagnostics.update(sampling=dict(self._expert_steps), optimization=self.runner.diagnostics)
                 else:
                     inference = self.runner if self.runner is not None else self.model
                     result = inference.infer_joint(sample,

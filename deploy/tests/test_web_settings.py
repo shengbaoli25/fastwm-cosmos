@@ -4,6 +4,8 @@ from pathlib import Path
 import sys
 import tempfile
 import threading
+from unittest.mock import Mock
+import pytest
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
@@ -13,7 +15,8 @@ from realman_deploy.runtime import DeploymentRuntime
 from realman_deploy.web import DeploymentWeb
 
 
-def test_settings_api_persists_4416_mode_and_rejects_invalid_combinations(tmp_path):
+@pytest.mark.parametrize('backend', ['joint_multirate', 'joint_expert_schedule'])
+def test_settings_api_persists_4416_mode_and_rejects_invalid_combinations(tmp_path, backend):
     normalizer = DatasetNormalizer({
         "state": {"mean": [0.] * 8, "std": [1.] * 8},
         "action": {"mean": [0.] * 8, "std": [1.] * 8},
@@ -21,6 +24,7 @@ def test_settings_api_persists_4416_mode_and_rejects_invalid_combinations(tmp_pa
     }, action_space="joint8")
     config_path = tmp_path / "runtime.json"
     config_path.write_text(json.dumps({"device": "cuda:1", "sampling_profile": "161616",
+        "inference_backend": backend,
         "execution_mode": "synchronous", "model_kwargs": {"marker": "preserved"}}))
     catalog_path = tmp_path / "catalog.json"
     catalog_path.write_text('{"checkpoints": []}')
@@ -35,6 +39,8 @@ def test_settings_api_persists_4416_mode_and_rejects_invalid_combinations(tmp_pa
             before = json.load(response)
         assert before["supported"] is True
         assert before["sampling_profile"] == "161616"
+        previous_policy = Mock()
+        runtime.policy = previous_policy
         payload = json.dumps({"sampling_profile": "4416", "execution_mode": "async_relaxed"}).encode()
         request = Request(base + "/api/settings", data=payload, headers={"Content-Type": "application/json"})
         with urlopen(request) as response:
@@ -42,9 +48,13 @@ def test_settings_api_persists_4416_mode_and_rejects_invalid_combinations(tmp_pa
         assert applied["reload_required"] is True
         assert runtime.sampling_profile == "4416"
         assert runtime.execution_mode == "async_relaxed"
+        assert runtime.policy is None
+        previous_policy.close.assert_called_once()
         saved = json.loads(config_path.read_text())
         assert saved["sampling_profile"] == "4416"
-        assert saved["inference_backend"] == "joint_multirate"
+        assert saved["inference_backend"] == backend
+        if backend == 'joint_expert_schedule':
+            assert saved['inference_optimization'] == dict(compile_layers=True, cuda_graph=True, compile_threads=4)
         assert saved["device"] == "cuda:1" and saved["model_kwargs"]["marker"] == "preserved"
 
         bad = json.dumps({"sampling_profile": "161616", "execution_mode": "async_relaxed"}).encode()

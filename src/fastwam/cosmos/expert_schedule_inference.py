@@ -91,6 +91,11 @@ class ExpertScheduleRunner(NoActionInferenceRunner):
         self.counts, self.ratios, self.plan = expert_plan(video_steps, force_steps, action_steps)
         self.merged_steps = len(self.plan)
         super().__init__(model, compile_layers=False, cuda_graph=cuda_graph, compile_threads=compile_threads)
+        # The parent leaves its combined control layers uncompiled; this runner
+        # compiles the separate Force/Action layers below instead.
+        self.compile_layers = bool(compile_layers)
+        self._execution_ready = False
+        self._execution_error = None
         if compile_layers:
             import torch._inductor.config as compiler_config
             compiler_config.compile_threads = max(1, int(compile_threads))
@@ -110,6 +115,31 @@ class ExpertScheduleRunner(NoActionInferenceRunner):
             force_sampling_evaluations=self.counts[1],
             force_forward_evaluations=sum(p['force_features'] for p in self.plan))
 
+    @property
+    def diagnostics(self):
+        """Report completed execution, not merely requested acceleration flags.
+
+        Compilation/capture failures propagate to the deployment loader; this
+        runner never silently replaces the requested path with an eager one.
+        """
+        requested = ("compiled_cuda_graph" if self.compile_layers and self.cuda_graph
+                     else "cuda_graph" if self.cuda_graph
+                     else "compile" if self.compile_layers else "eager")
+        effective = ("error" if self._execution_error else requested if self._execution_ready else "pending")
+        return {"runner": type(self).__name__, "requested_mode": requested,
+                "active_mode": effective, "effective_mode": effective,
+                "compile_layers": self.compile_layers,
+                "compile_status": ("active" if self._execution_ready else "pending") if self.compile_layers else "disabled",
+                "graph_scope": "complete_sampling_loop",
+                "graph_status": ("captured" if self._graph is not None else "pending") if self.cuda_graph else "disabled",
+                "fallback_reason": None, "error": self._execution_error,
+                "stats": dict(self.stats)}
+
+    def close(self):
+        self._execution_ready = False
+        self._execution_error = None
+        super().close()
+
     def _build_schedules(self, steps):
         if steps != self.merged_steps:
             raise ValueError('Merged step count is fixed by the three expert grids')
@@ -125,7 +155,14 @@ class ExpertScheduleRunner(NoActionInferenceRunner):
     def infer_joint(self, sample, *, num_inference_steps=None, **kwargs):
         if num_inference_steps is not None and int(num_inference_steps) != self.merged_steps:
             raise ValueError('Pass the merged expert grid size or omit num_inference_steps')
-        return super().infer_joint(sample, num_inference_steps=self.merged_steps, **kwargs)
+        try:
+            result = super().infer_joint(sample, num_inference_steps=self.merged_steps, **kwargs)
+        except Exception as exc:
+            self._execution_ready = False
+            self._execution_error = f"{type(exc).__name__}: {exc}"
+            raise
+        self._execution_ready, self._execution_error = True, None
+        return result
 
     def _rollout(self, video, force, action, first, static, texts, ftext, masks):
         m, fe, ae = self.model, self.model.dit['force'], self.model.dit['action']

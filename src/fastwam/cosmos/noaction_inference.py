@@ -126,29 +126,40 @@ class _JointLayer(nn.Module):
 class _Graph:
     def __init__(self, function, args):
         flat, self.spec = tree_flatten(args)
-        self.inputs = [x.clone() for x in flat]
+        self.device = flat[0].device
+        if self.device.type != 'cuda' or any(x.device != self.device for x in flat):
+            raise ValueError('CUDA graph inputs must be on the same CUDA device')
         self.signature = [(x.shape, x.dtype, x.device) for x in flat]
-        values = tree_unflatten(self.inputs, self.spec)
-        stream = torch.cuda.Stream(device=flat[0].device)
-        stream.wait_stream(torch.cuda.current_stream())
-        with torch.cuda.stream(stream):
-            for _ in range(2):
-                function(*values)
-        torch.cuda.current_stream().wait_stream(stream)
-        torch.cuda.synchronize()
-        self.graph = torch.cuda.CUDAGraph()
-        with torch.cuda.graph(self.graph, stream=stream):
-            self.outputs = function(*values)
+        with torch.cuda.device(self.device):
+            self.inputs = [x.clone() for x in flat]
+            values = tree_unflatten(self.inputs, self.spec)
+            stream = torch.cuda.Stream(device=self.device)
+            stream.wait_stream(torch.cuda.current_stream(self.device))
+            with torch.cuda.stream(stream):
+                for _ in range(2):
+                    function(*values)
+            stream.synchronize()
+            self.graph = torch.cuda.CUDAGraph()
+            with torch.cuda.graph(self.graph, stream=stream):
+                try:
+                    self.outputs = function(*values)
+                except Exception:
+                    # Preserve the first failure if capture_end also fails.
+                    import logging
+                    logging.getLogger(__name__).exception('Joint sampling graph capture body failed')
+                    raise
+            torch.cuda.current_stream(self.device).wait_stream(stream)
 
     def __call__(self, args):
         flat, spec = tree_flatten(args)
         if spec != self.spec or [(x.shape, x.dtype, x.device) for x in flat] != self.signature:
             raise ValueError('CUDA graph request shape/dtype/device changed')
-        for target, source in zip(self.inputs, flat):
-            target.copy_(source)
-        self.graph.replay()
-        # The graph owns its output buffers. Public results must survive the next replay.
-        return tuple(value.clone() for value in self.outputs)
+        with torch.cuda.device(self.device):
+            for target, source in zip(self.inputs, flat):
+                target.copy_(source)
+            self.graph.replay()
+            # Public results must survive the next replay.
+            return tuple(value.clone() for value in self.outputs)
 
 
 class NoActionInferenceRunner:

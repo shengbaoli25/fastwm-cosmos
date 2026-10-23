@@ -30,6 +30,15 @@ def updated_config(config: dict, profile: str, mode: str) -> dict:
     # Do not change model_kwargs/manifest.num_inference_steps. Those identify
     # the trained model; inference schedules are a separate runtime choice.
     options = dict(config.get("inference_optimization", {}))
-    options.setdefault("mode", "auto")
+    backend = config.get("inference_backend", "joint_multirate")
+    if backend == "joint_expert_schedule":
+        if "mode" in options:
+            raise ValueError("joint_expert_schedule uses compile_layers/cuda_graph, not mode")
+        options.setdefault("compile_layers", True)
+        options.setdefault("cuda_graph", True)
+        options.setdefault("compile_threads", 4)
+    else:
+        backend = "joint_multirate"
+        options.setdefault("mode", "auto")
     return {**config, "sampling_profile": profile, "execution_mode": mode,
-            "inference_backend": "joint_multirate", "inference_optimization": options}
+            "inference_backend": backend, "inference_optimization": options}

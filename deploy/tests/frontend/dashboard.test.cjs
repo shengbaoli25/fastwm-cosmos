@@ -40,6 +40,24 @@ function fixture(overrides = {}) {
 }
 const pending = () => { let resolve; const promise = new Promise(done => { resolve = done; }); return {promise, resolve}; };
 
+test('acceleration label distinguishes a completed full graph from pending or branch graphs', async () => {
+  const diagnostic = {device: {device: 'cuda:0', dtype: 'bfloat16'},
+    inference_backend: 'joint_expert_schedule', optimization: {effective_mode: 'pending'}};
+  const f = fixture({model_diagnostics: diagnostic}); await f.dashboard.init();
+  assert.match(f.$('cudaDetail').textContent, /cuda:0.*bfloat16.*准备中/);
+  assert.doesNotMatch(f.$('cudaDetail').textContent, /已启用|object Object/);
+  diagnostic.optimization = {effective_mode: 'compiled_cuda_graph', graph_scope: 'complete_sampling_loop'};
+  await f.dashboard.refreshStatus();
+  assert.match(f.$('cudaDetail').textContent, /编译＋完整采样图已启用/);
+  diagnostic.optimization = {effective_mode: 'cuda_graph'};
+  await f.dashboard.refreshStatus();
+  assert.match(f.$('cudaDetail').textContent, /分支采样图已启用/);
+  diagnostic.optimization = {effective_mode: 'error', error: 'capture failed'};
+  await f.dashboard.refreshStatus();
+  assert.match(f.$('cudaDetail').textContent, /error.*capture failed/);
+  assert.doesNotMatch(f.$('cudaDetail').textContent, /已启用/);
+});
+
 test('4416 exposes async mode, applies supported settings, and requires model reload', async () => {
   const f = fixture(); await f.dashboard.init();
   assert.equal(f.$('executionField').hidden, true);

@@ -202,6 +202,37 @@ its additional speedup was small and its normalized output difference was larger
 
 ## Joint8 no-reference inference optimization
 
+For the independently selected `161616` / `4416` deployment profiles, use
+`joint_expert_schedule` to run the same compiled Force/Action layers and complete
+sampling-loop CUDA Graph used by the step10000 expert-grid evaluation:
+
+```json
+{
+  "inference_backend": "joint_expert_schedule",
+  "sampling_profile": "4416",
+  "execution_mode": "synchronous",
+  "inference_optimization": {
+    "compile_layers": true,
+    "cuda_graph": true,
+    "compile_threads": 4
+  }
+}
+```
+
+Remove the legacy `inference_optimization.mode` field when selecting this backend;
+it belongs to `joint_multirate` and is rejected here rather than silently ignored.
+Existing configurations keep their backend. The settings API preserves the new
+backend when switching profiles, unloads the previous policy, and requires a
+fresh model load. Compilation and capture finish during the two loader warmups,
+before readiness is published; failures are surfaced without an eager fallback.
+The dashboard reports `编译＋完整采样图已启用` only after successful execution.
+
+The compiler requires a C compiler and Python development headers matching the
+interpreter. If headers are installed locally, expose their include directories
+through `CPATH` in the service environment before launching Python. Startup
+warmup timings are separate from accepted live-inference latency. See the
+[deployment validation and limitations](../docs/deploy/EXPERT_SCHEDULE_zh.md).
+
 For `cosmos-noaction-vfa-diffusion28-joint8-v2`, select
 `inference_backend: "joint_optimized"` to enable the dedicated runner:
 

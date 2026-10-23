@@ -97,7 +97,16 @@
       badge('cudaBadge', s.cuda?.available ? '可用' : s.cuda?.checking ? '检查中' : '不可用', s.cuda?.available ? 'good' : s.cuda?.checking ? 'warn' : 'bad');
       text('cuda', s.cuda?.available ? `${s.cuda.device}${s.cuda.total_bytes ? ` · ${(s.cuda.total_bytes / 1e9).toFixed(1)} GB` : ''}` : s.cuda?.checking ? '正在检查 CUDA 驱动' : '请检查 CUDA 环境与驱动');
       const diagnostic = s.model_diagnostics || {};
-      text('cudaDetail', [diagnostic.device, diagnostic.dtype, diagnostic.inference_backend].filter(Boolean).join(' · ') || '精度与计算后端在加载时确定');
+      const deviceInfo = diagnostic.device;
+      const optimization = diagnostic.optimization || {};
+      const optimizationLabel = optimization.effective_mode === 'compiled_cuda_graph'
+        ? '编译＋完整采样图已启用' : optimization.effective_mode === 'cuda_graph'
+        ? (optimization.graph_scope === 'complete_sampling_loop' ? '完整采样图已启用' : '分支采样图已启用')
+        : optimization.effective_mode === 'pending' ? '推理优化准备中'
+        : optimization.effective_mode ? `推理优化：${optimization.effective_mode}` : '';
+      text('cudaDetail', [typeof deviceInfo === 'object' ? deviceInfo?.device : deviceInfo,
+        deviceInfo?.dtype || diagnostic.dtype, diagnostic.inference_backend, optimizationLabel,
+        optimization.fallback_reason, optimization.error].filter(Boolean).join(' · ') || '精度与计算后端在加载时确定');
       badge('modelBadge', s.model_ready ? '模型已加载' : s.state === 'loading' ? '加载中' : '未加载', s.model_ready ? 'good' : 'warn');
       text('modelMode', `双视角观测 · ${s.model_ready ? (s.reference_mode === 'none' ? '无参考轨迹' : '滚动 AE 参考') : '模型未加载'} · 30 Hz 动作接口`);
       const profile = s.sampling_profile || settings?.sampling_profile;

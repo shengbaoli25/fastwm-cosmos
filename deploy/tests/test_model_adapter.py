@@ -2,6 +2,7 @@
 import sys
 from pathlib import Path
 from unittest.mock import Mock
+from types import SimpleNamespace
 
 import pytest
 import torch
@@ -121,3 +122,74 @@ def test_merged_joint_backends_preserve_dispatch_seeds_and_sampling(backend):
             assert call.kwargs['use_cache'] is (backend != 'reference')
     if accelerated:
         policy.model.infer_joint.assert_not_called()
+
+
+@pytest.mark.parametrize('profile,counts', [('161616', (16, 16, 16)), ('4416', (4, 4, 16))])
+def test_expert_schedule_dispatch_and_warmup_preserve_live_seeds(monkeypatch, profile, counts):
+    policy, _ = policy_fixture(False)
+    policy.reference_mode = 'none'
+    policy.inference_backend = 'joint_expert_schedule'
+    policy.config.update(sampling_profile=profile, joint_steps=99,
+                         inference_optimization={'compile_threads': 2})
+    runner = Mock()
+    runner.infer_joint.return_value = {'action': torch.zeros(1, 32, 7)}
+    runner.diagnostics = {'runner': 'ExpertScheduleRunner', 'effective_mode': 'compiled_cuda_graph'}
+    factory = Mock(return_value=runner)
+    monkeypatch.setitem(sys.modules, 'fastwam.cosmos.expert_schedule_inference',
+                        SimpleNamespace(ExpertScheduleRunner=factory))
+    policy._configure_inference()
+    steps = dict(zip(('video_steps', 'force_steps', 'action_steps'), counts))
+    factory.assert_called_once_with(policy.model, **steps, compile_layers=True, cuda_graph=True, compile_threads=2)
+    policy._warmup()
+    assert policy.inference_index == 0
+    assert len(policy.diagnostics['warmup']) == 2
+    obs = Observation.now(1, (0.,) * 7, (0.,) * 6, {'global': bytes(3), 'wrist': bytes(3)})
+    history = OnlineHistory(policy.normalizer)
+    history.append(obs.state, obs.force)
+    for _ in range(2):
+        policy.infer(obs, None, history.tensors())
+    calls = runner.infer_joint.call_args_list
+    assert [call.kwargs for call in calls] == [
+        dict(seed=seed, video_seed=44, force_seed=43) for seed in (42, 42, 42, 43)]
+    assert policy.diagnostics['sampling'] == steps
+    assert policy.diagnostics['optimization']['runner'] == 'ExpertScheduleRunner'
+    policy.model.infer_joint.assert_not_called()
+    # A caller bypassing the settings API must not replay the previous grid.
+    policy.config['sampling_profile'] = '4416' if profile == '161616' else '161616'
+    with pytest.raises(RuntimeError, match='reload the model'):
+        policy.infer(obs, None, history.tensors())
+    assert runner.infer_joint.call_count == 4
+    policy.close()
+    runner.close.assert_called_once()
+
+
+def test_expert_backend_survives_constructor_and_failed_warmup_cleans_up(monkeypatch):
+    config = {'normalization_file': 'unused.json', 'device': 'cuda:1',
+              'sampling_profile': '4416', 'inference_backend': 'joint_expert_schedule'}
+    monkeypatch.setattr(DatasetNormalizer, 'from_json', lambda path: SimpleNamespace(force_preprocessing=None))
+    from realman_deploy import device
+    cache = Mock(return_value={})
+    monkeypatch.setattr(device, 'configure_compile_cache', cache)
+    runner = Mock()
+    def fail_warmup(self):
+        assert self.inference_backend == 'joint_expert_schedule'
+        self.runner = runner
+        raise RuntimeError('graph capture failed')
+    monkeypatch.setattr(CosmosJointPolicy, '_load', fail_warmup)
+    with pytest.raises(RuntimeError, match='graph capture failed'):
+        CosmosJointPolicy('/tmp/model.pt', config, config_path='/tmp/config.json')
+    cache.assert_called_once()
+    assert cache.call_args.args[0] == 'cuda:1'
+    runner.close.assert_called_once()
+
+
+def test_expert_backend_rejects_legacy_mode_instead_of_ignoring_it(monkeypatch):
+    policy, _ = policy_fixture(False)
+    policy.inference_backend = 'joint_expert_schedule'
+    policy.config.update(sampling_profile='4416', inference_optimization={'mode': 'eager'})
+    factory = Mock()
+    monkeypatch.setitem(sys.modules, 'fastwam.cosmos.expert_schedule_inference',
+                        SimpleNamespace(ExpertScheduleRunner=factory))
+    with pytest.raises(ValueError, match='remove mode'):
+        policy._configure_inference()
+    factory.assert_not_called()
