@@ -6,8 +6,7 @@ separate threads and bounded/latest-only buffers. For GPU/ARM64 migration,
 asset staging, `device=cuda:N` checks and physical bring-up, follow the
 [Chinese migration guide](../docs/deploy/MIGRATION_zh.md). The read-only
 `deploy/doctor.py` never connects hardware; `deploy/benchmark.py` runs synthetic
-offline inference only. No remote observation/action client/server protocol is
-implemented here.
+offline inference only.
 
 ## Matched force preprocessing (2026-10-19)
 
