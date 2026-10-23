@@ -2,12 +2,14 @@
 from __future__ import annotations
 
 import logging
+import json
 import threading
 import time
 from typing import Callable
 
 from .adapters import HardwareAdapter, PolicyAdapter
 from .contracts import ActionChunk, RuntimeStatus
+from .cuda_status import CudaStatusProbe
 from .normalization import DatasetNormalizer, OnlineHistory
 from .queues import ActionTimeline, ChunkActionQueue, EpochGate, LatestObservation
 from .reference import RollingActionReference
@@ -25,10 +27,13 @@ class DeploymentRuntime:
 
     def __init__(self, normalizer: DatasetNormalizer, *, reference=None,
                  clock: Callable[[], float] = time.monotonic, require_cuda: bool = True,
-                 execution_mode: str = "timestamped"):
+                 execution_mode: str = "timestamped", cuda_device: str = "cuda",
+                 sampling_profile: str | None = None):
         if execution_mode not in {"timestamped", "async_relaxed", "synchronous"}:
             raise ValueError("execution_mode must be timestamped, async_relaxed or synchronous")
         self.execution_mode = execution_mode
+        self.sampling_profile = sampling_profile
+        self.cuda_probe = CudaStatusProbe(device=cuda_device)
         self.normalizer = normalizer
         self.require_cuda = require_cuda
         self.reference = reference or RollingActionReference(self.CONTROL_HZ)
@@ -53,13 +58,17 @@ class DeploymentRuntime:
         self._threads: list[threading.Thread] = []
         self._load_thread: threading.Thread | None = None
         self._infer_active = False
+        self._manual_active = False
         self._estop_latched = False
         self._relaxed_holding = False
         self._relaxed_end_at = 0.0
+        self._pending_chunk: ActionChunk | None = None
         self._synchronous_ready_at: float | None = None
         self.input_age_at_result_ms: float | None = None
 
     def _require_inactive(self) -> None:
+        if self._manual_active:
+            raise RuntimeError("夹爪操作正在进行，请等待回读")
         if self._estop_latched:
             raise RuntimeError("急停已锁存；检查机械臂并在本地复位后重启部署服务")
         if self.state in ("running", "loading", "stopping", "stopped") or self._infer_active:
@@ -76,6 +85,7 @@ class DeploymentRuntime:
         self._input_history = None
         self._relaxed_holding = False
         self._relaxed_end_at = 0.0
+        self._pending_chunk = None
         self._synchronous_ready_at = None
         self.state, self.error = state, error
         return epoch
@@ -110,9 +120,45 @@ class DeploymentRuntime:
                 or normalizer.force_preprocessing != self.normalizer.force_preprocessing):
             raise ValueError('模型与运行时 normalization.json 不一致；请使用同一训练导出文件重启服务')
 
+    def configure_sampling(self, profile: str, mode: str, *, persist=None) -> None:
+        """Change an inactive session atomically; new settings require model reload."""
+        from .sampling import updated_config
+        updated_config({}, profile, mode)
+        with self.lock:
+            self._require_inactive()
+            if self.normalizer.action_space != "joint8":
+                raise ValueError("三专家采样设置仅适用于 Joint8 模型")
+            # Persist before invalidating; an unwritable config must leave the
+            # existing model/settings usable. start/load cannot race this lock.
+            if persist is not None:
+                persist()
+            old, self.policy = self.policy, None
+            self._invalidate("idle")
+            self.execution_mode, self.sampling_profile = mode, profile
+            self.timeline = ChunkActionQueue(self.CONTROL_HZ, max_actions=32)
+            self.latency_ms = self.input_age_at_result_ms = None
+        if old:
+            old.close()
+
     def _validate_hardware_space(self,status):
         if status.get('action_space','eef_pose7') != self.normalizer.action_space:
             raise ValueError('Hardware and policy action space differ; joint8 requires joint commands in radians')
+
+    def control_gripper(self, operation: str) -> dict:
+        if operation not in {"enable", "disable", "open", "close", "hold"}:
+            raise ValueError("未知夹爪操作")
+        with self._command_lock:
+            with self.lock:
+                self._require_inactive()
+                hardware = self.hardware
+                if hardware is None or not hasattr(hardware, "control_gripper"):
+                    raise RuntimeError("请先连接支持夹爪控制的硬件")
+                self._manual_active = True
+            try:
+                return hardware.control_gripper(operation)
+            finally:
+                with self.lock:
+                    self._manual_active = False
 
     def load_policy_async(self, factory: Callable[[str], PolicyAdapter], checkpoint: str) -> None:
         with self.lock:
@@ -132,6 +178,7 @@ class DeploymentRuntime:
                             self.policy, new = new, None
                             self.state = "ready"
                 except Exception as exc:
+                    logger.exception("Policy load failed for %s", checkpoint)
                     with self.lock:
                         if self.gate.accepts(epoch):
                             self.state, self.error = "error", f"load: {exc}"
@@ -257,6 +304,11 @@ class DeploymentRuntime:
             raise ValueError(f"AE output must be Action32x{self.normalizer.action_dim}")
         predicted = self.normalizer.decode("action", normalized_actions)
         execution = [row[:-1] + [max(0.0, min(1.0, row[-1]))] for row in predicted]
+        logger.info('Gripper policy chunk %s', json.dumps(dict(
+            epoch=epoch, source_sequence=observation.sequence, source_stamp=observation.stamp,
+            measured_opening=observation.state[-1],
+            decoded_openings=[row[-1] for row in predicted],
+            execution_openings=[row[-1] for row in execution]), allow_nan=False))
         finished = self.clock()
         chunk = ActionChunk(observation.sequence, observation.stamp, epoch,
                             tuple(tuple(row) for row in execution), finished, self.normalizer.action_space)
@@ -267,6 +319,22 @@ class DeploymentRuntime:
             if self.state != "running" or not self.gate.accepts(epoch):
                 self.discarded_results += 1
                 return False
+            # Relaxed async mode computes exactly one next chunk while the
+            # current chunk executes. Hold that result until the chunk boundary
+            # so a fast model cannot repeatedly erase most of its own horizon.
+            queue_active = len(self.timeline) > 0 or finished < self._relaxed_end_at
+            if (self.execution_mode == "async_relaxed" and not self._relaxed_holding
+                    and queue_active):
+                if self._pending_chunk is not None:
+                    self.discarded_results += 1
+                    return False
+                self._pending_chunk = chunk
+                self.inference_count += 1
+                self._run_inference_count += 1
+                logger.info("async_relaxed next chunk ready: source_sequence=%s input_age_ms=%.1f "
+                            "inference_ms=%.1f; waiting for current chunk boundary",
+                            observation.sequence, self.input_age_at_result_ms, self.latency_ms)
+                return True
             _, kept = self.timeline.replace(chunk, finished)
             if kept < self.MIN_FRESH_ACTIONS:
                 self.timeline.clear()
@@ -309,6 +377,10 @@ class DeploymentRuntime:
                             or observation.stamp <= self._synchronous_ready_at):
                         continue
                     self._synchronous_ready_at = None
+                elif self.execution_mode == "async_relaxed" and self._pending_chunk is not None:
+                    # Keep one inference in flight per action chunk. The latest
+                    # sensor frame is used when the next chunk starts computing.
+                    continue
                 last_version = version
                 policy, epoch = self.policy, self.gate.current()
                 reference = (None if getattr(policy, "reference_mode", "rolling_ae") == "none"
@@ -347,6 +419,13 @@ class DeploymentRuntime:
                                        f"上限 {self.MAX_OBSERVATION_AGE_S * 1000:.0f} ms）")
                 if self.execution_mode != "timestamped":
                     action = self.timeline.take(now, epoch)
+                    if (action is None and self.execution_mode == "async_relaxed"
+                            and self._relaxed_holding and self._pending_chunk is not None):
+                        chunk, self._pending_chunk = self._pending_chunk, None
+                        self.timeline.replace(chunk, now)
+                        if getattr(self.policy, "reference_mode", "rolling_ae") != "none":
+                            self.reference.update(chunk.actions, source_stamp=self.timeline.start_stamp)
+                        action = self.timeline.take(now, epoch)
                     if action is None:
                         if len(self.timeline) or now < self._relaxed_end_at or self._relaxed_holding:
                             return
@@ -439,23 +518,18 @@ class DeploymentRuntime:
             result.update(reference_mode="none" if no_reference else "rolling_ae",
                           bootstrap=None if no_reference else self.reference.bootstrap(),
                           inference_busy=self._infer_active, hardware=hardware,
+                          gripper_busy=self._manual_active,
                           execution_mode=self.execution_mode,
+                          sampling_profile=self.sampling_profile,
                           execution_phase=phase,
                           input_age_at_result_ms=self.input_age_at_result_ms,
+                          pending_chunk=self._pending_chunk is not None,
                           model_diagnostics=dict(getattr(self.policy, "diagnostics", {})))
         result["cuda"] = self._cuda_status()
         return result
 
-    @staticmethod
-    def _cuda_status() -> dict:
-        try:
-            import torch
-            if not torch.cuda.is_available():
-                return {"available": False}
-            return {"available": True, "device": torch.cuda.get_device_name(0),
-                    "total_bytes": torch.cuda.get_device_properties(0).total_memory}
-        except Exception as exc:
-            return {"available": False, "error": str(exc)}
+    def _cuda_status(self) -> dict:
+        return self.cuda_probe.status()
 
     def close(self) -> None:
         try:
@@ -478,3 +552,4 @@ class DeploymentRuntime:
                 policy.close()
             if hardware:
                 hardware.close()
+            self.cuda_probe.close()

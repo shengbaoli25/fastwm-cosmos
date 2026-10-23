@@ -2,7 +2,11 @@
 
 This deployment app runs separately from the teleoperation project. The web
 server, sensor reader, model inference loop and 30 Hz arm command loop use
-separate threads and bounded/latest-only buffers.
+separate threads and bounded/latest-only buffers. For GPU/ARM64 migration,
+asset staging, `device=cuda:N` checks and physical bring-up, follow the
+[Chinese migration guide](../docs/deploy/MIGRATION_zh.md). The read-only
+`deploy/doctor.py` never connects hardware; `deploy/benchmark.py` runs synthetic
+offline inference only.
 
 ## Matched force preprocessing (2026-10-19)
 
@@ -63,10 +67,15 @@ physical policy execution.
 ## No-reference joint diffusion deployment
 
 New checkpoints with schema `cosmos-noaction-vfa-diffusion28-v1` use the same
-`infer_joint` core as training, with 16 joint Video/Force/Action updates and
-request-local static O/H/text K/V caches. The runtime neither supplies nor updates
-rolling AE references for these checkpoints. Its dashboard reports the selected
-mode. Legacy checkpoints retain their existing behavior.
+`infer_joint` core as training, with request-local static O/H/text K/V caches.
+The `4416` inference profile selects Video/Force/Action = 4/4/16, the measured
+latency/accuracy balance, without retraining or changing checkpoint identity.
+It can run `synchronous` or `async_relaxed`; async overlaps execution of an old
+action chunk with the next inference and therefore accepts delayed observations.
+`161616` remains the standard comparison. These schedules are runtime settings;
+they do not rewrite the checkpoint's training-step manifest. The runtime neither
+supplies nor updates rolling AE references for these checkpoints. Legacy
+checkpoints retain their existing behavior.
 
 Generate the runtime JSON from the resolved training config and exact training
 normalization using `scripts/cosmos/export_noaction_deployment.py`; see the
@@ -146,11 +155,10 @@ checks, pause, emergency stop and hardware motion checks remain active.
    sensor, CTAG gripper and two camera serials. Defaults reflect the RealMan
    setup used during data collection; they are not a substitute for checking
    the actual robot before enabling motion.
-5. Install compatible CUDA 12.8 PyTorch wheels, `requirements.txt`, the FastWAM
-   source package and RealMan's `Robotic-Arm`/RealSense runtime. Start with:
+5. Follow the portable [migration guide](../docs/deploy/MIGRATION_zh.md) to select matching CUDA wheels or retain a vendor ARM64 environment, install optional hardware bindings, export a relocatable config and check `cuda:N`. Then start with:
 
    ```sh
-   python deploy/serve_realman.py --config deploy/realman_runtime.example.json
+   python deploy/serve_realman.py --config /path/to/runtime.json
    ```
 
 Open `http://127.0.0.1:8765`. Selecting a checkpoint loads the model in a worker

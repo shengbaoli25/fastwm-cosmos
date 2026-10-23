@@ -88,3 +88,36 @@ def test_no_reference_deployment_uses_same_joint_sampler_without_rolling_actions
     policy.model.infer_forcewm.assert_not_called()
     if backend == 'joint_optimized':
         policy.model.infer_joint.assert_not_called()
+
+
+@pytest.mark.parametrize('backend', ['reference', 'joint_static_cache', 'joint_optimized', 'joint_multirate'])
+def test_merged_joint_backends_preserve_dispatch_seeds_and_sampling(backend):
+    policy, _ = policy_fixture(False)
+    policy.reference_mode = 'none'
+    policy.inference_backend = backend
+    policy.config.update(joint_steps=16, sampling_profile='4416')
+    accelerated = backend in {'joint_optimized', 'joint_multirate'}
+    policy.runner = Mock() if accelerated else None
+    target = policy.runner if accelerated else policy.model
+    method = target.infer if backend == 'joint_multirate' else target.infer_joint
+    method.return_value = {'action': torch.zeros(1, 32, 7)}
+    if backend == 'joint_multirate':
+        target.diagnostics = {'effective_mode': 'eager'}
+    obs = Observation.now(1, (0.,)*7, (0.,)*6, {'global':bytes(3), 'wrist':bytes(3)})
+    history = OnlineHistory(policy.normalizer)
+    history.append(obs.state, obs.force)
+    for _ in range(2):
+        assert len(policy.infer(obs, None, history.tensors())) == 32
+    assert [call.kwargs['seed'] for call in method.call_args_list] == [42, 43]
+    for call in method.call_args_list:
+        assert call.kwargs['video_seed'] == 44 and call.kwargs['force_seed'] == 43
+        assert 'reference' not in call.args[0] and 'action_condition' not in call.args[0]
+        if backend == 'joint_multirate':
+            assert call.kwargs['video_steps'] == call.kwargs['force_steps'] == 4
+            assert call.kwargs['action_steps'] == 16
+            assert 'num_inference_steps' not in call.kwargs
+        else:
+            assert call.kwargs['num_inference_steps'] == 16
+            assert call.kwargs['use_cache'] is (backend != 'reference')
+    if accelerated:
+        policy.model.infer_joint.assert_not_called()

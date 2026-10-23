@@ -26,6 +26,7 @@ import threading
 import time
 from typing import Any, Mapping, Sequence
 
+from .camera import RealSenseCamera as _Camera
 from .contracts import Observation, action_width
 from .gripper import Ctag2F120Worker
 
@@ -47,122 +48,6 @@ def _angle_delta(target: float, current: float) -> float:
     return (target - current + math.pi) % (2.0 * math.pi) - math.pi
 
 
-class _Camera:
-    """One serial-pinned RealSense color stream with a latest-frame cache."""
-
-    def __init__(self, spec: Mapping[str, Any], *, width: int, height: int, fps: int,
-                 max_age_s: float):
-        self.spec = dict(spec)
-        self.width, self.height, self.fps = int(width), int(height), int(fps)
-        self.max_age_s = float(max_age_s)
-        self.lock = threading.Lock()
-        self.stop = threading.Event()
-        self.thread: threading.Thread | None = None
-        self.pipeline = None
-        self.rgb: bytes | None = None
-        self.received = 0.0
-        self.meta: dict[str, Any] = {}
-        self.frames: deque[tuple[float, bytes, dict[str, Any]]] = deque(maxlen=8)
-        self.error: str | None = None
-
-    def start(self) -> None:
-        if self.thread is not None:
-            return
-        self.stop.clear()
-        self.thread = threading.Thread(target=self._run, name=f"realman-camera-{self.spec['name']}",
-                                       daemon=True)
-        self.thread.start()
-
-    def _run(self) -> None:
-        serial = str(self.spec["serial"])
-        while not self.stop.is_set():
-            pipeline = None
-            try:
-                import numpy as np
-                import pyrealsense2 as rs
-                context = rs.context()
-                devices = [d for d in context.query_devices()
-                           if d.get_info(rs.camera_info.serial_number) == serial]
-                if len(devices) != 1:
-                    raise RuntimeError(f"未找到相机 {self.spec.get('name', serial)} ({serial})")
-                pipeline = rs.pipeline(context)
-                config = rs.config()
-                config.enable_device(serial)
-                config.enable_stream(rs.stream.color, self.width, self.height,
-                                     rs.format.rgb8, self.fps)
-                pipeline.start(config)
-                self.pipeline = pipeline
-                warmup = int(self.spec.get("warmup_frames", 15))
-                while not self.stop.is_set():
-                    frames = pipeline.wait_for_frames(1000)
-                    received = time.monotonic()
-                    color = frames.get_color_frame()
-                    if not color:
-                        continue
-                    image = np.asanyarray(color.get_data())
-                    if image.shape != (self.height, self.width, 3) or image.dtype != np.uint8:
-                        raise RuntimeError(f"相机 {serial} 返回尺寸/dtype 不匹配")
-                    if warmup:
-                        warmup -= 1
-                        continue
-                    meta = {
-                        "name": self.spec["name"], "serial": serial, "received": received,
-                        "device_timestamp_ms": float(color.get_timestamp()),
-                        "frame_number": int(color.get_frame_number()), "color_order": "RGB",
-                        "width": self.width, "height": self.height,
-                    }
-                    with self.lock:
-                        self.rgb = image.tobytes()
-                        self.received = received
-                        self.meta = meta
-                        self.frames.append((received, self.rgb, meta))
-                        self.error = None
-            except Exception as exc:
-                with self.lock:
-                    self.error = str(exc)
-            finally:
-                if pipeline is not None:
-                    try:
-                        pipeline.stop()
-                    except Exception:
-                        pass
-                self.pipeline = None
-            self.stop.wait(float(self.spec.get("retry_delay_s", 2.0)))
-
-    def snapshot(self, anchor: float, now: float | None = None) -> tuple[bytes, dict[str, Any]]:
-        now = time.monotonic() if now is None else now
-        with self.lock:
-            eligible = [(stamp, rgb, dict(meta)) for stamp, rgb, meta in self.frames if stamp <= anchor]
-            error = self.error
-        if not eligible:
-            raise RuntimeError(error or f"相机 {self.spec['name']} 缺少状态锚点之前的画面")
-        received, rgb, meta = eligible[-1]
-        age = anchor - received
-        if not 0 <= age <= self.max_age_s or now - received > self.max_age_s:
-            raise RuntimeError(error or f"相机 {self.spec['name']} 画面过期 ({max(age, 0) * 1000:.1f} ms)")
-        meta["age_ms"] = round(age * 1000.0, 2)
-        return rgb, meta
-
-    def status(self) -> dict[str, Any]:
-        now = time.monotonic()
-        with self.lock:
-            received, error, frame_number = self.received, self.error, self.meta.get("frame_number")
-        age = now - received if received else None
-        ready = received > 0 and age is not None and 0 <= age <= self.max_age_s and error is None
-        return {
-            "name": self.spec.get("name"), "serial": self.spec.get("serial"),
-            "ready": ready, "age_ms": round(age * 1000.0, 2) if age is not None else None,
-            "frame_number": frame_number, "error": None if ready else (error or "等待相机首帧"),
-        }
-
-    def close(self) -> None:
-        self.stop.set()
-        if self.thread and self.thread is not threading.current_thread():
-            self.thread.join(timeout=2.0)
-        self.thread = None
-        self.pipeline = None
-
-
 class _RobotFeedback:
     """Callback-owned RM75 state and six-axis force snapshot."""
 
@@ -180,6 +65,7 @@ class _RobotFeedback:
         self.original_config: dict[str, Any] | None = None
         self.changed = False
         self.callback = None
+        self.callback_registered = False
         self.processed = deque(maxlen=256)
         self.force_filter = None
         self.calibration = config.get('_force_calibration')
@@ -259,6 +145,7 @@ class _RobotFeedback:
         self.callback = rm_realtime_arm_state_callback_ptr(
             lambda state: self.ingest(state, time.monotonic()))
         self.sdk.rm_realtime_arm_state_call_back(self.callback)
+        self.callback_registered = True
         target = dict(original, ip=local_ip,
                       port=int(self.config.get("feedback_port", 8090)),
                       cycle=int(self.config.get("feedback_cycle", 1)), enable=True,
@@ -275,7 +162,8 @@ class _RobotFeedback:
         deadline = time.monotonic() + float(self.config.get("feedback_start_timeout_s", 2.0))
         while time.monotonic() < deadline:
             with self.lock:
-                if self.q is not None and self.pose is not None and self.force is not None:
+                if (self.q is not None and self.pose is not None and self.force is not None
+                        and self.error is None and self.force_error is None):
                     return
             time.sleep(0.01)
         raise RuntimeError("未收到有效 RM75 状态/力反馈")
@@ -300,6 +188,12 @@ class _RobotFeedback:
                 "error": None if ready else (error or force_error or "等待 RM75 反馈")}
 
     def restore(self) -> None:
+        # The callback belongs to the native process, not to this SDK handle.
+        # Detach it before releasing its Python owner, even on failed connect.
+        if self.callback_registered:
+            from Robotic_Arm.rm_robot_interface import rm_realtime_arm_state_callback_ptr
+            self.sdk.rm_realtime_arm_state_call_back(rm_realtime_arm_state_callback_ptr())
+            self.callback_registered = False
         if not self.changed or self.original_config is None:
             return
         from Robotic_Arm.rm_robot_interface import rm_realtime_push_config_t, rm_udp_custom_config_t
@@ -407,10 +301,11 @@ class RealManHardwareAdapter:
     def _connect(self) -> None:
         try:
             from Robotic_Arm.rm_robot_interface import (
-                RoboticArm, rm_thread_mode_e, rm_inverse_kinematics_params_t,
+                rm_inverse_kinematics_params_t,
             )
+            from .sdk import create_sdk
             self.ik_params_type = rm_inverse_kinematics_params_t
-            self.sdk = RoboticArm(rm_thread_mode_e.RM_TRIPLE_MODE_E)
+            self.sdk = create_sdk()
             self.sdk.rm_set_timeout(int(self.config.get("connect_timeout_ms", 1000)))
             self.handle = self.sdk.rm_create_robot_arm(str(self.config["robot_ip"]),
                                                         int(self.config["robot_port"]), 3)
@@ -444,7 +339,7 @@ class RealManHardwareAdapter:
                                      if configured_center is not None else current_pose)
             self.gripper = Ctag2F120Worker(self.config)
             self.gripper.start()
-            self.gripper_feedback = self.gripper.wait_ready(
+            self.gripper_feedback = self.gripper.wait_initialized(
                 float(self.config.get("gripper_start_timeout_s", 8.0)))
             self.cameras = [_Camera(spec, width=self.config["camera_width"],
                                      height=self.config["camera_height"], fps=self.config["camera_fps"],
@@ -503,6 +398,21 @@ class RealManHardwareAdapter:
         if not status.get("gripper_ready"):
             raise RuntimeError("夹爪尚未就绪")
         self.armed = True
+
+    def control_gripper(self, operation: str) -> dict[str, Any]:
+        if self.closed or not self.connected or self.gripper is None:
+            raise RuntimeError("夹爪未连接")
+        if self.armed or self.estop_latched:
+            raise RuntimeError("先暂停推理；急停锁定时禁止夹爪操作")
+        if operation in {"enable", "disable"}:
+            return self.gripper.set_enabled(operation == "enable")
+        if operation == "hold":
+            self.gripper.hold()
+        elif operation in {"open", "close"}:
+            self.gripper.command(1.0 if operation == "open" else 0.0, source='manual')
+        else:
+            raise ValueError("未知夹爪操作")
+        return self.gripper.status()
 
     def observe(self) -> Observation | None:
         return self.observe_at(time.monotonic())

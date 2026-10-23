@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RealMan · 推理控制台</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="/static/app.js" defer></script>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <span class="brandmark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v3m-2-3h4M4 10H2m20 0h-2M8 20v1m8-1v1"/><rect x="4" y="6" width="16" height="14" rx="3"/><path d="M8 11v2m8-2v2m-7 3h6"/></svg></span>
+      <div><strong>RealMan <span>× Inference</span></strong><small>RM75 · 双视角 · Video / Force / Action</small></div>
+    </div>
+    <div class="header-right"><span id="badge" class="badge warn" role="status">连接中</span><button id="estop" class="emergency" title="立即停止硬件并锁定启动">软件急停</button></div>
+  </header>
+  <main>
+    <div id="error" class="alert" role="alert" hidden></div>
+    <div id="estopNotice" class="latch" hidden><strong>软件急停已锁定</strong><span>确认现场状态后重启部署服务。网络停止未确认时，请使用控制柜物理急停。</span></div>
+
+    <section class="devices" aria-label="设备连接">
+      <article class="device"><div class="device-heading"><h2>RealMan 机械臂</h2><span id="robot" class="badge">检查中</span></div><p>以太网控制 · 30 Hz 动作接口</p><div class="device-detail"><span>六轴力 <b id="force">—</b></span><span>夹爪 <b id="gripper">—</b></span></div></article>
+      <article class="device"><div class="device-heading"><h2>双视角相机</h2><span id="cameras" class="badge">检查中</span></div><p>全局视角 · 腕部视角</p><small>按配置中的设备序列号连接</small></article>
+      <article class="device"><div class="device-heading"><h2>CUDA 推理设备</h2><span id="cudaBadge" class="badge">检查中</span></div><p id="cuda">正在读取设备信息</p><small id="cudaDetail">精度与计算后端在加载时确定</small></article>
+    </section>
+
+    <section class="panel gripper-panel" aria-labelledby="gripperHeading">
+      <div class="section-heading"><div><h2 id="gripperHeading">CTAG2F120 夹爪</h2><p id="gripperDetail">先连接硬件，读取真实使能与开度</p></div></div>
+      <div class="button-row"><button id="gripperEnable" disabled>夹爪使能</button><button id="gripperDisable" disabled>夹爪失能</button><button id="gripperOpen" disabled>张开夹爪</button><button id="gripperClose" disabled>闭合夹爪</button><button id="gripperHold" disabled>取消待发目标</button></div>
+      <p class="control-help">手动开合会驱动夹爪；请先暂停推理。使能仅写使能寄存器并回读，不下发开合目标。取消待发目标不等同于中止已下发的夹爪运动。</p>
+    </section>
+
+    <section class="control-band" aria-label="闭环控制">
+      <div class="session"><h1 id="sessionTitle">真机推理控制台</h1><p id="modelMode">等待服务状态</p><div class="session-meta"><span id="activeProfile" class="badge">采样设置待确认</span><span id="executionMode">—</span><span id="executionPhase">—</span></div></div>
+      <div class="commands"><button id="start" class="primary" disabled>开始推理与控制</button><button id="pause">暂停 / 缓停</button></div>
+    </section>
+    <p id="warning" class="control-help">启动前请确认工作区无障碍、机械臂处于可控状态。</p>
+
+    <div class="workspace">
+      <section class="panel" aria-labelledby="modelHeading">
+        <div class="section-heading"><div><h2 id="modelHeading">模型 checkpoint</h2><p>选择权重并加载到当前 CUDA 设备</p></div><span id="modelBadge" class="badge">未加载</span></div>
+        <label for="checkpoint">模型文件</label>
+        <div class="input-row"><select id="checkpoint" disabled><option value="">正在读取列表…</option></select><button id="refresh">刷新</button></div>
+        <p id="modelHint" class="control-help">正在读取 checkpoint 目录</p>
+        <div class="button-row"><button id="download" disabled>下载 checkpoint</button><button id="load" class="primary" disabled>加载模型</button></div>
+        <p id="downloadProgress" class="control-help" role="status"></p>
+        <div class="panel-foot"><span>硬件连接</span><button id="connect" disabled>连接硬件</button><button id="reload">刷新状态</button></div>
+      </section>
+
+      <section class="panel" aria-labelledby="samplingHeading">
+        <div class="section-heading"><div><h2 id="samplingHeading">推理设置</h2><p>采样步数顺序：Video / Force / Action</p></div><span id="settingsState" class="badge">读取中</span></div>
+        <label for="samplingProfile">采样方案</label>
+        <select id="samplingProfile" disabled><option value="161616">16 / 16 / 16 · 基准</option><option value="4416">4 / 4 / 16 · 平衡</option></select>
+        <div id="executionField" class="field" hidden><label for="executionSelect">执行方式</label><select id="executionSelect" disabled><option value="synchronous">同步推理</option><option value="async_relaxed">异步推理</option></select></div>
+        <p id="profileHint" class="control-help">保留完整联合采样，用于基准对照。</p>
+        <p id="settingsHint" class="control-help">停止或暂停后可修改；应用新设置后需要重新加载模型。</p>
+        <div class="button-row"><button id="applySettings" disabled>应用设置</button><span id="settingsFeedback" role="status"></span></div>
+      </section>
+    </div>
+
+    <section class="telemetry" aria-labelledby="metricsHeading">
+      <div class="section-heading"><h2 id="metricsHeading">运行指标</h2><span id="inferencePhase">模型空闲</span></div>
+      <div class="metrics">
+        <div class="metric"><small>模型延迟</small><strong id="latency">—</strong></div>
+        <div class="metric"><small>输入观测至结果返回</small><strong id="inputAge">—</strong></div>
+        <div class="metric"><small>动作缓冲</small><strong id="queue">0</strong></div>
+        <div class="metric"><small>丢弃结果</small><strong id="discarded">0</strong></div>
+      </div>
+      <p id="modeHint" class="control-help">正在读取执行方式…</p>
+    </section>
+
+    <details class="diagnostics"><summary><h2>运行诊断</h2><span>设备、采样与加载信息</span></summary><div class="detail-content"><div class="diagnostic-meta"><span>状态 / epoch <b id="state">—</b></span><span>观测序号 <b id="sequence">—</b></span></div><pre id="diagnostics">等待服务状态</pre></div></details>
+    <footer><span>软件急停通过独立停止通道发送；未确认时请使用物理急停。</span><span id="updated">尚未更新</span><span>服务默认仅监听本机</span></footer>
+  </main>
+</body>
+</html>

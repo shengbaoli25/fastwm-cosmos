@@ -396,6 +396,30 @@ class RelaxedRuntimeTests(unittest.TestCase):
         finally:
             runtime.close()
 
+    def test_fast_async_keeps_one_completed_next_chunk_until_boundary(self):
+        class FastPolicy(MockPolicy):
+            pass
+
+        runtime = DeploymentRuntime(NORMALIZER, require_cuda=False, execution_mode="async_relaxed")
+        hardware, policy = MockHardware(), FastPolicy()
+        runtime.attach(hardware=hardware, policy=policy)
+        try:
+            runtime.start()
+            self.assertTrue(wait_until(lambda: runtime._pending_chunk and len(hardware.commands) >= 3))
+            # A sub-second model must not repeatedly replace the active action
+            # horizon with results from every 30 Hz camera frame.
+            calls = len(policy.references)
+            self.assertGreaterEqual(calls, 2)
+            time.sleep(0.2)
+            self.assertEqual(len(policy.references), calls)
+            self.assertTrue(runtime._pending_chunk)
+            self.assertTrue(wait_until(lambda: runtime.inference_count > calls and len(hardware.commands) > 32,
+                                       timeout=2.5))
+            self.assertIsNone(runtime.error)
+            runtime.pause()
+        finally:
+            runtime.close()
+
 
 class SynchronousRuntimeTests(unittest.TestCase):
     def test_full_chunk_finishes_before_next_post_stop_observation_and_inference(self):

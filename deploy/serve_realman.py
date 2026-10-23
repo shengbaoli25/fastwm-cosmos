@@ -15,6 +15,7 @@ sys.path.insert(0, str(ROOT / "src"))
 from realman_deploy.normalization import DatasetNormalizer
 from realman_deploy.runtime import DeploymentRuntime
 from realman_deploy.web import DeploymentWeb
+from realman_deploy.sampling import updated_config
 
 
 def main() -> int:
@@ -31,8 +32,13 @@ def main() -> int:
     if not normalizer_path.is_absolute():
         normalizer_path = config_path.parent / normalizer_path
     normalizer = DatasetNormalizer.from_json(normalizer_path)
+    if config.get("sampling_profile") is not None:
+        # Reject invalid profile/mode combinations before creating the server.
+        updated_config(config, config["sampling_profile"], config.get("execution_mode", "synchronous"))
     runtime = DeploymentRuntime(normalizer,
-        execution_mode=config.get("execution_mode", "timestamped"))
+        execution_mode=config.get("execution_mode", "synchronous"),
+        cuda_device=config.get("device", "cuda"),
+        sampling_profile=config.get("sampling_profile"))
     web = DeploymentWeb(runtime, catalog_path=args.catalog, config_path=config_path,
                         hardware_factory=config.get("hardware_factory"),
                         host=args.host, port=args.port)
