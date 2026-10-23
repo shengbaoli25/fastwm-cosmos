@@ -14,6 +14,7 @@ import time
 
 from .contracts import Observation
 from .normalization import DatasetNormalizer, OnlineHistory
+from .sampling import profile_steps
 
 
 logger = logging.getLogger(__name__)
@@ -33,11 +34,21 @@ class CosmosJointPolicy:
         self.tokenizer = None
         self.runner = None
         self.inference_backend = str(config.get("inference_backend", "reference"))
-        if self.inference_backend not in {"reference", "video_isolated_reuse", "joint_static_cache"}:
+        if config.get("sampling_profile") is not None:
+            profile_steps(config["sampling_profile"])
+            self.inference_backend = "joint_multirate"
+        if self.inference_backend not in {"reference", "video_isolated_reuse", "joint_static_cache", "joint_multirate"}:
             raise ValueError(f"Unknown inference_backend: {self.inference_backend}")
         self.text_index = 0
         self.inference_index = 0
         self.diagnostics = {}
+        if self.inference_backend in {"video_isolated_reuse", "joint_multirate"}:
+            # These backends may import TorchInductor/Triton. Choose a cache
+            # namespace before the first Torch import, scoped to this checkout
+            # and selected physical CUDA device.
+            from .device import configure_compile_cache
+            self.diagnostics["compile_cache"] = configure_compile_cache(
+                self.device, Path(__file__).resolve().parents[2])
         try:
             self._load()
         except Exception:
@@ -66,24 +77,28 @@ class CosmosJointPolicy:
         # Complete this work before the runtime can enter closed-loop control.
         from torchvision.transforms import InterpolationMode, Resize
         self._resize = Resize((224, 224), interpolation=InterpolationMode.BILINEAR, antialias=True)
-        if not torch.cuda.is_available() and self.device.startswith("cuda"):
-            raise RuntimeError("CUDA is unavailable; connect the external GPU before loading a checkpoint")
+        from .device import validate_device
+        device_info = validate_device(self.device)
+        self.device = device_info["device"]
+        self.diagnostics["device"] = device_info
         from fastwam.cosmos.assets import create_joint_cosmos_forcewm, create_noaction_joint_cosmos, load_tokenizer
         from fastwam.cosmos.noaction import SCHEMA
         payload = torch.load(self.checkpoint, map_location="cpu", weights_only=True, mmap=True)
         self.reference_mode = "none" if payload.get("schema") == SCHEMA else "rolling_ae"
         if self.reference_mode == "none" and self.inference_backend == "video_isolated_reuse":
             raise ValueError("New joint diffusion uses reference or joint_static_cache backend")
-        if self.reference_mode != "none" and self.inference_backend == "joint_static_cache":
-            raise ValueError("joint_static_cache requires the no-reference diffusion checkpoint")
+        if self.reference_mode != "none" and self.inference_backend in {"joint_static_cache", "joint_multirate"}:
+            raise ValueError("Joint sampling profiles require a Joint8 no-reference checkpoint")
         kwargs = dict(self.config["model_kwargs"])
         if self.reference_mode == "none":
             from .preprocessing import file_sha256
             normalization_sha = payload['manifest'].get('normalization_sha256')
             if not normalization_sha or file_sha256(self._path(self.config['normalization_file'])) != normalization_sha:
                 raise ValueError('Use the exact normalization.json bound during this RealMan training run')
-            if int(self.config.get('joint_steps', 16)) != payload['manifest']['num_inference_steps']:
-                raise ValueError('Joint sampler step count differs from the trained configuration')
+            # The trained architecture/manifest stays intact. Sampling schedules
+            # are an inference choice and do not change checkpoint identity.
+            if self.inference_backend != "joint_multirate" and int(self.config.get('joint_steps', 16)) < 1:
+                raise ValueError('Joint sampler step count must be positive')
             trained = payload["manifest"]["extra_config"]
             if (payload['manifest']['action_space'] != self.normalizer.action_space
                     or payload['manifest']['action_dim'] != self.normalizer.action_dim):
@@ -119,6 +134,15 @@ class CosmosJointPolicy:
     def _configure_inference(self) -> None:
         if self.inference_backend in {"reference", "joint_static_cache"}:
             return
+        if self.inference_backend == "joint_multirate":
+            from fastwam.cosmos.multirate import MultirateRunner
+            options = self.config.get("inference_optimization", {})
+            mode = str(options.get("mode", "auto"))
+            if mode in {"auto", "compile"}:
+                import torch._inductor.config as compiler_config
+                compiler_config.compile_threads = max(1, int(options.get("compile_threads", 2)))
+            self.runner = MultirateRunner(self.model, mode=mode)
+            return
         from fastwam.cosmos.inference import JointInferenceRunner
         options = self.config.get("inference_optimization", {})
         compile_future = bool(options.get("compile_future", True))
@@ -153,7 +177,7 @@ class CosmosJointPolicy:
                 profiles.append(dict(self.diagnostics["last_inference"]))
         finally:
             self.inference_index = 0
-        self.diagnostics = {"inference_backend": self.inference_backend, "warmup": profiles}
+        self.diagnostics = {**self.diagnostics, "inference_backend": self.inference_backend, "warmup": profiles}
         logger.info("Model initialization completed; synthetic warmup timings: %s", profiles)
 
     def _encode_image(self, observation: Observation):
@@ -199,12 +223,17 @@ class CosmosJointPolicy:
                 "cosmos_text_index": torch.tensor([self.text_index], device=self.device),
             }
             if getattr(self, "reference_mode", "rolling_ae") == "none":
-                result = self.model.infer_joint(sample,
-                    num_inference_steps=int(self.config.get("joint_steps", 16)),
-                    seed=int(self.config.get("action_seed", 42)) + self.inference_index,
-                    video_seed=int(self.config.get("video_seed", 44)),
-                    force_seed=int(self.config.get("force_seed", 43)),
-                    use_cache=self.inference_backend == "joint_static_cache")
+                seeds = dict(seed=int(self.config.get("action_seed", 42)) + self.inference_index,
+                             video_seed=int(self.config.get("video_seed", 44)),
+                             force_seed=int(self.config.get("force_seed", 43)))
+                if self.inference_backend == "joint_multirate":
+                    steps = profile_steps(self.config.get("sampling_profile", "161616"))
+                    result = self.runner.infer(sample, **steps, **seeds)
+                    self.diagnostics.update(sampling=steps, optimization=self.runner.diagnostics)
+                else:
+                    result = self.model.infer_joint(sample,
+                        num_inference_steps=int(self.config.get("joint_steps", 16)),
+                        use_cache=self.inference_backend == "joint_static_cache", **seeds)
             else:
                 reference = torch.tensor(normalized_reference, device=self.device,
                                         dtype=torch.bfloat16).unsqueeze(0)

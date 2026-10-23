@@ -38,6 +38,32 @@ def test_export_uses_training_steps_and_model_identity(tmp_path):
     assert runtime['execution_mode']=='synchronous' and runtime['task_prompt']=='new-cup-task'
     assert runtime['model_kwargs']['expected_data_identity']==manifest['dataset_identity']
     assert 'generated_video_steps' not in runtime['model_kwargs']
+    assert 'sampling_profile' not in runtime
+    assert runtime['device'] == 'cuda'
+
+
+def test_export_selects_ui_consistent_4416_profile_and_visible_cuda_device(tmp_path):
+    from realman_deploy.sampling import settings
+    config,manifest,paths=fixture(tmp_path)
+    runtime=export.runtime_config(config,manifest,**paths,sampling_profile='4416',
+        execution_mode='async_relaxed',device='cuda:1',optimization='cuda_graph')
+    ui=settings(runtime)
+    assert runtime['sampling_profile']=='4416'
+    assert runtime['inference_backend']=='joint_multirate'
+    assert runtime['device']=='cuda:1'
+    assert runtime['inference_optimization']=={'mode':'cuda_graph'}
+    assert ui['sampling_profile']=='4416' and ui['execution_mode']=='async_relaxed'
+
+
+@pytest.mark.parametrize('profile,mode,device',[
+    ('161616','async_relaxed','cuda'), ('4416','timestamped','cuda'),
+    ('unknown','synchronous','cuda'), ('4416','synchronous','cpu'),
+])
+def test_export_rejects_invalid_profile_mode_or_device(tmp_path,profile,mode,device):
+    config,manifest,paths=fixture(tmp_path)
+    with pytest.raises(ValueError):
+        export.runtime_config(config,manifest,**paths,sampling_profile=profile,
+            execution_mode=mode,device=device)
 
 
 @pytest.mark.parametrize('mismatch',['normalization','architecture','dataset'])
