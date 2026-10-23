@@ -177,7 +177,14 @@ class _CudaGraphCall:
             stream.synchronize()
             self.graph = torch.cuda.CUDAGraph()
             with torch.cuda.graph(self.graph, stream=stream):
-                output = function(*tree_unflatten(self.inputs, self.spec))
+                try:
+                    output = function(*tree_unflatten(self.inputs, self.spec))
+                except Exception:
+                    # capture_end can replace the original error when the stream
+                    # was invalidated. Log it before leaving the graph context.
+                    import logging
+                    logging.getLogger(__name__).exception("CUDA graph capture body failed")
+                    raise
             self.outputs, self.output_spec = tree_flatten(output)
             torch.cuda.current_stream(self.device).wait_stream(stream)
 

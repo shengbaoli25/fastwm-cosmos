@@ -48,6 +48,9 @@ h2 { font-size: 15px; font-weight: 600; }
 .device small, .device-detail { color: var(--muted); font-size: 11px; line-height: 1.7; }
 .device-detail { display: flex; gap: 24px; }
 .device-detail b { font-weight: 500; color: #354b42; margin-left: 5px; }
+.gripper-panel { margin-top: 18px; }
+.gripper-panel .section-heading { margin-bottom: 14px; }
+.gripper-panel .control-help { margin-bottom: 0; }
 .control-band { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 28px 0 18px; }
 .session > p { color: var(--muted); font-size: 12px; }
 .session-meta { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; color: var(--muted); font-size: 12px; margin-top: 12px; }

@@ -25,6 +25,12 @@
       <article class="device"><div class="device-heading"><h2>CUDA 推理设备</h2><span id="cudaBadge" class="badge">检查中</span></div><p id="cuda">正在读取设备信息</p><small id="cudaDetail">精度与计算后端在加载时确定</small></article>
     </section>
 
+    <section class="panel gripper-panel" aria-labelledby="gripperHeading">
+      <div class="section-heading"><div><h2 id="gripperHeading">CTAG2F120 夹爪</h2><p id="gripperDetail">先连接硬件，读取真实使能与开度</p></div></div>
+      <div class="button-row"><button id="gripperEnable" disabled>夹爪使能</button><button id="gripperDisable" disabled>夹爪失能</button><button id="gripperOpen" disabled>张开夹爪</button><button id="gripperClose" disabled>闭合夹爪</button><button id="gripperHold" disabled>取消待发目标</button></div>
+      <p class="control-help">手动开合会驱动夹爪；请先暂停推理。使能仅写使能寄存器并回读，不下发开合目标。取消待发目标不等同于中止已下发的夹爪运动。</p>
+    </section>
+
     <section class="control-band" aria-label="闭环控制">
       <div class="session"><h1 id="sessionTitle">真机推理控制台</h1><p id="modelMode">等待服务状态</p><div class="session-meta"><span id="activeProfile" class="badge">采样设置待确认</span><span id="executionMode">—</span><span id="executionPhase">—</span></div></div>
       <div class="commands"><button id="start" class="primary" disabled>开始推理与控制</button><button id="pause">暂停 / 缓停</button></div>

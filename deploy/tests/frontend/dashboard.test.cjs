@@ -166,3 +166,35 @@ test('missing settings never enables control with an unconfirmed schedule', asyn
   assert.equal(f.$('estop').disabled, false);
   assert.match(f.$('error').textContent, /设置读取失败/);
 });
+
+test('gripper enable uses the dedicated API and movement stays disabled until ready', async () => {
+  const f = fixture({hardware: {connected: true, gripper: {initialized: true, enabled: false, ready: false, opening: .4}}});
+  await f.dashboard.init();
+  assert.equal(f.$('gripperEnable').disabled, false);
+  assert.equal(f.$('gripperOpen').disabled, true);
+  assert.match(f.$('gripperDetail').textContent, /未使能.*40.0%/);
+  await f.$('gripperEnable').onclick();
+  assert.deepEqual(JSON.parse(f.posts('/api/gripper')[0].body), {operation: 'enable'});
+  f.state.status.hardware.gripper = {initialized: true, enabled: true, ready: true, opening: .4};
+  await f.dashboard.refreshStatus();
+  assert.equal(f.$('gripperEnable').disabled, true);
+  assert.equal(f.$('gripperOpen').disabled, false);
+  f.state.status.state = 'loading';
+  await f.dashboard.refreshStatus();
+  assert.equal(f.$('gripperOpen').disabled, true);
+  assert.equal(f.$('estop').disabled, false);
+  f.state.status.state = 'ready'; f.state.status.gripper_busy = true;
+  await f.dashboard.refreshStatus();
+  assert.equal(f.$('load').disabled, true);
+  assert.equal(f.$('start').disabled, true);
+});
+
+test('gripper display distinguishes measured opening, pending target and acknowledged target', async () => {
+  const f = fixture({hardware: {connected: true, gripper: {initialized: true, enabled: true,
+    ready: true, opening: .6, requested_opening: .1, last_sent: {opening: .25}}}});
+  await f.dashboard.init();
+  assert.match(f.$('gripperDetail').textContent, /实际开度 60.0%.*待发目标 10.0%.*已下发 25.0%/);
+  f.state.status.hardware.gripper.requested_opening = null;
+  await f.dashboard.refreshStatus();
+  assert.match(f.$('gripperDetail').textContent, /待发目标 无.*已下发 25.0%/);
+});

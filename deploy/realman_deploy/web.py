@@ -171,6 +171,8 @@ class DeploymentWeb:
                             web.connect_lock.release()
                     elif self.path == "/api/start":
                         web.runtime.start(); self._json({"state": "running"})
+                    elif self.path == "/api/gripper":
+                        self._json(web.runtime.control_gripper(str(body.get("operation", ""))))
                     elif self.path == "/api/pause":
                         web.runtime.pause(); self._json({"state": "paused"})
                     elif self.path == "/api/estop":

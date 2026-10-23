@@ -14,7 +14,7 @@
     let draft = {sampling_profile: '161616', execution_mode: 'synchronous'};
     const text = (id, value) => { $(id).textContent = value; };
     function badge(id, label, kind = '') { text(id, label); $(id).className = `badge ${kind}`; }
-    const inactive = () => online && status && !status.inference_busy &&
+    const inactive = () => online && status && !status.inference_busy && !status.gripper_busy &&
       ['idle', 'ready', 'paused', 'error'].includes(status.state) && !localEstop;
     const changed = () => settings && (draft.sampling_profile !== settings.sampling_profile ||
       draft.execution_mode !== settings.execution_mode);
@@ -64,6 +64,13 @@
       $('download').disabled = busy || !selected || selected.installed || selected.source === 'local' || localEstop;
       $('load').disabled = locked || !selected?.installed || !status?.cuda?.available || !settings || changed();
       $('connect').disabled = locked;
+      const gripper = status?.hardware?.gripper;
+      const gripperLocked = locked || !status?.hardware?.connected || !gripper?.initialized;
+      $('gripperEnable').disabled = gripperLocked || gripper?.enabled === true;
+      $('gripperDisable').disabled = gripperLocked || gripper?.enabled !== true;
+      $('gripperOpen').disabled = gripperLocked || !gripper?.ready;
+      $('gripperClose').disabled = gripperLocked || !gripper?.ready;
+      $('gripperHold').disabled = gripperLocked;
       $('start').disabled = locked || !settings || !status?.model_ready || !status?.robot_ready || !status?.cameras_ready ||
         !status?.force_ready || !status?.gripper_ready || !status?.cuda?.available || changed() ||
         !['ready', 'paused', 'idle'].includes(status?.state);
@@ -83,6 +90,10 @@
       badge('cameras', s.cameras_ready ? '双路就绪' : '未就绪', s.cameras_ready ? 'good' : 'warn');
       text('force', s.force_ready ? '就绪' : '未就绪');
       text('gripper', s.gripper_ready ? '就绪' : '未就绪');
+      const gripper = s.hardware?.gripper;
+      text('gripperDetail', gripper?.initialized
+        ? `${gripper.enabled ? '已使能' : '未使能'} · 实际开度 ${Number.isFinite(gripper.opening) ? (gripper.opening * 100).toFixed(1) + '%' : '未知'} · 待发目标 ${Number.isFinite(gripper.requested_opening) ? (gripper.requested_opening * 100).toFixed(1) + '%' : '无'} · 已下发 ${Number.isFinite(gripper.last_sent?.opening) ? (gripper.last_sent.opening * 100).toFixed(1) + '%' : '未知'}${gripper.error ? ' · ' + gripper.error : ''}`
+        : '先连接硬件，读取真实使能与开度');
       badge('cudaBadge', s.cuda?.available ? '可用' : s.cuda?.checking ? '检查中' : '不可用', s.cuda?.available ? 'good' : s.cuda?.checking ? 'warn' : 'bad');
       text('cuda', s.cuda?.available ? `${s.cuda.device}${s.cuda.total_bytes ? ` · ${(s.cuda.total_bytes / 1e9).toFixed(1)} GB` : ''}` : s.cuda?.checking ? '正在检查 CUDA 驱动' : '请检查 CUDA 环境与驱动');
       const diagnostic = s.model_diagnostics || {};
@@ -212,6 +223,10 @@
     });
     $('load').onclick = () => action('load', '/api/select', {id: $('checkpoint').value});
     $('connect').onclick = () => action('connect', '/api/connect');
+    for (const [id, operation] of Object.entries({gripperEnable: 'enable', gripperDisable: 'disable',
+      gripperOpen: 'open', gripperClose: 'close', gripperHold: 'hold'})) {
+      $(id).onclick = () => action(id, '/api/gripper', {operation});
+    }
     $('start').onclick = () => action('start', '/api/start');
     $('pause').onclick = () => stop(false);
     $('estop').onclick = () => stop(true);

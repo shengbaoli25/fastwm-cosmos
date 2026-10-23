@@ -106,17 +106,22 @@ def inspect_config(config_path, *, checkpoint=None, hardware_libraries=False):
             digests = {}
             for node in tree.body:
                 if isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
-                    if node.targets[0].id in {"WEIGHT_SHA", "TOKENIZER_SHA"}:
+                    if node.targets[0].id in {"WEIGHT_SHA", "NONACTION_WEIGHT_SHA", "TOKENIZER_SHA"}:
                         digests[node.targets[0].id] = ast.literal_eval(node.value)
-            if len(digests) != 2:
+            if len(digests) != 3:
                 raise ValueError("仓库中缺少官方 asset SHA pin")
             base_digest = sha256_file(paths["checkpoint"])
             tokenizer_digest = sha256_file(paths["tokenizer"])
-            if base_digest != digests["WEIGHT_SHA"]:
-                raise ValueError("Cosmos action-conditioned 基座权重 SHA256 不匹配")
+            variants = {digests["WEIGHT_SHA"]: "action-conditioned",
+                        digests["NONACTION_WEIGHT_SHA"]: "base/post-trained"}
+            if base_digest not in variants:
+                raise ValueError("Cosmos 基座权重 SHA256 与固定的官方版本不匹配")
             if tokenizer_digest != digests["TOKENIZER_SHA"]:
                 raise ValueError("Cosmos tokenizer SHA256 不匹配")
-            return dict(base_checkpoint_sha256=base_digest, tokenizer_sha256=tokenizer_digest)
+            # The loader selects the factory from the trained checkpoint schema
+            # and enforces that factory's exact base identity again.
+            return dict(base_checkpoint_sha256=base_digest, base_variant=variants[base_digest],
+                        tokenizer_sha256=tokenizer_digest)
         record("official_cosmos_assets", official_assets_check)
 
     normalizer = None
@@ -164,7 +169,9 @@ def inspect_config(config_path, *, checkpoint=None, hardware_libraries=False):
             return dict(prompts=prompts, identity_sha256=digest, payload_sha256=payload_hashes)
         record("text_manifest", text_check)
 
-    if paths.get("hardware_config"):
+    if paths.get("hardware_config") and config.get("hardware_factory", "realman_deploy.hardware:make_hardware") is None:
+        warn("hardware_config_only", "离线部署：hardware_factory 为 null，硬件连接已禁用；未验证实机 IP、相机或 SDK 配置。")
+    elif paths.get("hardware_config"):
         def hardware_check():
             from realman_deploy.hardware import RealManHardwareAdapter
             # __init__ opens real hardware: call only the pure config validator.

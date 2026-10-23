@@ -4,6 +4,7 @@ import importlib.util
 import json
 from pathlib import Path
 import sys
+import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(ROOT / 'deploy'), str(ROOT / 'src')]
@@ -100,3 +101,31 @@ def test_missing_config_returns_failure_json_without_exception(tmp_path, capsys)
     assert result['ok'] is False
     assert result['hardware_connected'] is False
     assert result['model_loaded'] is False
+
+
+def test_explicitly_offline_deployment_reports_hardware_unverified(tmp_path):
+    path, config = fixture_config(tmp_path)
+    config['hardware_factory'] = None
+    path.write_text(json.dumps(config))
+    (tmp_path / 'hardware.json').write_text('{"action_space": "joint8"}')
+    checks = {c['name']: c for c in doctor.inspect_config(path)['checks']}
+    assert checks['hardware_config_only']['status'] == 'warning'
+    assert 'hardware_factory' in checks['hardware_config_only']['detail']
+
+
+@pytest.mark.parametrize('base_digest,valid', [
+    ('565bbb2c9645737327983f4461e4d32627bba465b0a8dc26447edea144e1ff47', True),
+    ('0' * 64, False),
+])
+def test_nonaction_official_base_is_supported_without_accepting_unknown_weights(tmp_path, monkeypatch, base_digest, valid):
+    path, _ = fixture_config(tmp_path)
+    monkeypatch.setattr(doctor.importlib.metadata, 'version', lambda name: 'test')
+    monkeypatch.setattr(doctor, 'sha256_file', lambda path: {
+        'base.pt': base_digest,
+        'tokenizer.pth': '38071ab59bd94681c686fa51d75a1968f64e470262043be31f7a094e442fd981',
+        'context.safetensors': hashlib.sha256(b'').hexdigest()}[Path(path).name])
+    monkeypatch.setitem(sys.modules, 'torch', None)
+    checks = {c['name']: c for c in doctor.inspect_config(path)['checks']}
+    assert (checks['official_cosmos_assets']['status'] == 'ok') is valid
+    if valid:
+        assert checks['official_cosmos_assets']['detail']['base_variant'] == 'base/post-trained'

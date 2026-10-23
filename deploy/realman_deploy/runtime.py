@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import json
 import threading
 import time
 from typing import Callable
@@ -57,6 +58,7 @@ class DeploymentRuntime:
         self._threads: list[threading.Thread] = []
         self._load_thread: threading.Thread | None = None
         self._infer_active = False
+        self._manual_active = False
         self._estop_latched = False
         self._relaxed_holding = False
         self._relaxed_end_at = 0.0
@@ -65,6 +67,8 @@ class DeploymentRuntime:
         self.input_age_at_result_ms: float | None = None
 
     def _require_inactive(self) -> None:
+        if self._manual_active:
+            raise RuntimeError("夹爪操作正在进行，请等待回读")
         if self._estop_latched:
             raise RuntimeError("急停已锁存；检查机械臂并在本地复位后重启部署服务")
         if self.state in ("running", "loading", "stopping", "stopped") or self._infer_active:
@@ -140,6 +144,22 @@ class DeploymentRuntime:
         if status.get('action_space','eef_pose7') != self.normalizer.action_space:
             raise ValueError('Hardware and policy action space differ; joint8 requires joint commands in radians')
 
+    def control_gripper(self, operation: str) -> dict:
+        if operation not in {"enable", "disable", "open", "close", "hold"}:
+            raise ValueError("未知夹爪操作")
+        with self._command_lock:
+            with self.lock:
+                self._require_inactive()
+                hardware = self.hardware
+                if hardware is None or not hasattr(hardware, "control_gripper"):
+                    raise RuntimeError("请先连接支持夹爪控制的硬件")
+                self._manual_active = True
+            try:
+                return hardware.control_gripper(operation)
+            finally:
+                with self.lock:
+                    self._manual_active = False
+
     def load_policy_async(self, factory: Callable[[str], PolicyAdapter], checkpoint: str) -> None:
         with self.lock:
             self._require_inactive()
@@ -158,6 +178,7 @@ class DeploymentRuntime:
                             self.policy, new = new, None
                             self.state = "ready"
                 except Exception as exc:
+                    logger.exception("Policy load failed for %s", checkpoint)
                     with self.lock:
                         if self.gate.accepts(epoch):
                             self.state, self.error = "error", f"load: {exc}"
@@ -283,6 +304,11 @@ class DeploymentRuntime:
             raise ValueError(f"AE output must be Action32x{self.normalizer.action_dim}")
         predicted = self.normalizer.decode("action", normalized_actions)
         execution = [row[:-1] + [max(0.0, min(1.0, row[-1]))] for row in predicted]
+        logger.info('Gripper policy chunk %s', json.dumps(dict(
+            epoch=epoch, source_sequence=observation.sequence, source_stamp=observation.stamp,
+            measured_opening=observation.state[-1],
+            decoded_openings=[row[-1] for row in predicted],
+            execution_openings=[row[-1] for row in execution]), allow_nan=False))
         finished = self.clock()
         chunk = ActionChunk(observation.sequence, observation.stamp, epoch,
                             tuple(tuple(row) for row in execution), finished, self.normalizer.action_space)
@@ -492,6 +518,7 @@ class DeploymentRuntime:
             result.update(reference_mode="none" if no_reference else "rolling_ae",
                           bootstrap=None if no_reference else self.reference.bootstrap(),
                           inference_busy=self._infer_active, hardware=hardware,
+                          gripper_busy=self._manual_active,
                           execution_mode=self.execution_mode,
                           sampling_profile=self.sampling_profile,
                           execution_phase=phase,
