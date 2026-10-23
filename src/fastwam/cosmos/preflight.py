@@ -11,13 +11,16 @@ ROOT=Path(__file__).resolve().parents[3]
 
 def validate_config(cfg):
     noaction = cfg['model']['_target_'] == 'fastwam.cosmos.assets.create_noaction_joint_cosmos'
+    query_posttrain = noaction and cfg['model'].get('visual_query_posttrain') is True
     batch,steps = cfg.get('batch_size'),cfg.get('max_steps')
-    if noaction and (batch not in (16,32,64) or steps not in (1000,20000,30000)):
-        raise ValueError('Joint8 requires an authorized batch16/32/64 and 1000/20000/30000 schedule')
+    valid_steps = (5000,) if query_posttrain else (1000,20000,30000)
+    if noaction and (batch not in (16,32,64) or steps not in valid_steps):
+        raise ValueError('Joint8 requires the approved batch/schedule for its selected training mode')
     expected={'batch_size':batch if noaction else 16,'gradient_accumulation_steps':1,
         'max_steps':steps if noaction else 30000,'save_every':1000 if noaction and steps == 1000 else 5000,
         'learning_rate':1e-4,'weight_decay':.01,'mixed_precision':'bf16',
-        'seed':42,'resume':None,'lr_scheduler_type':'cosine','eval_every':0}
+        'seed':42,'resume':None,'lr_scheduler_type':'cosine','eval_every':0,
+        'num_workers':8,'max_grad_norm':1.,'eval_num_inference_steps':16}
     if any(cfg.get(k)!=v for k,v in expected.items()):
         raise ValueError('Exact configured batch/accum1/schedule/save recipe required')
     if cfg['data'].get('val') is not None:
@@ -28,12 +31,21 @@ def validate_config(cfg):
                         force_heads=16, force_shift=1., num_inference_steps=16,
                         action_seed=42, force_seed=43, memory_seed=44, action_space='joint8')
         if (any(m.get(k) != v for k, v in required.items())
-                or any(k in m for k in ('control_seed', 'initial_checkpoint', 'action_condition'))
+                or 'control_seed' in m or 'action_condition' in m
                 or d['_target_'] != 'fastwam.cosmos.cache.CosmosCachedDataset'
                 or len(d.get('expected_identity_sha256', '')) != 64
                 or len(m.get('expected_text_identity', '')) != 64 or not d.get('require_production')
                 or m.get('expected_data_identity') != d['expected_identity_sha256']):
             raise ValueError('Bound no-reference Cosmos/AE768/Force768 diffusion configuration required')
+        if query_posttrain:
+            query = dict(query_count=4, query_dim=256, query_temperature=.07,
+                         query_diversity_weight=.01, query_diversity_margin=.7,
+                         query_route_scale_init=.05)
+            if (steps != 5000 or batch != 64 or any(m.get(k) != v for k, v in query.items())
+                    or not m.get('initial_checkpoint') or len(m.get('initial_checkpoint_sha256', '')) != 64):
+                raise ValueError('Bound 20k visual-query warm start and unchanged batch64 5k recipe required')
+        elif any(k in m for k in ('initial_checkpoint', 'initial_checkpoint_sha256')):
+            raise ValueError('Baseline no-reference run must not warm-start')
         return
     if (m['_target_'] not in ('fastwam.cosmos.assets.create_cosmos_forcewm',
                               'fastwam.cosmos.assets.create_joint_cosmos_forcewm')
@@ -120,6 +132,19 @@ def execute(config_path,output):
     force_probe = (model.dit['force'].force_encoder.weight if hasattr(model.dit['force'], 'force_encoder')
                    else model.dit['force'].queries)
     handles.append(force_probe.register_hook(record_query_gradient))
+    selector_gradients=[]; route_gradients=[]
+    if query_posttrain:
+        selector=model.dit['visual_queries']
+        def record_selector_gradient(gradient):
+            selector_gradients.append({'finite':bool(torch.isfinite(gradient).all()),
+                'all_queries_nonzero':bool(gradient.float().abs().sum(-1).gt(0).all())})
+            return gradient
+        handles.append(selector.queries.register_hook(record_selector_gradient))
+        def record_route_gradient(gradient):
+            route_gradients.append({'finite':bool(torch.isfinite(gradient).all()),
+                                    'nonzero':bool(gradient.float().abs().sum().gt(0))})
+            return gradient
+        handles.append(selector.route_scale.register_hook(record_route_gradient))
     for i,block in enumerate(model.dit['force'].blocks):
         def count(module,args,out,i=i):layer_calls[i]+=1
         handles.append(block.register_forward_hook(count))
@@ -131,6 +156,10 @@ def execute(config_path,output):
         'actual_engine_updates':int(engine.global_steps),'scheduler':h.inspect_scheduler(trainer.scheduler),
         **h.inspect_adam(adam),'losses':losses,'updates':updates,'chunk_layer_calls':layer_calls,'query_gradients':query_gradients,
         'force_gradient_target':'input_encoder' if hasattr(model.dit['force'], 'force_encoder') else 'learned_queries',
+        'visual_query_gradients':selector_gradients,
+        'visual_route_gradients':route_gradients,
+        'visual_backbone_frozen':not any(p.requires_grad for p in model.dit['video'].parameters()),
+        'proprio_encoder_frozen':not any(p.requires_grad for p in model.proprio_encoder.parameters()),
         'all_parameters_finite':all(h._finite(p) for p in model.parameters()),
         'startup_seconds':startup,'peak_allocated_gib':torch.cuda.max_memory_allocated()/2**30,
         'peak_reserved_gib':torch.cuda.max_memory_reserved()/2**30,
@@ -143,6 +172,15 @@ def execute(config_path,output):
         and report['adam_master_and_moments_finite'] and min(layer_calls)>=2
         and len(query_gradients)==2 and all(g['finite'] and g['all_queries_nonzero'] for g in query_gradients)
         and all(not u['optimizer_step_was_skipped'] for u in updates))
+    if query_posttrain:
+        accepted=(accepted and len(selector_gradients)==2
+            and all(g['finite'] and g['all_queries_nonzero'] for g in selector_gradients)
+            and len(route_gradients)==2 and all(g['finite'] and g['nonzero'] for g in route_gradients)
+            and report['visual_backbone_frozen'] and report['proprio_encoder_frozen']
+            and all(p.requires_grad for p in selector.parameters())
+            and all(p.requires_grad for p in model.dit['force'].parameters())
+            and all(p.requires_grad for p in model.dit['action'].parameters())
+            and not any(p.requires_grad for p in model.dit['video'].parameters()))
     from .persistence import resource_identity,training_state_fingerprints
     report['resource']=resource_identity()
     trainer.checkpoint_root=str(output/'checkpoint')

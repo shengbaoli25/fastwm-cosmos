@@ -1,0 +1,32 @@
+_target_: fastwam.cosmos.assets.create_noaction_joint_cosmos
+upstream: third_party/cosmos-predict2.5
+checkpoint: checkpoints/cosmos/base/post-trained/81edfebe-bd6a-4039-8c1d-737df1a790bf_ema_bf16.pt
+text_cache: data/cosmos_reason1
+expected_text_identity: ???
+expected_data_identity: ???
+expected_normalization_sha256: null
+initial_checkpoint: null
+initial_checkpoint_sha256: null
+visual_query_posttrain: true
+action_seed: 42
+force_seed: 43
+memory_seed: 44
+num_inference_steps: 16
+gradient_checkpointing: true
+action_hidden: 768
+action_space: joint8
+action_ffn: 3072
+force_hidden: 768
+force_ffn: 2048
+force_heads: 16
+force_shift: 1.0
+fps: 7.5
+query_count: 4
+query_dim: 256
+query_temperature: 0.07
+query_diversity_weight: 0.01
+query_diversity_margin: 0.7
+query_route_scale_init: 0.05
+training_recipe:
+  batch_per_rank: ${batch_size}
+  max_steps: ${max_steps}

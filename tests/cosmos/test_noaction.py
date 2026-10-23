@@ -155,6 +155,37 @@ def test_joint8_requested_batch64_schedules(steps,save):
     with pytest.raises(ValueError):validate_config(c)
 
 
+def test_visual_query_posttrain_pins_step20000_and_original_recipe():
+    with initialize_config_dir(config_dir=str(ROOT/'configs'),version_base=None):
+        cfg=compose(config_name='train',overrides=['task=cosmos_noaction_query_posttrain_4gpu_5k',
+            'model.expected_text_identity='+'a'*64,'model.expected_data_identity='+'b'*64,
+            'data.train.expected_identity_sha256='+'b'*64,
+            'model.initial_checkpoint=/tmp/step_020000.pt','model.initial_checkpoint_sha256='+'c'*64])
+    c=OmegaConf.to_container(cfg,resolve=True,throw_on_missing=True);validate_config(c)
+    assert c['batch_size']==64 and c['max_steps']==5000 and c['save_every']==5000
+    assert c['num_workers']==8 and c['learning_rate']==1e-4 and c['max_grad_norm']==1.
+    assert c['model']['training_recipe']==dict(batch_per_rank=64,max_steps=5000)
+    for field,value in [('num_workers',4),('max_grad_norm',.9),('eval_num_inference_steps',8)]:
+        altered=copy.deepcopy(c);altered[field]=value
+        with pytest.raises(ValueError):validate_config(altered)
+
+
+def test_visual_query_posttrain_freezes_video_and_trains_interaction_path():
+    torch.manual_seed(11)
+    m=NoActionJointModel(net(),manifest={'scope':'test'},action_hidden=24,action_ffn=48,
+        force_hidden=24,force_ffn=48,force_heads=2,gradient_checkpointing=False,
+        action_space='eef_pose7',visual_query_posttrain=True,query_dim=16)
+    assert m.configure_training_parameters()
+    assert all(not p.requires_grad for p in m.video.parameters())
+    assert all(not p.requires_grad for p in m.proprio_encoder.parameters())
+    for name in ('action','force','action_source_time','visual_queries'):
+        assert all(p.requires_grad for p in m.dit[name].parameters())
+    s=sample(1);loss,metrics=m.training_loss(s);loss.backward()
+    assert torch.isfinite(loss) and 'loss_query_diversity' in metrics
+    assert m.dit['visual_queries'].route_scale.grad is not None
+    assert torch.isfinite(m.dit['visual_queries'].route_scale.grad)
+
+
 def test_bf16_training_and_inference_have_finite_outputs():
     m=model().to(dtype=torch.bfloat16);s=sample(1)
     # oneDNN on AVX2 does not implement BF16 backward; use native CPU kernels.

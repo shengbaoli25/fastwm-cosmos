@@ -147,7 +147,8 @@ def load_nonaction_video(upstream, checkpoint, *, device='cuda', dtype=torch.bfl
 
 
 def create_noaction_joint_cosmos(*, upstream, checkpoint, text_cache, expected_text_identity, expected_data_identity,
-                                expected_normalization_sha256=None, training_recipe=None, device='cuda', **kwargs):
+                                expected_normalization_sha256=None, training_recipe=None, device='cuda',
+                                initial_checkpoint=None, initial_checkpoint_sha256=None, **kwargs):
     from .noaction import NoActionJointModel
     bank, _, digest = read_text_bank(text_cache)
     if digest != expected_text_identity:
@@ -165,4 +166,12 @@ def create_noaction_joint_cosmos(*, upstream, checkpoint, text_cache, expected_t
         normalization_sha256=expected_normalization_sha256,
         tokenizer_sha256=TOKENIZER_SHA, text_identity=digest,
         extra_config=kwargs, recipe=recipe)
-    return NoActionJointModel(net, manifest=manifest, text_bank=bank, **kwargs).to(device=device, dtype=torch.bfloat16)
+    model = NoActionJointModel(net, manifest=manifest, text_bank=bank, **kwargs)
+    if initial_checkpoint is not None:
+        if not model.visual_query_posttrain or initial_checkpoint_sha256 is None:
+            raise ValueError('Model-only baseline warm start requires visual-query post-training and SHA256')
+        from .noaction import warm_start_visual_query_posttrain
+        warm_start_visual_query_posttrain(model, initial_checkpoint, initial_checkpoint_sha256)
+    elif initial_checkpoint_sha256 is not None:
+        raise ValueError('Initial checkpoint path required with its SHA256')
+    return model.to(device=device, dtype=torch.bfloat16)

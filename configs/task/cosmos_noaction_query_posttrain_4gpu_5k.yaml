@@ -1,0 +1,10 @@
+# @package _global_
+defaults:
+  - cosmos_forcewm_4gpu_30k
+  - override /model: cosmos_noaction_visual_query
+  - _self_
+
+batch_size: 64
+max_steps: 5000
+save_every: 5000
+output_dir: runs/realman-cup-noaction-query-posttrain-4rank-5k

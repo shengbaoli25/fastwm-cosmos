@@ -6,7 +6,7 @@ def run_two_updates(trainer, *, synchronize, clock=time.monotonic):
     import torch
 
     horizon=trainer.max_steps
-    if horizon not in (1000,20000,30000) or trainer.global_step != 0:
+    if horizon not in (1000,5000,20000,30000) or trainer.global_step != 0:
         raise ValueError("Probe requires a fresh trainer with the complete configured schedule")
     accelerator = trainer.accelerator
     train_model = (trainer.model if hasattr(trainer.model, 'training_loss')

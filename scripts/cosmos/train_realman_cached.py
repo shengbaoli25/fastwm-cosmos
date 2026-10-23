@@ -15,8 +15,18 @@ def main():
     for name in ('dataset', 'source-sha', 'prepared', 'work', 'run-root', 'checkpoint'):
         parser.add_argument('--' + name, required=True)
     parser.add_argument('--batch-size',type=int,choices=[16,32,64],default=16)
-    parser.add_argument('--max-steps',type=int,choices=[1000,20000,30000],default=30000)
+    parser.add_argument('--max-steps',type=int,choices=[1000,5000,20000,30000],default=30000)
+    parser.add_argument('--task',choices=['cosmos_noaction_joint_4gpu_30k','cosmos_noaction_query_posttrain_4gpu_5k'],default='cosmos_noaction_joint_4gpu_30k')
+    parser.add_argument('--initial-checkpoint')
+    parser.add_argument('--initial-checkpoint-sha256')
     args = parser.parse_args()
+    query_posttrain=args.task=='cosmos_noaction_query_posttrain_4gpu_5k'
+    if query_posttrain:
+        if (args.max_steps!=5000 or args.batch_size!=64 or not args.initial_checkpoint
+                or not args.initial_checkpoint_sha256 or len(args.initial_checkpoint_sha256)!=64):
+            raise ValueError('Query post-training requires batch64, 5000 updates, and a SHA-bound initial checkpoint')
+    elif args.initial_checkpoint is not None or args.initial_checkpoint_sha256 is not None:
+        raise ValueError('Initial checkpoint is exclusive to query post-training')
     from distributed_fresh import clean_environment
     env = clean_environment(os.environ, ROOT)
     os.environ.clear()
@@ -54,14 +64,14 @@ def main():
         prepared=str(prepared), dataset_source_sha=source.source_sha,
         cache_identity=manifest['identity_sha256'], samples=len(source),
         joint_protocol=JOINT_PROTOCOL, branch_reads=BRANCH_READS,
-        model_warm_start=False, optimizer_resume=False))
+        model_warm_start=query_posttrain, initial_checkpoint=args.initial_checkpoint,
+        initial_checkpoint_sha256=args.initial_checkpoint_sha256, optimizer_resume=False))
     del source
     # The resolver verifies every shard, text pairing, official weights and
     # pinned upstream before this independent run may enter its GPU gates.
-    with (work / 'resolve.log').open('w') as log:
-        subprocess.run([
+    resolver = [
             sys.executable, '-u', str(ROOT / 'scripts/cosmos/resolve_config.py'),
-            '--task', 'cosmos_noaction_joint_4gpu_30k',
+            '--task', args.task,
             '--batch-size',str(args.batch_size),'--max-steps',str(args.max_steps),
             '--normalization', str(work / 'normalization.json'),
             '--text-cache', str(prepared / 'text'),
@@ -70,10 +80,18 @@ def main():
             '--upstream', str(ROOT / 'third_party/cosmos-predict2.5'),
             '--output-dir', str(work / 'config-placeholder'),
             '--config-output', str(work / 'resolved.yaml'),
-        ], check=True, cwd=ROOT, stdout=log, stderr=subprocess.STDOUT)
+        ]
+    if query_posttrain:
+        resolver.extend(['--initial-checkpoint', args.initial_checkpoint,
+                         '--initial-checkpoint-sha256', args.initial_checkpoint_sha256])
+    with (work / 'resolve.log').open('w') as log:
+        subprocess.run(resolver, check=True, cwd=ROOT, stdout=log, stderr=subprocess.STDOUT)
     cfg = OmegaConf.load(work / 'resolved.yaml')
-    if cfg.model.get('initial_checkpoint') is not None or cfg.max_steps != args.max_steps:
-        raise ValueError('Fresh official initialization and the requested complete schedule required')
+    expected_initial = str(Path(args.initial_checkpoint).resolve()) if query_posttrain else None
+    if (cfg.model.get('initial_checkpoint') != expected_initial
+            or cfg.model.get('initial_checkpoint_sha256') != (args.initial_checkpoint_sha256 if query_posttrain else None)
+            or cfg.max_steps != args.max_steps):
+        raise ValueError('Requested checkpoint warm-start mode and complete training schedule do not match the resolved config')
     print('REALMAN_NOACTION_DIFFUSION_CACHE_VERIFIED', flush=True)
     os.execv(sys.executable, [
         sys.executable, '-u', str(ROOT / 'scripts/cosmos/distributed_chunk.py'),

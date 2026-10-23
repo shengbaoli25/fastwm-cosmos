@@ -12,7 +12,7 @@ MAX_OPTIMIZER_GROUP_NUMEL = 1_000_000_000
 
 
 def bounded_optimizer_param_groups(model, parameters, *, max_group_numel=MAX_OPTIMIZER_GROUP_NUMEL):
-    """Group the exact official DiT/proprio list by dtype, then stable size.
+    """Group the exact requires-grad DiT/proprio list by dtype, then stable size.
 
     Every group contains only ``params`` and inherits all AdamW defaults. No
     parameter is split, duplicated, dropped or moved to another dtype/device.
@@ -21,9 +21,9 @@ def bounded_optimizer_param_groups(model, parameters, *, max_group_numel=MAX_OPT
     if isinstance(max_group_numel, bool) or not isinstance(max_group_numel, int) or not 0 < max_group_numel < 2**31:
         raise ValueError("Optimizer group cap must be a positive integer below 2**31")
     parameters = list(parameters)
-    expected = list(model.dit.parameters())
+    expected = [parameter for parameter in model.dit.parameters() if parameter.requires_grad]
     if getattr(model, "proprio_encoder", None) is not None:
-        expected.extend(model.proprio_encoder.parameters())
+        expected.extend(parameter for parameter in model.proprio_encoder.parameters() if parameter.requires_grad)
     identifiers = [id(parameter) for parameter in parameters]
     expected_identifiers = [id(parameter) for parameter in expected]
     if (not identifiers or len(set(identifiers)) != len(identifiers) or

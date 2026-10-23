@@ -39,16 +39,21 @@ def main():
     if (not native.is_absolute() or native.parent.name != 'bin'
             or native.parent.parent.name != '.venv' or not run.is_absolute()):
         raise ValueError('Absolute run path and original .venv/bin/python invocation required')
+    from omegaconf import OmegaConf
+    from fastwam.cosmos.preflight import validate_config
+    cfg = OmegaConf.load(args.config)
+    validate_config(OmegaConf.to_container(cfg, resolve=True, throw_on_missing=True))
     commands = phase_commands(native, ROOT, run)
     if not args.execute:
         print(json.dumps({'mode': 'plan_only', 'commands': commands, 'resume': False,
-                          'ranks': 4, 'global_batch': 64, 'max_steps': 30000}))
+                          'ranks': 4, 'global_batch': 4 * int(cfg.batch_size),
+                          'batch_size_per_rank': int(cfg.batch_size),
+                          'gradient_accumulation_steps': int(cfg.gradient_accumulation_steps),
+                          'max_steps': int(cfg.max_steps)}))
         return
     if not native.is_file() or Path(sys.executable) != native:
         raise ValueError('Invoke this foreground command with the original native Python')
     sys.path[:0] = [str(ROOT/'src'), str(ROOT)]
-    from omegaconf import OmegaConf
-    from fastwam.cosmos.preflight import validate_config
     from fastwam.cosmos.persistence import resource_identity
     from bounded_probe import execute
     if not os.environ.get('TRAIN_JOB_ID'):
@@ -56,8 +61,6 @@ def main():
     env = clean_environment(os.environ, ROOT)
     os.environ.clear(); os.environ.update(env)
     resource = resource_identity()
-    cfg = OmegaConf.load(args.config)
-    validate_config(OmegaConf.to_container(cfg, resolve=True, throw_on_missing=True))
     original = OmegaConf.to_container(cfg, resolve=True, throw_on_missing=True)
     cfg = OmegaConf.create(new_recipe(original, run))
     run.mkdir(parents=False, exist_ok=False)

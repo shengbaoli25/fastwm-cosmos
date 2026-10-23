@@ -18,6 +18,7 @@ from fastwam.models.wan22.wan_video_dit import sinusoidal_embedding_1d, modulate
 from fastwam.models.wan22.schedulers.scheduler_continuous import WanContinuousFlowMatchScheduler
 
 SCHEMA = 'cosmos-noaction-vfa-diffusion28-joint8-v2'
+QUERY_POSTTRAIN_SCHEMA = 'cosmos-noaction-vfa-diffusion28-joint8-query-posttrain-v1'
 BRANCH_READS = ((1, 0, 0), (1, 1, 0), (1, 1, 1))
 
 
@@ -34,9 +35,63 @@ def frame_slice(prepared, start, end):
             'grid': (end - start, *prepared['grid'][1:]), 'state': state}
 
 
-def attend(q, k, v, valid=None):
-    mask = None if valid is None else valid[:, None, None, :]
+def attend(q, k, v, valid=None, bias=None):
+    if bias is not None:
+        mask = bias.to(dtype=q.dtype)
+        if valid is not None:
+            mask = mask.masked_fill(~valid[:, None, None, :], -torch.inf)
+    else:
+        mask = None if valid is None else valid[:, None, None, :]
     return F.scaled_dot_product_attention(q, k, v, attn_mask=mask, dropout_p=0.)
+
+
+class ActionConditionedVisualQueries(nn.Module):
+    """Action-conditioned distributions over current-frame visual keys."""
+    def __init__(self, *, video_dim, action_dim, query_dim=256, num_queries=4,
+                 temperature=0.07, diversity_margin=0.7, route_scale_init=0.05):
+        super().__init__()
+        if num_queries < 2 or query_dim < 8 or temperature <= 0:
+            raise ValueError('At least two queries, positive query width and temperature required')
+        self.num_queries = int(num_queries)
+        self.temperature = float(temperature)
+        self.diversity_margin = float(diversity_margin)
+        self.visual_norm = nn.LayerNorm(query_dim)
+        self.action_norm = nn.LayerNorm(query_dim)
+        self.visual_proj = nn.Linear(video_dim, query_dim, bias=False)
+        self.action_proj = nn.Linear(action_dim, query_dim, bias=False)
+        self.query_norm = nn.LayerNorm(query_dim)
+        self.queries = nn.Parameter(torch.randn(num_queries, query_dim) / query_dim ** 0.5)
+        self.route_scale = nn.Parameter(torch.tensor(float(route_scale_init)))
+
+    def forward(self, observed_keys, action_tokens, action_valid):
+        if (observed_keys.ndim != 3 or action_tokens.ndim != 3
+                or action_valid.shape != action_tokens.shape[:2]
+                or action_valid.dtype != torch.bool):
+            raise ValueError('Visual keys [B,N,D], action tokens [B,T,D], and boolean validity required')
+        visual = F.normalize(self.visual_norm(self.visual_proj(observed_keys).float()), dim=-1)
+        action = self.action_norm(self.action_proj(action_tokens.float()))
+        query = self.query_norm(self.queries.float()[None, None] + action[:, :, None])
+        query = F.normalize(query, dim=-1)
+        logits = torch.einsum('btqd,bnd->btqn', query, visual) / self.temperature
+        maps = logits.softmax(-1)
+
+        # A soft pairwise cosine ceiling avoids forcing unrelated queries to be
+        # orthogonal while still penalizing near-duplicate spatial maps.
+        qmap = F.normalize(maps.float(), dim=-1)
+        similarity = qmap @ qmap.transpose(-1, -2)
+        pairs = torch.triu(torch.ones(self.num_queries, self.num_queries,
+                                      device=maps.device, dtype=torch.bool), diagonal=1)
+        penalty = F.relu(similarity[..., pairs] - self.diversity_margin).square().mean(-1)
+        valid = action_valid.float()
+        diversity = (penalty * valid).sum() / valid.sum().clamp_min(1)
+
+        # At route_scale=0 the prior is exactly neutral; a small positive
+        # initialization gives the task loss a gradient into the queries.
+        n = observed_keys.shape[1]
+        mixture = maps.mean(2)
+        prior = (1. + self.route_scale.tanh() * (n * mixture - 1.)).clamp_min(1e-6)
+        observed_bias = prior.log()
+        return maps, observed_bias, diversity
 
 
 class NoActionJointModel(CosmosForceWM):
@@ -46,7 +101,10 @@ class NoActionJointModel(CosmosForceWM):
     def __init__(self, net, *, manifest, text_bank=None, action_hidden=768, action_ffn=3072,
                  force_hidden=768, force_ffn=2048, force_heads=16, action_seed=42,
                  force_seed=43, memory_seed=44, num_inference_steps=16,
-                 force_shift=1., gradient_checkpointing=True, fps=7.5, action_space='joint8'):
+                 force_shift=1., gradient_checkpointing=True, fps=7.5, action_space='joint8',
+                 visual_query_posttrain=False, query_count=4, query_dim=256,
+                 query_temperature=0.07, query_diversity_weight=0.01,
+                 query_diversity_margin=0.7, query_route_scale_init=0.05):
         nn.Module.__init__(self)
         self.gradient_checkpointing = gradient_checkpointing
         self.num_inference_steps, self.fps = int(num_inference_steps), float(fps)
@@ -72,6 +130,10 @@ class NoActionJointModel(CosmosForceWM):
             force = ForceDiffusionExpert(hidden_dim=force_hidden, ffn_dim=force_ffn,
                 num_layers=self.depth, width=video.hidden_dim, num_heads=force_heads, text_dim=text_dim,
                 state_dim=self.state_dim)
+        self.visual_query_posttrain = bool(visual_query_posttrain)
+        self.query_diversity_weight = float(query_diversity_weight)
+        if self.query_diversity_weight < 0:
+            raise ValueError('Query diversity weight must be non-negative')
         self.manifest = dict(manifest, schema=SCHEMA, joint_protocol=SCHEMA, reference_mode='none',
             branch_reads=BRANCH_READS, loss='video/action/force FM, sigma0 clean, target noise-clean',
             clocks=dict(video_shift=5., action_shift=1., force_shift=float(force_shift)),
@@ -82,14 +144,44 @@ class NoActionJointModel(CosmosForceWM):
         self.manifest.update(action_space=action_space, action_dim=self.action_dim,
             state_dim=self.state_dim, history_dim=self.state_dim + 6,
             action_units='7 absolute joint radians + gripper openness' if action_space == 'joint8' else 'xyz metres + Euler radians + gripper openness')
-        self.dit = nn.ModuleDict(dict(video=video, action=action, force=force, action_source_time=source_time,
-                                     runtime=ForceRuntimeState(memory_seed, self.manifest)))
+        modules = dict(video=video, action=action, force=force, action_source_time=source_time,
+                       runtime=ForceRuntimeState(memory_seed, self.manifest))
+        if self.visual_query_posttrain:
+            with torch.random.fork_rng(devices=[]):
+                torch.manual_seed(46)
+                modules['visual_queries'] = ActionConditionedVisualQueries(
+                    video_dim=video.hidden_dim, action_dim=action_hidden, query_dim=query_dim,
+                    num_queries=query_count, temperature=query_temperature,
+                    diversity_margin=query_diversity_margin, route_scale_init=query_route_scale_init)
+            self.checkpoint_schema = QUERY_POSTTRAIN_SCHEMA
+            self.manifest.update(schema=QUERY_POSTTRAIN_SCHEMA, posttrain_method='action-conditioned visual query routing',
+                visual_queries=dict(count=query_count, dim=query_dim, temperature=query_temperature,
+                    diversity_loss='off-diagonal spatial-map cosine hinge',
+                    diversity_margin=query_diversity_margin, diversity_weight=self.query_diversity_weight,
+                    initial_route_scale=query_route_scale_init,
+                    route='same-layer Action tokens to observed-frame O keys; additive bias on Force reads only'),
+                trainable_policy='Force/Action/visual_queries; frozen Video and proprio encoder',
+                warm_start='explicit model-only step20000; fresh optimizer/scheduler')
+            modules['runtime'].bind_manifest(self.manifest)
+        self.dit = nn.ModuleDict(modules)
         self.register_buffer('text_bank', text_bank, persistent=False)
         self.v_scheduler = WanContinuousFlowMatchScheduler(shift=5.)
         self.a_scheduler = WanContinuousFlowMatchScheduler(shift=1.)
         self.f_scheduler = WanContinuousFlowMatchScheduler(shift=force_shift)
         self.compile_training_denoise = False
         self.ops = _ActionOps()
+
+    def configure_training_parameters(self):
+        """Keep the learned interaction path trainable without moving Video."""
+        if not self.visual_query_posttrain:
+            return False
+        self.eval()
+        self.requires_grad_(False)
+        for name in ('action', 'force', 'action_source_time', 'visual_queries'):
+            module = self.dit[name]
+            module.train()
+            module.requires_grad_(True)
+        return True
 
     def _conditions(self, sample):
         if any(k in sample for k in ('action_condition', 'candidate_actions', 'reference', 'action_reference')):
@@ -139,7 +231,8 @@ class NoActionJointModel(CosmosForceWM):
         history = torch.where(hvalid[..., None], history, 0)
         return observed, history, (ok, ov, hk, hv)
 
-    def _dynamic_layer(self, i, video, force, action, prepared, fm, am, text, text_mask, freq, hvalid, static, text_cache=None):
+    def _dynamic_layer(self, i, video, force, action, prepared, fm, am, text, text_mask, freq, hvalid, static,
+                       action_valid=None, text_cache=None):
         ok, ov, hk, hv = static
         vq, vk, vv, vs = self.video.block_qkv(i, video, prepared)
         block = self.dit['force'].blocks[i]
@@ -152,7 +245,19 @@ class NoActionJointModel(CosmosForceWM):
         k, v = torch.cat((ok, vk, hk, fk), 2), torch.cat((ov, vv, hv, fv), 2)
         valid = torch.cat((torch.ones(len(force), ok.shape[2] + vk.shape[2], device=force.device, dtype=torch.bool),
                            hvalid, torch.ones(len(force), fk.shape[2], device=force.device, dtype=torch.bool)), 1)
-        force = block(attend(fq, k, v, valid), fs)
+        selector = self.dit['visual_queries'] if self.visual_query_posttrain else None
+        if selector is None:
+            force = block(attend(fq, k, v, valid), fs)
+            diversity = None
+        else:
+            if action_valid is None:
+                raise ValueError('Action validity is required by visual query routing')
+            observed_keys = ok.transpose(1, 2).flatten(2)
+            maps, observed_bias, diversity = selector(observed_keys, action, action_valid)
+            rest = torch.zeros((*observed_bias.shape[:2], k.shape[2] - observed_bias.shape[-1]),
+                               device=observed_bias.device, dtype=observed_bias.dtype)
+            bias = torch.cat((observed_bias, rest), -1)[:, None]
+            force = block(attend(fq, k, v, valid, bias), fs)
         av_valid = torch.cat((valid, torch.ones(len(action), ak.shape[2], device=action.device, dtype=torch.bool)), 1)
         mixed = attend(aq, torch.cat((k, ak), 2), torch.cat((v, av), 2), av_valid).transpose(1, 2).flatten(2)
         if text_cache is None:
@@ -164,7 +269,7 @@ class NoActionJointModel(CosmosForceWM):
             cross = F.scaled_dot_product_attention(q, k, v, attn_mask=text_mask[:, None], dropout_p=0.)
             action = action + ab.cross_attn.o(cross.transpose(1, 2).flatten(2))
             action = ab.gate(action, mg, ab.ffn(modulate(ab.norm2(action), shift, scale)))
-        return video, force, action
+        return (video, force, action, diversity) if selector is not None else (video, force, action)
 
     def prefill_static(self, first, conditions):
         """Request-local O/H cache. Used only for inference, with fixed weights."""
@@ -187,7 +292,8 @@ class NoActionJointModel(CosmosForceWM):
             texts.append((vkv, akv))
         return dict(layers=tuple(caches), text=tuple(texts))
 
-    def joint_denoise_core(self, video, force, action, tv, tf, ta, conditions, static_cache=None):
+    def joint_denoise_core(self, video, force, action, tv, tf, ta, conditions, static_cache=None,
+                           action_valid=None):
         raw, context, cmask, history, hvalid = conditions
         full = self._video_prepare(video, tv, raw)
         op = frame_slice(full, 0, 1); vp = frame_slice(full, 1, full['grid'][0])
@@ -198,21 +304,38 @@ class NoActionJointModel(CosmosForceWM):
         am = am + self.dit['action_source_time'](source_time).unflatten(-1, (6, self.dit['action'].hidden_dim))
         if static_cache is not None and (torch.is_grad_enabled() or len(static_cache["layers"]) != self.depth):
             raise ValueError('Request-local inference cache with matching depth required')
+        query_diversities = []
+        if self.visual_query_posttrain:
+            if action_valid is None:
+                action_valid = torch.ones(action.shape[:2], device=action.device, dtype=torch.bool)
+            if action_valid.shape != action.shape[:2] or action_valid.dtype != torch.bool:
+                raise ValueError('Action validity must match the action token grid')
         for i in range(self.depth):
             def layer(o, h, v, f, a, i=i):
                 if static_cache is None:
                     o, h, kv = self._static_layer(i, o, h, op, hvalid)
                 else:
                     kv = static_cache["layers"][i]
-                v, f, a = self._dynamic_layer(i, v, f, a, vp, fm, am, text, text_mask, freq, hvalid, kv,
-                    None if static_cache is None else static_cache["text"][i])
+                result = self._dynamic_layer(i, v, f, a, vp, fm, am, text, text_mask, freq, hvalid, kv,
+                    action_valid=action_valid,
+                    text_cache=None if static_cache is None else static_cache["text"][i])
+                if self.visual_query_posttrain:
+                    v, f, a, diversity = result
+                    return o, h, v, f, a, diversity
+                v, f, a = result
                 return o, h, v, f, a
             args = (observed, history, vt, ft, at)
-            observed, history, vt, ft, at = (checkpoint(layer, *args, use_reentrant=False)
+            result = (checkpoint(layer, *args, use_reentrant=False)
                 if self.gradient_checkpointing and torch.is_grad_enabled() else layer(*args))
+            if self.visual_query_posttrain:
+                observed, history, vt, ft, at, diversity = result
+                query_diversities.append(diversity)
+            else:
+                observed, history, vt, ft, at = result
         future_velocity = self.video.finish(vt, vp)
         vv = torch.cat((torch.zeros_like(video[:, :, :1]), future_velocity), 2)
-        return vv, self.dit['force'].head(ft), self.dit['action'].post(at)
+        outputs = (vv, self.dit['force'].head(ft), self.dit['action'].post(at))
+        return (*outputs, torch.stack(query_diversities).mean()) if self.visual_query_posttrain else outputs
 
     def training_loss(self, sample):
         clean = sample['video_latents'].to(self.device, self.torch_dtype)
@@ -231,7 +354,12 @@ class NoActionJointModel(CosmosForceWM):
         v = self.v_scheduler.add_noise(clean, vn, tv); v[:, :, :1] = first
         f = self.f_scheduler.add_noise(force, fn, tf)
         a = self.a_scheduler.add_noise(action, an, ta)
-        pv, pf, pa = self.joint_denoise_core(v, f, a, tv, tf, ta, conditions)
+        denoised = self.joint_denoise_core(v, f, a, tv, tf, ta, conditions,
+            action_valid=~sample['action_is_pad'].to(self.device, torch.bool))
+        if self.visual_query_posttrain:
+            pv, pf, pa, query_diversity = denoised
+        else:
+            pv, pf, pa = denoised
         imagepad = sample['image_is_pad'].to(self.device, torch.bool)
         vvalid = ~imagepad[:, 1:].reshape(len(clean), 2, 4).all(-1)
         lv = temporal_mse(pv[:, :, 1:].transpose(1, 2).flatten(2),
@@ -240,7 +368,14 @@ class NoActionJointModel(CosmosForceWM):
             ~sample['action_is_pad'].to(self.device, torch.bool), self.a_scheduler, ta)
         delta = torch.where(fvalid, pf.float() - self.f_scheduler.training_target(force, fn, tf).float(), 0)
         lf = ((delta.square().sum((1, 2)) / fvalid.sum((1, 2)).clamp_min(1)) * self.f_scheduler.training_weight(tf)).mean()
-        return lv + lf + la, dict(loss_video_fm=float(lv.detach()), loss_force_fm=float(lf.detach()), loss_action_fm=float(la.detach()))
+        components = dict(loss_video_fm=float(lv.detach()), loss_force_fm=float(lf.detach()),
+                          loss_action_fm=float(la.detach()))
+        if self.visual_query_posttrain:
+            lq = query_diversity * self.query_diversity_weight
+            components['loss_query_diversity'] = float(lq.detach())
+            components['query_diversity_raw'] = float(query_diversity.detach())
+            return lv + lf + la + lq, components
+        return lv + lf + la, components
 
     @torch.no_grad()
     def infer_joint(self, sample, *, num_inference_steps=None, seed=42, video_seed=44, force_seed=43, use_cache=True):
@@ -258,10 +393,18 @@ class NoActionJointModel(CosmosForceWM):
             f = noise((len(first), 32, 6), force_seed)
             a = noise((len(first), 32, self.action_dim), seed)
             static = self.prefill_static(first, conditions) if use_cache else None
+            action_valid = (~sample['action_is_pad'].to(self.device, torch.bool)
+                            if 'action_is_pad' in sample else
+                            torch.ones((len(first), 32), device=self.device, dtype=torch.bool))
             schedules = [s.build_inference_schedule(steps, self.device, self.torch_dtype) for s in (self.v_scheduler, self.f_scheduler, self.a_scheduler)]
             for i in range(steps):
                 tv, tf, ta = (pair[0][i].expand(len(first)) for pair in schedules)
-                pv, pf, pa = self.joint_denoise_core(v, f, a, tv, tf, ta, conditions, static)
+                denoised = self.joint_denoise_core(v, f, a, tv, tf, ta, conditions, static,
+                    action_valid=action_valid)
+                if self.visual_query_posttrain:
+                    pv, pf, pa, _ = denoised
+                else:
+                    pv, pf, pa = denoised
                 v = self.v_scheduler.step(pv, schedules[0][1][i], v); v[:, :, :1] = first
                 f = self.f_scheduler.step(pf, schedules[1][1][i], f)
                 a = self.a_scheduler.step(pa, schedules[2][1][i], a)
@@ -297,3 +440,52 @@ class NoActionJointModel(CosmosForceWM):
             if payload['cuda_rng']:
                 torch.cuda.set_rng_state_all(payload['cuda_rng'])
         return payload.get('step')
+
+
+def warm_start_visual_query_posttrain(model, path, digest, *, expected_step=20000):
+    """Strict model-only migration from a verified baseline V/F/A checkpoint."""
+    from fastwam.cache.latent import file_sha256
+    if not model.visual_query_posttrain or model.checkpoint_schema != QUERY_POSTTRAIN_SCHEMA:
+        raise ValueError('Visual-query post-training model required')
+    if file_sha256(path) != digest:
+        raise ValueError('Warm-start checkpoint SHA256 differs')
+    payload = torch.load(path, map_location='cpu', weights_only=True, mmap=True)
+    if (payload.get('schema') != SCHEMA or payload.get('step') != expected_step
+            or 'model' not in payload or 'manifest' not in payload):
+        raise ValueError('Verified baseline step-20000 model checkpoint required')
+    old_manifest = payload['manifest']
+    for key in ('upstream', 'video_sha256', 'dataset_identity', 'normalization_sha256',
+                'text_identity', 'action_space', 'action_dim', 'state_dim', 'history_dim'):
+        if old_manifest.get(key) != model.manifest.get(key):
+            raise ValueError('Warm-start provenance differs: ' + key)
+    for key in ('joint_protocol', 'reference_mode', 'branch_reads', 'architecture', 'clocks',
+                'action_units', 'num_inference_steps'):
+        if old_manifest.get(key) != model.manifest.get(key):
+            raise ValueError('Warm-start behavior differs: ' + key)
+
+    original, current = payload['model'], model.state_dict()
+    new_prefixes = ('dit.visual_queries.',)
+    runtime_prefix = 'dit.runtime.'
+    retained = {key for key in current
+                if not key.startswith(new_prefixes) and not key.startswith(runtime_prefix)}
+    missing = retained - original.keys()
+    unexpected = {key for key in original
+                  if key not in retained and not key.startswith(runtime_prefix)}
+    if missing or unexpected:
+        raise ValueError(f'Warm-start key mismatch: missing={sorted(missing)}, extra={sorted(unexpected)}')
+    for key in retained:
+        source, target = original[key], current[key]
+        if (not isinstance(source, torch.Tensor) or not isinstance(target, torch.Tensor)
+                or source.shape != target.shape or not bool(torch.isfinite(source).all())):
+            raise ValueError('Warm-start shape/nonfinite tensor: ' + key)
+
+    receipt = dict(source_schema=SCHEMA, source_step=expected_step, source_sha256=digest,
+        retained_tensors=len(retained), new_parameters='dit.visual_queries.*',
+        runtime='fresh; rebound to post-train manifest', optimizer='fresh AdamW',
+        scheduler='fresh 5000-step cosine with 250-step warmup')
+    model.manifest['warm_start'] = receipt
+    model.dit['runtime'].bind_manifest(model.manifest)
+    state = model.state_dict()
+    state.update({key: original[key] for key in retained})
+    model.load_state_dict(state, strict=True)
+    return receipt

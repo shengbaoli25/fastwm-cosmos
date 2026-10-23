@@ -1,0 +1,13 @@
+{
+  "episode": 15,
+  "annotation": "Coarse visible cup/end-effector regions annotated from GT only, before inspecting checkpoint attention. View-local 224x224 pixels; not contact-state ground truth. Occlusion and coarse latent grid limit localization.",
+  "frames": {
+    "0": {"global": [[25, 76, 106, 156]], "wrist": [[12, 132, 82, 224], [145, 160, 224, 224]]},
+    "96": {"global": [[24, 76, 108, 157]], "wrist": [[65, 145, 148, 224]]},
+    "192": {"global": [[0, 79, 114, 224]], "wrist": [[66, 163, 150, 224]]},
+    "288": {"global": [[0, 70, 119, 224]], "wrist": [[8, 145, 142, 224]]},
+    "384": {"global": [[0, 62, 122, 224]], "wrist": [[72, 145, 165, 224]]},
+    "480": {"global": [[18, 72, 116, 208]], "wrist": [[54, 153, 146, 224]]},
+    "517": {"global": [[15, 73, 116, 211]], "wrist": [[0, 134, 140, 224]]}
+  }
+}

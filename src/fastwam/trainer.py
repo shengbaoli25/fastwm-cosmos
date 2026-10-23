@@ -82,10 +82,12 @@ class Wan22Trainer:
         # Freeze non-trainable modules before optimizer/deepspeed initialization.
         # This keeps DiT (+ optional proprio encoder) as trainable when ZeRO builds optimizer state.
         self._apply_dit_only_train_mode(self.model)
-        trainable_params = list(self.model.dit.parameters())
+        trainable_params = [p for p in self.model.dit.parameters() if p.requires_grad]
         proprio_encoder = getattr(self.model, "proprio_encoder", None)
         if proprio_encoder is not None:
-            trainable_params.extend(list(proprio_encoder.parameters()))
+            trainable_params.extend(p for p in proprio_encoder.parameters() if p.requires_grad)
+        if not trainable_params:
+            raise ValueError("Training policy left no trainable parameters")
         optimizer_param_groups = getattr(self.model, "optimizer_param_groups", None)
         if optimizer_param_groups is not None:
             trainable_params = optimizer_param_groups(trainable_params)
@@ -311,6 +313,9 @@ class Wan22Trainer:
 
     @staticmethod
     def _apply_dit_only_train_mode(model):
+        configure = getattr(model, "configure_training_parameters", None)
+        if callable(configure) and configure():
+            return
         model.eval()
         model.requires_grad_(False)
         model.dit.train()
