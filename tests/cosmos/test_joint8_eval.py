@@ -38,17 +38,31 @@ def test_attention_probability_includes_additive_observation_bias():
     np.testing.assert_allclose(probabilities.mean(1),actual.numpy(),atol=1e-6)
 
 
-def test_probe_saves_raw_per_query_maps_only_at_selected_layer_and_step(tmp_path):
+def test_per_query_force_probabilities_preserve_horizon_and_actual_bias():
+    probe=load('attention')
+    q=torch.zeros(1,2,3,4);k=torch.zeros(1,2,5,4)
+    valid=torch.tensor([[True,False,True,True,False]])
+    bias=torch.zeros(1,1,3,5);bias[:,:,1,2]=torch.log(torch.tensor(3.))
+    probabilities=probe.per_query_key_probabilities(q,k,valid,bias)
+    assert probabilities.shape==(1,3,5)
+    np.testing.assert_allclose(probabilities[0,0],np.array([1/3,0,1/3,1/3,0]),atol=1e-6)
+    np.testing.assert_allclose(probabilities[0,1],np.array([1/5,0,3/5,1/5,0]),atol=1e-6)
+    np.testing.assert_allclose(probabilities.sum(-1),1,atol=1e-6)
+
+
+def test_probe_saves_query_maps_and_applied_bias_only_at_selected_layer_and_step(tmp_path):
     probe=load('attention').AttentionProbe(object(),layers=(0,6,13,20,27),steps=(0,7,15))
     maps=torch.softmax(torch.randn(1,32,4,392),dim=-1)
+    bias=torch.randn(1,32,392)
     probe.active=6;probe.step=7
-    probe._record_queries(None,(),(maps,torch.zeros(1,32,392),torch.tensor(0.)))
+    probe._record_queries(None,(),(maps,bias,torch.tensor(0.)))
     probe.active=5
-    probe._record_queries(None,(),(maps,torch.zeros(1,32,392),torch.tensor(0.)))
+    probe._record_queries(None,(),(maps,bias,torch.tensor(0.)))
     path=tmp_path/'query_maps.npz';probe.save(path)
     saved=np.load(path)
-    assert saved.files==['s07_l06_query_maps']
-    np.testing.assert_allclose(saved[saved.files[0]],maps.numpy(),atol=0,rtol=0)
+    assert saved.files==['s07_l06_query_maps','s07_l06_query_bias']
+    np.testing.assert_allclose(saved['s07_l06_query_maps'],maps.numpy(),atol=0,rtol=0)
+    np.testing.assert_allclose(saved['s07_l06_query_bias'],bias.numpy(),atol=0,rtol=0)
 
 
 def test_anchors_cover_every_valid_action_once_without_crossing_gap():
@@ -82,7 +96,8 @@ def test_real_joint_sampler_is_unchanged_with_attention_probe():
         expected=m.infer_joint(s,num_inference_steps=2)
         with probe.recording():actual=m.infer_joint(s,num_inference_steps=2)
     for k in expected:torch.testing.assert_close(expected[k],actual[k],atol=0,rtol=0)
-    assert len(probe.records)==12
+    assert len(probe.records)==16
+    assert sum(k.endswith('_force_query_probs') for k in probe.records)==4
     for probabilities in probe.records.values():
         np.testing.assert_allclose(probabilities.sum(-1),1,atol=1e-6)
 

@@ -19,6 +19,17 @@ def mean_key_probabilities(q, k, valid=None, query_stride=1, bias=None):
     return logits.softmax(-1).mean(-2).detach().cpu().numpy()  # batch, head, key
 
 
+def per_query_key_probabilities(q, k, valid=None, bias=None):
+    """Average heads while retaining each temporal query's key distribution."""
+    attention_dtype = q.dtype
+    logits = q.float() @ k.float().transpose(-1, -2) / q.shape[-1] ** .5
+    if bias is not None:
+        logits = logits + bias.to(dtype=attention_dtype).float()
+    if valid is not None:
+        logits = logits.masked_fill(~valid[:, None, None, :], -torch.inf)
+    return logits.softmax(-1).mean(1).detach().cpu().numpy()  # batch, query, key
+
+
 class AttentionProbe:
     def __init__(self, model, layers=(0, 6, 13, 20, 27), steps=(0, 7, 15)):
         self.model, self.layers, self.steps = model, layers, steps
@@ -30,12 +41,16 @@ class AttentionProbe:
         if not isinstance(output, (tuple, list)) or len(output) < 2:
             raise ValueError('Visual query selector must return (maps, bias, ...)')
         maps = output[0]
+        bias = output[1]
         if not isinstance(maps, torch.Tensor) or maps.ndim != 4 or maps.shape[-1] != 392:
             raise ValueError('Expected visual query maps [B, action_time, queries, 392]')
         if maps.shape[1] != 32:
             raise ValueError('Expected query maps for 32 action tokens')
-        self.query_records[f's{self.step:02d}_l{self.active:02d}_query_maps'] = (
-            maps.detach().float().cpu().numpy())
+        if not isinstance(bias, torch.Tensor) or bias.shape != (maps.shape[0], maps.shape[1], 392):
+            raise ValueError('Expected the actual applied query routing bias [B, action_time, 392]')
+        prefix = f's{self.step:02d}_l{self.active:02d}'
+        self.query_records[prefix + '_query_maps'] = maps.detach().float().cpu().numpy()
+        self.query_records[prefix + '_query_bias'] = bias.detach().float().cpu().numpy()
 
     @contextmanager
     def recording(self):
@@ -66,6 +81,11 @@ class AttentionProbe:
                     p = mean_key_probabilities(q, k, valid, 8 if branch == 'video' else 1,
                                                bias=bias)
                     self.records[f's{self.step:02d}_l{self.active:02d}_{branch}'] = p
+                    if branch == 'force':
+                        # Preserve temporal alignment for diagnosing which
+                        # action/force horizon routes to observed visual keys.
+                        self.records[f's{self.step:02d}_l{self.active:02d}_force_query_probs'] = (
+                            per_query_key_probabilities(q, k, valid, bias=bias))
             return result
         self.model.joint_denoise_core, self.model._dynamic_layer = traced_core, traced_layer
         module.attend = traced_sdpa

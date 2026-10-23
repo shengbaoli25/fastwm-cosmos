@@ -3,6 +3,7 @@
 Video reads O/V; Force reads O/H/V/F; Action reads O/H/V/F/A.
 All clocks are 0..1000, with 0 clean. There is no future action condition.
 """
+import math
 from pathlib import Path
 import torch
 from torch import nn
@@ -61,7 +62,10 @@ class ActionConditionedVisualQueries(nn.Module):
         self.action_proj = nn.Linear(action_dim, query_dim, bias=False)
         self.query_norm = nn.LayerNorm(query_dim)
         self.queries = nn.Parameter(torch.randn(num_queries, query_dim) / query_dim ** 0.5)
-        self.route_scale = nn.Parameter(torch.tensor(float(route_scale_init)))
+        if not 0 < route_scale_init < 0.5:
+            raise ValueError('Initial route strength must lie in (0, 0.5)')
+        inverse_softplus = math.log(math.expm1(float(route_scale_init)))
+        self.route_scale = nn.Parameter(torch.tensor(inverse_softplus))
 
     def forward(self, observed_keys, action_tokens, action_valid):
         if (observed_keys.ndim != 3 or action_tokens.ndim != 3
@@ -85,11 +89,14 @@ class ActionConditionedVisualQueries(nn.Module):
         valid = action_valid.float()
         diversity = (penalty * valid).sum() / valid.sum().clamp_min(1)
 
-        # At route_scale=0 the prior is exactly neutral; a small positive
-        # initialization gives the task loss a gradient into the queries.
+        # A small positive initialization keeps the first routing updates near
+        # the baseline while allowing Force loss to train the query maps.
         n = observed_keys.shape[1]
         mixture = maps.mean(2)
-        prior = (1. + self.route_scale.tanh() * (n * mixture - 1.)).clamp_min(1e-6)
+        # Keep routing an upweighting mechanism: a negative coefficient would
+        # turn selected visual locations into locations the Force expert avoids.
+        route_strength = F.softplus(self.route_scale).clamp(max=0.5)
+        prior = (1. + route_strength * (n * mixture - 1.)).clamp_min(1e-6)
         observed_bias = prior.log()
         return maps, observed_bias, diversity
 

@@ -84,21 +84,50 @@ def compose_frame(gt, maps, boxes, episode, frame, episode_time, layer, scales, 
     return np.concatenate(rows, axis=0)
 
 
-def compose_query_frame(gt, query_maps, boxes, episode, frame, layer, step, vmax, view):
+def _normalized(vector):
+    vector = np.asarray(vector, dtype=np.float64)
+    vector = np.maximum(vector, 0.)
+    total = vector.sum()
+    return vector / total if total > 0 else np.full_like(vector, 1. / len(vector))
+
+
+def _map_entropy(heat):
+    p = _normalized(heat.ravel())
+    entropy = float(-(p * np.log(np.maximum(p, 1e-12))).sum())
+    return entropy, float(np.exp(entropy))
+
+
+def compose_query_frame(gt, query_maps, query_bias, baseline_force, posttrain_force,
+                        boxes, episode, frame, layer, step, horizon, scales, view):
     from PIL import Image, ImageDraw, ImageFont
     camera_offset = 0 if view == 'global' else 14
     gt_view = gt[:, camera_offset * 16:(camera_offset + 14) * 16]
-    row = [panel(colorize(gt_view, np.zeros((14, 14), dtype=np.float32), vmax, boxes),
-                 f'Ep{episode:03d} f{frame} GT')]
-    for query, heat in enumerate(query_maps):
+    mixture = query_maps.mean(0)
+    prior = _normalized(np.exp(np.asarray(query_bias, dtype=np.float64)
+                               - np.max(query_bias)))
+    base_map = baseline_force[:392].reshape(14, 28)
+    post_map = posttrain_force[:392].reshape(14, 28)
+    panels = [
+        ('GT', np.zeros((14, 28), dtype=np.float32), 'none'),
+        ('Query mixture', mixture.reshape(14, 28), 'query'),
+        ('Applied O-prior', prior.reshape(14, 28), 'prior'),
+    ]
+    panels.extend((f'Q{query:02d}', heat.reshape(14, 28), 'query')
+                  for query, heat in enumerate(query_maps))
+    panels.extend((('Force 20k', base_map, 'force'), ('Force 25k', post_map, 'force')))
+    row = []
+    for title, heat, scale_key in panels:
         local = heat[:, camera_offset:(camera_offset + 14)]
-        row.append(panel(colorize(gt_view, local, vmax, boxes),
-                         f'{step} learned Q{query:02d} | view mass={float(local.sum()):.3f}'))
+        mass = float(local.sum())
+        scale = max(scales.get(scale_key, 0.), 1e-12)
+        merged = colorize(gt_view, local, scale, boxes)
+        suffix = '' if scale_key == 'none' else f' | view mass={mass:.3f}'
+        row.append(panel(merged, f'{title}{suffix}'))
     header = 24
     canvas = Image.new('RGB', (row[0].width * len(row), row[0].height + header), '#111111')
     draw = ImageDraw.Draw(canvas)
     draw.rectangle((0, 0, canvas.width - 1, header - 1), fill='#252b32')
-    draw.text((5, 4), f'Layer {layer}: learned action-conditioned query maps averaged over valid action horizons; shared raw P 0..{vmax:.3g}',
+    draw.text((5, 4), f'Layer {layer} | {view} | Action h={horizon} -> Force h+1 | per-measure raw scales',
               fill='#9eead8', font=ImageFont.load_default())
     for col, image in enumerate(row):
         canvas.paste(image, (col * image.width, header))
@@ -158,10 +187,11 @@ def main():
     maps = {}
     scales = {}
     roi_rows = []
-    learned_maps = {}
+    learned_horizons = {}
     learned_scales = {}
     learned_roi_rows = []
     learned_diversity_rows = []
+    representative_horizons = {}
     steps = [p['step'] for p in protocols]
     for frame, sample in zip(frames, probe_indices):
         per_run = [np.load(run / f'attention_{sample:06d}.npz') for run in runs]
@@ -184,37 +214,68 @@ def main():
                         roi_rows.append(dict(sample=sample, frame=frame, step=step,
                                              layer=layer, branch=branch, view=view, **stats))
 
-            query_key = f's15_l{layer:02d}_query_maps'
-            if query_key not in per_run[1].files:
-                raise ValueError(f'Missing learned visual query maps: {query_key}')
+            prefix = f's15_l{layer:02d}'
+            query_key = prefix + '_query_maps'
+            bias_key = prefix + '_query_bias'
+            force_query_key = prefix + '_force_query_probs'
+            if any(key not in per_run[1].files for key in (query_key, bias_key, force_query_key)):
+                raise ValueError(f'Missing learned-query routing or per-horizon Force attention for {prefix}')
+            base_force_key = prefix + '_force_query_probs'
+            if base_force_key not in per_run[0].files:
+                raise ValueError(f'Missing baseline per-horizon Force attention for {prefix}')
             raw_queries = per_run[1][query_key]
-            if raw_queries.ndim != 4 or raw_queries.shape[0] != 1 or raw_queries.shape[1] != 32 or raw_queries.shape[-1] != 392:
-                raise ValueError(f'Unexpected learned query map shape for {query_key}: {raw_queries.shape}')
+            raw_bias = per_run[1][bias_key]
+            base_force = per_run[0][base_force_key]
+            post_force = per_run[1][force_query_key]
+            if (raw_queries.ndim != 4 or raw_queries.shape[0] != 1 or raw_queries.shape[1] != 32
+                    or raw_queries.shape[-1] != 392 or raw_bias.shape != (1, 32, 392)
+                    or base_force.ndim != 3 or post_force.ndim != 3
+                    or base_force.shape[:2] != (1, 32) or post_force.shape[:2] != (1, 32)
+                    or base_force.shape[-1] < 392 or post_force.shape[-1] < 392):
+                raise ValueError(f'Unexpected query/bias/per-horizon attention shape for {prefix}')
             horizon_valid = predictions[1]['action_valid'][row].any(-1)
             if not horizon_valid.any():
                 raise ValueError(f'No valid action horizons for query maps at frame {frame}')
-            valid_maps = raw_queries[0, horizon_valid].astype(np.float64)
-            mean_queries = valid_maps.mean(0).reshape(raw_queries.shape[2], 14, 28)
-            learned_maps[(frame, layer)] = mean_queries
-            learned_scales[layer] = max(learned_scales.get(layer, 0.0), float(mean_queries.max()))
-            flat = mean_queries.reshape(mean_queries.shape[0], -1)
-            norms = np.linalg.norm(flat, axis=1, keepdims=True).clip(min=1e-12)
-            cosine = (flat / norms) @ (flat / norms).T
-            upper = cosine[np.triu_indices(len(flat), k=1)]
-            learned_diversity_rows.append(dict(sample=sample, frame=frame, step=steps[1], layer=layer,
-                mean_pairwise_cosine=float(upper.mean()) if len(upper) else None,
-                query_count=int(len(flat))))
-            for horizon, query_maps in zip(np.flatnonzero(horizon_valid), valid_maps):
-                spatial = query_maps.reshape(raw_queries.shape[2], 14, 28)
-                for query, heat in enumerate(spatial):
-                    prob = np.maximum(heat, 1e-12)
-                    prob = prob / prob.sum()
-                    entropy = float(-(prob * np.log(prob)).sum())
+            valid_ids = np.flatnonzero(horizon_valid)
+            selected = sorted(set(int(valid_ids[round(i * (len(valid_ids) - 1) / 4)])
+                                  for i in range(5)))
+            representative_horizons[(frame, layer)] = selected
+            for horizon in valid_ids:
+                query_maps = raw_queries[0, horizon].astype(np.float64)
+                mixture = query_maps.mean(0)
+                prior = _normalized(np.exp(raw_bias[0, horizon].astype(np.float64)
+                                           - np.max(raw_bias[0, horizon])))
+                baseline_force = base_force[0, horizon].astype(np.float64)
+                posttrain_force = post_force[0, horizon].astype(np.float64)
+                learned_horizons[(frame, layer, int(horizon))] = dict(
+                    query_maps=query_maps, query_bias=raw_bias[0, horizon],
+                    baseline_force=baseline_force, posttrain_force=posttrain_force)
+                measures = [('query_mixture', mixture), ('applied_prior', prior)]
+                measures.extend((f'query_{q}', heat) for q, heat in enumerate(query_maps))
+                measures.extend((('force_20k', baseline_force[:392]),
+                                 ('force_25k', posttrain_force[:392])))
+                for measure, values in measures:
+                    heat = values.reshape(14, 28)
+                    scale_kind = ('query' if measure.startswith('query_') else
+                                  'prior' if measure == 'applied_prior' else
+                                  'force' if measure.startswith('force_') else 'query')
+                    skey = (layer, scale_kind)
+                    learned_scales[skey] = max(learned_scales.get(skey, 0.), float(heat.max()))
+                    entropy, support = _map_entropy(heat)
                     for view_index, view in enumerate(VIEWS):
                         stats = region_statistics(heat, roi['frames'][str(frame)][view], view_index)
-                        learned_roi_rows.append(dict(sample=sample, frame=frame, action_horizon=int(horizon),
-                            step=steps[1], layer=layer, query=query, view=view,
-                            entropy=entropy, effective_support=float(np.exp(entropy)), **stats))
+                        learned_roi_rows.append(dict(sample=sample, frame=frame,
+                            action_horizon=int(horizon), step=steps[1], layer=layer,
+                            measure=measure, view=view, entropy=entropy,
+                            effective_support=support, **stats))
+                flat = query_maps.reshape(query_maps.shape[0], -1)
+                norms = np.linalg.norm(flat, axis=1, keepdims=True).clip(min=1e-12)
+                cosine = (flat / norms) @ (flat / norms).T
+                upper = cosine[np.triu_indices(len(flat), k=1)]
+                learned_diversity_rows.append(dict(sample=sample, frame=frame,
+                    action_horizon=int(horizon), step=steps[1], layer=layer,
+                    mean_pairwise_cosine=float(upper.mean()) if len(upper) else None,
+                    query_count=int(len(flat))))
 
     records = []
     for layer in (13, 27):
@@ -244,14 +305,19 @@ def main():
             view_frames = []
             sheets = []
             for frame in frames:
-                image = compose_query_frame(gt[frame], learned_maps[(frame, layer)],
-                    roi['frames'][str(frame)][view], episode, frame, layer, steps[1],
-                    learned_scales[layer], view)
+                rows = []
+                for horizon in representative_horizons[(frame, layer)]:
+                    record = learned_horizons[(frame, layer, horizon)]
+                    rows.append(compose_query_frame(gt[frame], record['query_maps'],
+                        record['query_bias'], record['baseline_force'], record['posttrain_force'],
+                        roi['frames'][str(frame)][view], episode, frame, layer, steps[1],
+                        horizon, learned_scales, view))
+                image = np.concatenate(rows, axis=0)
                 view_frames.append(image)
                 sheets.append(Image.fromarray(image))
-            video_path = out / f'episode_{episode:03d}_{view}_learned_queries_s15_l{layer:02d}_step{steps[1]:06d}.mp4'
+            video_path = out / f'episode_{episode:03d}_{view}_visual_force_horizons_s15_l{layer:02d}_step{steps[1]:06d}.mp4'
             write_video(video_path, iter(view_frames), fps=1)
-            sheet_path = out / f'episode_{episode:03d}_{view}_learned_queries_s15_l{layer:02d}_step{steps[1]:06d}.png'
+            sheet_path = out / f'episode_{episode:03d}_{view}_visual_force_horizons_s15_l{layer:02d}_step{steps[1]:06d}.png'
             sheet = Image.new('RGB', (sheets[0].width, sum(x.height for x in sheets)), '#101418')
             y = 0
             for item in sheets:
@@ -275,10 +341,10 @@ def main():
     (out / 'roi-summary.json').write_text(json.dumps(roi_summary, indent=2) + '\n')
     query_grouped = {}
     for row in learned_roi_rows:
-        query_grouped.setdefault((row['step'], row['layer'], row['query'], row['view']), []).append(row)
+        query_grouped.setdefault((row['step'], row['layer'], row['measure'], row['view']), []).append(row)
     query_summary = []
-    for (step, layer, query, view), rows in sorted(query_grouped.items()):
-        summary = dict(step=step, layer=layer, query=query, view=view,
+    for (step, layer, measure, view), rows in sorted(query_grouped.items()):
+        summary = dict(step=step, layer=layer, measure=measure, view=view,
                        anchors=len({row['sample'] for row in rows}), action_horizon_observations=len(rows))
         for field in ('view_attention_mass', 'region_attention_mass', 'area_fraction',
                       'within_view_fraction', 'enrichment', 'entropy', 'effective_support'):
@@ -286,7 +352,8 @@ def main():
             summary[field + '_mean'] = float(np.mean(values)) if values else None
             summary[field + '_median'] = float(np.median(values)) if values else None
         query_summary.append(summary)
-    (out / 'learned-query-roi-summary.json').write_text(json.dumps(query_summary, indent=2) + '\n')
+    (out / 'query-force-roi-summary.json').write_text(json.dumps(query_summary, indent=2) + '\n')
+    (out / 'query-force-roi-by-horizon.json').write_text(json.dumps(learned_roi_rows, indent=2) + '\n')
     (out / 'learned-query-diversity.json').write_text(json.dumps(learned_diversity_rows, indent=2) + '\n')
     manifest = dict(episode=episode, steps=steps, sampling_step=15,
                     layers=[13, 27], queries=list(BRANCH_LABELS),
@@ -294,11 +361,17 @@ def main():
                     timestamps_seconds=[round(f / 30, 3) for f in frames],
                     timeline='Seven measured anchors only; no interpolation between attention probes.',
                     key_layout='first 392 visual keys are the observed 14x28 dual-view frame; each view is 14x14.',
-                    color_scale='Fixed per layer and query branch across all anchors, both views, and both checkpoints.',
+                    color_scale='Fixed by layer/measure across all anchors, both views, and both checkpoints.',
+                    representative_action_horizons='Five approximately evenly spaced valid horizons per anchor are visualized; all valid horizons are in the JSON statistics. Action horizon h maps to Force offset h+1.',
+                    applied_prior='Softmax over the saved additive O-only log-bias; proportional to the exact multiplicative prior. It is normalized only over the 392 observed-frame keys for display.',
+                    force_attention='Head-averaged per temporal query; includes the saved additive bias and original valid-key mask.',
                     display_transform=f'Probability colors and opacity use x^{DISPLAY_GAMMA}; shared raw probability scale is unchanged.',
                     scales={f'l{layer:02d}_{branch}': value for (layer, branch), value in scales.items()},
+                    query_force_scales={f'l{layer:02d}_{measure}': value
+                                        for (layer, measure), value in learned_scales.items()},
                     roi_summary='roi-summary.json',
-                    learned_query_summary='learned-query-roi-summary.json',
+                    query_force_roi_summary='query-force-roi-summary.json',
+                    query_force_roi_by_horizon='query-force-roi-by-horizon.json',
                     learned_query_diversity='learned-query-diversity.json',
                     learned_query_outputs=learned_outputs, outputs=records)
     (out / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
