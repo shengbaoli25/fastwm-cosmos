@@ -1,0 +1,6233 @@
+{
+  "status": "complete",
+  "stage": "events",
+  "checkpoint_sha256": "2e8409d495d11961614b72d81b25bec7cc71bc2e194acb15ea220a72edace1d8",
+  "step": 10000,
+  "input_sha256": "2ef2f3eb86783562a7a47385785285285e090b9c700afc98eb0b6f5613f85d17",
+  "command": [
+    "code/scripts/cosmos/evaluate_joint8_experts.py",
+    "--checkpoint",
+    "/home/airpiggy/Desktop/realman_joint8_step10000_sweep_20261021/assets/weights/step_010000.pt",
+    "--runtime",
+    "/home/airpiggy/Desktop/realman_joint8_step10000_sweep_20261021/assets/runtime.local.json",
+    "--prepared",
+    "/home/airpiggy/Desktop/realman_joint8_step10000_sweep_20261021/assets/prepared-observations.pt",
+    "--output",
+    "/home/airpiggy/Desktop/realman_joint8_step10000_sweep_20261021/results/gb10-events",
+    "--stage",
+    "events",
+    "--modes",
+    "v16_f16_a16",
+    "v4_f4_a4",
+    "v4_f4_a8",
+    "v4_f8_a8",
+    "v4_f8_a16",
+    "v4_f16_a16",
+    "v8_f8_a8",
+    "v8_f8_a16"
+  ],
+  "gpu": "NVIDIA GB10",
+  "torch": "2.9.1+cu130",
+  "cuda": "13.0",
+  "python": "3.12.3 (main, Jun 19 2026, 12:46:00) [GCC 13.3.0]",
+  "architecture": "aarch64",
+  "baseline": "v16_f16_a16",
+  "modes": [
+    "v16_f16_a16",
+    "v4_f4_a4",
+    "v4_f4_a8",
+    "v4_f4_a16",
+    "v4_f8_a8",
+    "v4_f8_a16",
+    "v4_f16_a16",
+    "v8_f8_a8",
+    "v8_f8_a16"
+  ],
+  "seed_offsets": [
+    0,
+    1,
+    2
+  ],
+  "parity": {
+    "v16_f16_a16": {
+      "video_latents": {
+        "max_abs": 0.0,
+        "mean_abs": 0.0,
+        "rmse": 0.0,
+        "exact": true
+      },
+      "force": {
+        "max_abs": 0.015625,
+        "mean_abs": 0.000675201416015625,
+        "rmse": 0.002554073929786682,
+        "exact": false
+      },
+      "action": {
+        "max_abs": 0.015625,
+        "mean_abs": 0.0003190040588378906,
+        "rmse": 0.0015413076616823673,
+        "exact": false
+      }
+    },
+    "v4_f4_a4": {
+      "video_latents": {
+        "max_abs": 0.0,
+        "mean_abs": 0.0,
+        "rmse": 0.0,
+        "exact": true
+      },
+      "force": {
+        "max_abs": 0.015625,
+        "mean_abs": 0.000667572021484375,
+        "rmse": 0.0024120472371578217,
+        "exact": false
+      },
+      "action": {
+        "max_abs": 0.015625,
+        "mean_abs": 0.0004315376281738281,
+        "rmse": 0.0018739290535449982,
+        "exact": false
+      }
+    },
+    "v4_f4_a8": {
+      "video_latents": {
+        "max_abs": 0.0,
+        "mean_abs": 0.0,
+        "rmse": 0.0,
+        "exact": true
+      },
+      "force": {
+        "max_abs": 0.015625,
+        "mean_abs": 0.000667572021484375,
+        "rmse": 0.0024120472371578217,
+        "exact": false
+      },
+      "action": {
+        "max_abs": 0.015625,
+        "mean_abs": 0.0007562637329101562,
+        "rmse": 0.002755257301032543,
+        "exact": false
+      }
+    },
+    "v4_f8_a8": {
+      "video_latents": {
+        "max_abs": 0.0,
+        "mean_abs": 0.0,
+        "rmse": 0.0,
+        "exact": true
+      },
+      "force": {
+        "max_abs": 0.015625,
+        "mean_abs": 0.000621795654296875,
+        "rmse": 0.0026360193733125925,
+        "exact": false
+      },
+      "action": {
+        "max_abs": 0.015625,
+        "mean_abs": 0.000629425048828125,
+        "rmse": 0.002429168438538909,
+        "exact": false
+      }
+    },
+    "v4_f8_a16": {
+      "video_latents": {
+        "max_abs": 0.0,
+        "mean_abs": 0.0,
+        "rmse": 0.0,
+        "exact": true
+      },
+      "force": {
+        "max_abs": 0.015625,
+        "mean_abs": 0.000621795654296875,
+        "rmse": 0.0026360193733125925,
+        "exact": false
+      },
+      "action": {
+        "max_abs": 0.015625,
+        "mean_abs": 0.000400543212890625,
+        "rmse": 0.0016868727980181575,
+        "exact": false
+      }
+    },
+    "v4_f16_a16": {
+      "video_latents": {
+        "max_abs": 0.0,
+        "mean_abs": 0.0,
+        "rmse": 0.0,
+        "exact": true
+      },
+      "force": {
+        "max_abs": 0.015625,
+        "mean_abs": 0.000865936279296875,
+        "rmse": 0.003179740160703659,
+        "exact": false
+      },
+      "action": {
+        "max_abs": 0.015625,
+        "mean_abs": 0.0009036064147949219,
+        "rmse": 0.0030949492938816547,
+        "exact": false
+      }
+    },
+    "v8_f8_a8": {
+      "video_latents": {
+        "max_abs": 0.0,
+        "mean_abs": 0.0,
+        "rmse": 0.0,
+        "exact": true
+      },
+      "force": {
+        "max_abs": 0.015625,
+        "mean_abs": 0.0006815592641942203,
+        "rmse": 0.0025412184186279774,
+        "exact": false
+      },
+      "action": {
+        "max_abs": 0.015625,
+        "mean_abs": 0.000530242919921875,
+        "rmse": 0.0019716338720172644,
+        "exact": false
+      }
+    },
+    "v8_f8_a16": {
+      "video_latents": {
+        "max_abs": 0.0,
+        "mean_abs": 0.0,
+        "rmse": 0.0,
+        "exact": true
+      },
+      "force": {
+        "max_abs": 0.015625,
+        "mean_abs": 0.0006815592641942203,
+        "rmse": 0.0025412184186279774,
+        "exact": false
+      },
+      "action": {
+        "max_abs": 0.015625,
+        "mean_abs": 0.0004477500915527344,
+        "rmse": 0.001882049604319036,
+        "exact": false
+      }
+    },
+    "v4_f4_a16": {
+      "video_latents": {
+        "max_abs": 0.0,
+        "mean_abs": 0.0,
+        "rmse": 0.0,
+        "exact": true
+      },
+      "force": {
+        "max_abs": 0.015625,
+        "mean_abs": 0.000667572021484375,
+        "rmse": 0.0024120472371578217,
+        "exact": false
+      },
+      "action": {
+        "max_abs": 0.015625,
+        "mean_abs": 0.0008063316345214844,
+        "rmse": 0.002914238953962922,
+        "exact": false
+      }
+    }
+  },
+  "setup_ms": {
+    "v16_f16_a16": 7567.007840960287,
+    "v4_f4_a4": 1742.4527709954418,
+    "v4_f4_a8": 1996.6031920048408,
+    "v4_f8_a8": 2078.2445709919557,
+    "v4_f8_a16": 2530.5719040334225,
+    "v4_f16_a16": 2742.9112250101753,
+    "v8_f8_a8": 3341.160707990639,
+    "v8_f8_a16": 3760.7948220102116,
+    "v4_f4_a16": 3236.2562679918483
+  },
+  "runner_stats": {
+    "v16_f16_a16": {
+      "compile_layers": true,
+      "cuda_graph": true,
+      "compile_scope": "Force/Action blocks; native Video captured in CUDA Graph",
+      "text_cache_hits": 291,
+      "text_cache_builds": 1,
+      "schedule_builds": 1,
+      "graph_builds": 1,
+      "graph_setup_seconds": 5.482243617007043,
+      "action_rope": "FP32 real arithmetic",
+      "sampler": "independent_expert_block_hold",
+      "nominal_steps": {
+        "video": 16,
+        "force": 16,
+        "action": 16
+      },
+      "merged_ticks": 16,
+      "velocity_cache": false,
+      "video_forward_evaluations": 16,
+      "action_forward_evaluations": 16,
+      "force_sampling_evaluations": 16,
+      "force_forward_evaluations": 16,
+      "peak_allocated_gib": 6.76371955871582,
+      "peak_reserved_gib": 7.662109375
+    },
+    "v4_f4_a4": {
+      "compile_layers": true,
+      "cuda_graph": true,
+      "compile_scope": "Force/Action blocks; native Video captured in CUDA Graph",
+      "text_cache_hits": 291,
+      "text_cache_builds": 1,
+      "schedule_builds": 1,
+      "graph_builds": 1,
+      "graph_setup_seconds": 1.146581103967037,
+      "action_rope": "FP32 real arithmetic",
+      "sampler": "independent_expert_block_hold",
+      "nominal_steps": {
+        "video": 4,
+        "force": 4,
+        "action": 4
+      },
+      "merged_ticks": 4,
+      "velocity_cache": false,
+      "video_forward_evaluations": 4,
+      "action_forward_evaluations": 4,
+      "force_sampling_evaluations": 4,
+      "force_forward_evaluations": 4,
+      "peak_allocated_gib": 6.686120986938477,
+      "peak_reserved_gib": 7.609375
+    },
+    "v4_f4_a8": {
+      "compile_layers": true,
+      "cuda_graph": true,
+      "compile_scope": "Force/Action blocks; native Video captured in CUDA Graph",
+      "text_cache_hits": 291,
+      "text_cache_builds": 1,
+      "schedule_builds": 1,
+      "graph_builds": 1,
+      "graph_setup_seconds": 1.3244441749993712,
+      "action_rope": "FP32 real arithmetic",
+      "sampler": "independent_expert_block_hold",
+      "nominal_steps": {
+        "video": 4,
+        "force": 4,
+        "action": 8
+      },
+      "merged_ticks": 8,
+      "velocity_cache": false,
+      "video_forward_evaluations": 4,
+      "action_forward_evaluations": 8,
+      "force_sampling_evaluations": 4,
+      "force_forward_evaluations": 4,
+      "peak_allocated_gib": 6.725526809692383,
+      "peak_reserved_gib": 7.6640625
+    },
+    "v4_f8_a8": {
+      "compile_layers": true,
+      "cuda_graph": true,
+      "compile_scope": "Force/Action blocks; native Video captured in CUDA Graph",
+      "text_cache_hits": 291,
+      "text_cache_builds": 1,
+      "schedule_builds": 1,
+      "graph_builds": 1,
+      "graph_setup_seconds": 1.3824472350534052,
+      "action_rope": "FP32 real arithmetic",
+      "sampler": "independent_expert_block_hold",
+      "nominal_steps": {
+        "video": 4,
+        "force": 8,
+        "action": 8
+      },
+      "merged_ticks": 8,
+      "velocity_cache": false,
+      "video_forward_evaluations": 4,
+      "action_forward_evaluations": 8,
+      "force_sampling_evaluations": 8,
+      "force_forward_evaluations": 8,
+      "peak_allocated_gib": 6.734437942504883,
+      "peak_reserved_gib": 7.685546875
+    },
+    "v4_f8_a16": {
+      "compile_layers": true,
+      "cuda_graph": true,
+      "compile_scope": "Force/Action blocks; native Video captured in CUDA Graph",
+      "text_cache_hits": 291,
+      "text_cache_builds": 1,
+      "schedule_builds": 1,
+      "graph_builds": 1,
+      "graph_setup_seconds": 1.6830894149607047,
+      "action_rope": "FP32 real arithmetic",
+      "sampler": "independent_expert_block_hold",
+      "nominal_steps": {
+        "video": 4,
+        "force": 8,
+        "action": 16
+      },
+      "merged_ticks": 16,
+      "velocity_cache": false,
+      "video_forward_evaluations": 4,
+      "action_forward_evaluations": 16,
+      "force_sampling_evaluations": 8,
+      "force_forward_evaluations": 8,
+      "peak_allocated_gib": 6.801477432250977,
+      "peak_reserved_gib": 7.771484375
+    },
+    "v4_f16_a16": {
+      "compile_layers": true,
+      "cuda_graph": true,
+      "compile_scope": "Force/Action blocks; native Video captured in CUDA Graph",
+      "text_cache_hits": 291,
+      "text_cache_builds": 1,
+      "schedule_builds": 1,
+      "graph_builds": 1,
+      "graph_setup_seconds": 1.824273094011005,
+      "action_rope": "FP32 real arithmetic",
+      "sampler": "independent_expert_block_hold",
+      "nominal_steps": {
+        "video": 4,
+        "force": 16,
+        "action": 16
+      },
+      "merged_ticks": 16,
+      "velocity_cache": false,
+      "video_forward_evaluations": 4,
+      "action_forward_evaluations": 16,
+      "force_sampling_evaluations": 16,
+      "force_forward_evaluations": 16,
+      "peak_allocated_gib": 6.810388565063477,
+      "peak_reserved_gib": 7.79296875
+    },
+    "v8_f8_a8": {
+      "compile_layers": true,
+      "cuda_graph": true,
+      "compile_scope": "Force/Action blocks; native Video captured in CUDA Graph",
+      "text_cache_hits": 291,
+      "text_cache_builds": 1,
+      "schedule_builds": 1,
+      "graph_builds": 1,
+      "graph_setup_seconds": 2.253211582021322,
+      "action_rope": "FP32 real arithmetic",
+      "sampler": "independent_expert_block_hold",
+      "nominal_steps": {
+        "video": 8,
+        "force": 8,
+        "action": 8
+      },
+      "merged_ticks": 8,
+      "velocity_cache": false,
+      "video_forward_evaluations": 8,
+      "action_forward_evaluations": 8,
+      "force_sampling_evaluations": 8,
+      "force_forward_evaluations": 8,
+      "peak_allocated_gib": 6.761171340942383,
+      "peak_reserved_gib": 7.75
+    },
+    "v8_f8_a16": {
+      "compile_layers": true,
+      "cuda_graph": true,
+      "compile_scope": "Force/Action blocks; native Video captured in CUDA Graph",
+      "text_cache_hits": 291,
+      "text_cache_builds": 1,
+      "schedule_builds": 1,
+      "graph_builds": 1,
+      "graph_setup_seconds": 2.517337847966701,
+      "action_rope": "FP32 real arithmetic",
+      "sampler": "independent_expert_block_hold",
+      "nominal_steps": {
+        "video": 8,
+        "force": 8,
+        "action": 16
+      },
+      "merged_ticks": 16,
+      "velocity_cache": false,
+      "video_forward_evaluations": 8,
+      "action_forward_evaluations": 16,
+      "force_sampling_evaluations": 8,
+      "force_forward_evaluations": 8,
+      "peak_allocated_gib": 6.828210830688477,
+      "peak_reserved_gib": 7.833984375
+    },
+    "v4_f4_a16": {
+      "compile_layers": true,
+      "cuda_graph": true,
+      "compile_scope": "Force/Action blocks; native Video captured in CUDA Graph",
+      "text_cache_hits": 291,
+      "text_cache_builds": 1,
+      "schedule_builds": 1,
+      "graph_builds": 1,
+      "graph_setup_seconds": 2.4834936229744926,
+      "action_rope": "FP32 real arithmetic",
+      "sampler": "independent_expert_block_hold",
+      "nominal_steps": {
+        "video": 4,
+        "force": 4,
+        "action": 16
+      },
+      "merged_ticks": 16,
+      "velocity_cache": false,
+      "video_forward_evaluations": 4,
+      "action_forward_evaluations": 16,
+      "force_sampling_evaluations": 4,
+      "force_forward_evaluations": 4,
+      "peak_allocated_gib": 6.76371955871582,
+      "peak_reserved_gib": 7.6640625
+    }
+  },
+  "encoding_ms": [
+    79.95144202141091,
+    78.93192098708823,
+    75.94983896706253,
+    77.69211195409298,
+    76.9572639837861,
+    78.34969798568636,
+    79.01369902538136,
+    77.9904339578934,
+    79.94067703839391,
+    79.58573300857097,
+    81.03581500472501,
+    77.89251499343663,
+    78.74675700441003,
+    75.75512200128287,
+    78.97510897601023,
+    77.68704503541812,
+    79.93047096533701,
+    76.49947702884674,
+    76.1905960389413,
+    78.08187900809571,
+    76.91341399913654,
+    78.00845603924245,
+    79.65036202222109,
+    78.51709699025378,
+    77.65344897052273,
+    83.84476701030508,
+    77.17180001782253,
+    80.76455601258203,
+    78.36697099264711,
+    74.97463101753965,
+    81.03230100823566,
+    78.48729100078344,
+    78.1501869787462,
+    76.93516201106831,
+    79.07218899345025,
+    76.68148301308975,
+    76.09506597509608,
+    78.25138798216358,
+    77.05590000841767,
+    77.88639701902866,
+    78.37532600387931,
+    76.5107479528524,
+    79.0873279911466,
+    76.64506800938398,
+    77.7046550065279,
+    78.72153597418219,
+    81.15632302360609,
+    81.99069299735129,
+    78.50099296774715,
+    78.37587402900681,
+    77.85643299575895,
+    78.44029000261799,
+    76.89463999122381,
+    77.81841797986999,
+    79.26613098243251,
+    82.01274398015812,
+    78.79701198544353,
+    82.20152702415362,
+    78.88061198173091,
+    77.66917103435844,
+    79.32061399333179,
+    81.9210329791531,
+    80.11957502458245,
+    78.93523800885305,
+    79.37819900689647,
+    77.17789302114397,
+    77.87195703713223,
+    76.31542801391333,
+    77.31122197583318,
+    80.22949699079618,
+    79.513048985973,
+    76.35874097468331,
+    79.18271300150082,
+    78.1481210142374,
+    78.68375303223729,
+    78.01943301456049,
+    77.33224803814664,
+    75.67272504093125,
+    79.83669999521226,
+    77.71572197088972,
+    78.21804203558713,
+    78.50482797948644,
+    76.96629699785262,
+    78.42897099908441,
+    77.98732299124822,
+    78.77975702285767,
+    78.22785200551152,
+    77.51212402945384,
+    79.62667098036036,
+    79.98487999429926,
+    77.88994902512059,
+    76.9223949755542,
+    78.48436600761488,
+    83.08510901406407,
+    78.16364703467116,
+    78.43995100120082,
+    77.03604595735669
+  ],
+  "scope": "Recorded training observations, not robot success or held-out accuracy",
+  "latency_scope": "Synchronized wall-clock joint core, incl prefill/noise/copy, excluding VAE/RGB/network/robot",
+  "ordering": "Baseline first then grid order; final candidates separately remeasured with alternating blocks",
+  "source_hashes": {
+    "scripts/cosmos/evaluate_joint8_experts.py": "6254bb6c795eaebd9929f85c3af7d75a2017439c5d0aa887cf8ffeadbb8ea9c9",
+    "src/fastwam/cosmos/expert_schedule_inference.py": "eedfebcee592fac075b277d9e920cbefcc2dda1f1558c6aae51285e917a5d38e",
+    "src/fastwam/cosmos/noaction_inference.py": "4dcc51b5786e75c7708d8c5d28ac1cb6dc14df2d4d31e7e2264604494d581354"
+  },
+  "aggregate": {
+    "v16_f16_a16": {
+      "records": 291,
+      "metrics": {
+        "action_vs_recorded": {
+          "joint_deg": {
+            "valid_per_channel": [
+              9312,
+              9312,
+              9312,
+              9312,
+              9312,
+              9312,
+              9312
+            ],
+            "absolute_error_sum": [
+              1609.5445678147012,
+              1167.8247974840401,
+              1894.3208294827198,
+              1273.123062841049,
+              1267.4084306736538,
+              1031.786234594153,
+              1180.2288132297876
+            ],
+            "squared_error_sum": [
+              455.54645399533837,
+              238.32981281707706,
+              664.7086101076942,
+              298.6863981987791,
+              301.82894425308666,
+              264.30028826271734,
+              263.4075317701059
+            ],
+            "mae_per_channel": [
+              0.17284628090793613,
+              0.12541073856143042,
+              0.20342792412829894,
+              0.13671854197176214,
+              0.13610485724588206,
+              0.11080178636105595,
+              0.12674278492587926
+            ],
+            "rmse_per_channel": [
+              0.22117948960789907,
+              0.15998074036288631,
+              0.2671739852056551,
+              0.17909614557503611,
+              0.18003583556901726,
+              0.16847184605984084,
+              0.16818707232821467
+            ],
+            "max_abs_per_channel": [
+              0.9265739582357453,
+              0.6945569852202169,
+              1.8604895957588212,
+              0.9315837705791878,
+              0.9745439104700679,
+              1.9080703579773228,
+              0.9488043656584537
+            ],
+            "pooled_mae": 0.14457898772889213,
+            "pooled_rmse": 0.19532175942822258,
+            "pooled_max_abs": 1.9080703579773228
+          },
+          "gripper_openness": {
+            "valid_per_channel": [
+              9312
+            ],
+            "absolute_error_sum": [
+              120.0223007328459
+            ],
+            "squared_error_sum": [
+              28.728774576785717
+            ],
+            "mae_per_channel": [
+              0.01288899277629359
+            ],
+            "rmse_per_channel": [
+              0.05554398911573151
+            ],
+            "max_abs_per_channel": [
+              1.0059596300125122
+            ],
+            "pooled_mae": 0.01288899277629359,
+            "pooled_rmse": 0.05554398911573151,
+            "pooled_max_abs": 1.0059596300125122
+          },
+          "joint_velocity_deg_s": {
+            "valid_per_channel": [
+              9021,
+              9021,
+              9021,
+              9021,
+              9021,
+              9021,
+              9021
+            ],
+            "absolute_error_sum": [
+              12588.221487709827,
+              9976.731704919373,
+              19169.89933369974,
+              13326.684195187156,
+              11528.092913390728,
+              11248.674287227786,
+              11539.421528531597
+            ],
+            "squared_error_sum": [
+              39371.53327937205,
+              20933.98591311772,
+              87357.54757862617,
+              38034.13256156697,
+              29525.373254069713,
+              29868.21545172384,
+              32125.47029639238
+            ],
+            "mae_per_channel": [
+              1.395435260803661,
+              1.1059452061766293,
+              2.1250304105642104,
+              1.477295665135479,
+              1.27791740531989,
+              1.2469431645302944,
+              1.2791732101243318
+            ],
+            "rmse_per_channel": [
+              2.089122096998655,
+              1.5233462309662,
+              3.1118802427520733,
+              2.0533331397437355,
+              1.8091324222622052,
+              1.8196057322120076,
+              1.8871108241576495
+            ],
+            "max_abs_per_channel": [
+              13.74402061086856,
+              11.13016651804487,
+              20.393329768854887,
+              13.413841247558594,
+              11.24410620720041,
+              20.406353055205358,
+              15.846621882052757
+            ],
+            "pooled_mae": 1.415391474664928,
+            "pooled_rmse": 2.0952361922158977,
+            "pooled_max_abs": 20.406353055205358
+          }
+        },
+        "action_vs_training_target": {
+          "joint_deg": {
+            "valid_per_channel": [
+              9312,
+              9312,
+              9312,
+              9312,
+              9312,
+              9312,
+              9312
+            ],
+            "absolute_error_sum": [
+              1609.5422999321966,
+              1167.8209280857745,
+              1894.3186059250113,
+              1273.129022977747,
+              1267.4063939913203,
+              1031.793804816406,
+              1180.2285285011642
+            ],
+            "squared_error_sum": [
+              455.54510156062685,
+              238.32847551288987,
+              664.7070000273926,
+              298.6878490072753,
+              301.82815199886016,
+              264.30433167815755,
+              263.4074044107075
+            ],
+            "mae_per_channel": [
+              0.17284603736385273,
+              0.12541032303326616,
+              0.20342768534418076,
+              0.13671918202080616,
+              0.13610463852999574,
+              0.11080259931447659,
+              0.12674275434935184
+            ],
+            "rmse_per_channel": [
+              0.22117916128678208,
+              0.1599802915243387,
+              0.26717366162640205,
+              0.17909658053607833,
+              0.18003559928577148,
+              0.16847313474375175,
+              0.16818703166839225
+            ],
+            "max_abs_per_channel": [
+              0.9265740579536077,
+              0.694555960283072,
+              1.860488888398109,
+              0.931586576370961,
+              0.9745433436084667,
+              1.9080816465347539,
+              0.9488037757212737
+            ],
+            "pooled_mae": 0.1445790314222757,
+            "pooled_rmse": 0.19532177021970326,
+            "pooled_max_abs": 1.9080816465347539
+          },
+          "gripper_openness": {
+            "valid_per_channel": [
+              9312
+            ],
+            "absolute_error_sum": [
+              120.02228518720949
+            ],
+            "squared_error_sum": [
+              28.72877461038797
+            ],
+            "mae_per_channel": [
+              0.012888991106873872
+            ],
+            "rmse_per_channel": [
+              0.05554398914821468
+            ],
+            "max_abs_per_channel": [
+              1.0059596300125122
+            ],
+            "pooled_mae": 0.012888991106873872,
+            "pooled_rmse": 0.05554398914821468,
+            "pooled_max_abs": 1.0059596300125122
+          },
+          "joint_velocity_deg_s": {
+            "valid_per_channel": [
+              9021,
+              9021,
+              9021,
+              9021,
+              9021,
+              9021,
+              9021
+            ],
+            "absolute_error_sum": [
+              12588.223358036725,
+              9976.730301755731,
+              19169.895301833232,
+              13326.678246614289,
+              11528.093717981297,
+              11248.67897881388,
+              11539.42031701235
+            ],
+            "squared_error_sum": [
+              39371.54344126959,
+              20933.97829148761,
+              87357.51253319663,
+              38034.113562933635,
+              29525.377560417888,
+              29868.225748411358,
+              32125.463799180186
+            ],
+            "mae_per_channel": [
+              1.39543546813399,
+              1.1059450506324944,
+              2.125029963621908,
+              1.4772950057215706,
+              1.2779174945107301,
+              1.2469436846041324,
+              1.2791730758244484
+            ],
+            "rmse_per_channel": [
+              2.089122366602625,
+              1.52334595365679,
+              3.111879618551911,
+              2.0533326269079524,
+              1.809132554195403,
+              1.819606045854951,
+              1.8871106333283798
+            ],
+            "max_abs_per_channel": [
+              13.744048157358158,
+              11.130168912940128,
+              20.393336565551948,
+              13.413842661933892,
+              11.244109274900634,
+              20.406351277571993,
+              15.846623709377264
+            ],
+            "pooled_mae": 1.4153913918641823,
+            "pooled_rmse": 2.09523602821216,
+            "pooled_max_abs": 20.406351277571993
+          }
+        },
+        "force_vs_recorded": {
+          "force_N": {
+            "valid_per_channel": [
+              9312,
+              9312,
+              9312
+            ],
+            "absolute_error_sum": [
+              715.9776468276978,
+              1085.5530741843395,
+              431.99919509887695
+            ],
+            "squared_error_sum": [
+              107.04141534723999,
+              246.93362620395555,
+              38.96422653672926
+            ],
+            "mae_per_channel": [
+              0.076887633894727,
+              0.1165757167294179,
+              0.04639166614034332
+            ],
+            "rmse_per_channel": [
+              0.10721472544656174,
+              0.16284282704237638,
+              0.06468618614444173
+            ],
+            "max_abs_per_channel": [
+              1.028289794921875,
+              1.3889003992080688,
+              0.5989303588867188
+            ],
+            "pooled_mae": 0.07995167225482941,
+            "pooled_rmse": 0.11859888469072026,
+            "pooled_max_abs": 1.3889003992080688
+          },
+          "torque_Nm": {
+            "valid_per_channel": [
+              9312,
+              9312,
+              9312
+            ],
+            "absolute_error_sum": [
+              42.161235094070435,
+              81.98939232687007,
+              31.295918223990157
+            ],
+            "squared_error_sum": [
+              0.44595016149906996,
+              1.3650345873384058,
+              0.24019860541027405
+            ],
+            "mae_per_channel": [
+              0.00452762404360722,
+              0.00880470278424292,
+              0.003360815960480043
+            ],
+            "rmse_per_channel": [
+              0.0069202483286903834,
+              0.012107384763953911,
+              0.005078830945884742
+            ],
+            "max_abs_per_channel": [
+              0.06178450584411621,
+              0.10725872218608856,
+              0.06491529941558838
+            ],
+            "pooled_mae": 0.0055643809294433945,
+            "pooled_rmse": 0.008568802454836611,
+            "pooled_max_abs": 0.10725872218608856
+          }
+        },
+        "action_dynamics": {
+          "acceleration_deg_s2": {
+            "valid_per_channel": [
+              8730,
+              8730,
+              8730,
+              8730,
+              8730,
+              8730,
+              8730
+            ],
+            "absolute_error_sum": [
+              593270.3163064255,
+              455169.6624074109,
+              932274.3451894948,
+              612712.3638761664,
+              516809.86028665124,
+              503591.5622828988,
+              528950.5325100065
+            ],
+            "squared_error_sum": [
+              86419459.53083724,
+              44718760.051281564,
+              198338880.3395901,
+              81132118.92481288,
+              58240253.05009788,
+              57089665.90360681,
+              65461636.18532976
+            ],
+            "mae_per_channel": [
+              67.95765364334771,
+              52.138563849646154,
+              106.78973026225599,
+              70.18469231113018,
+              59.19929671095662,
+              57.68517322828165,
+              60.58998081443373
+            ],
+            "rmse_per_channel": [
+              99.49440314825685,
+              71.57111031527958,
+              150.72899614688953,
+              96.40271994566564,
+              81.67788901790553,
+              80.86705528473635,
+              86.59370189535468
+            ],
+            "max_abs_per_channel": [
+              532.182043515825,
+              617.0959733106642,
+              836.4054950890335,
+              581.3163709462801,
+              493.6569527496928,
+              572.9101140159066,
+              698.5336774449158
+            ],
+            "pooled_mae": 67.79215583143599,
+            "pooled_rmse": 98.37501292412239,
+            "pooled_max_abs": 836.4054950890335
+          },
+          "first_jump_deg": {
+            "valid_per_channel": [
+              291,
+              291,
+              291,
+              291,
+              291,
+              291,
+              291
+            ],
+            "absolute_error_sum": [
+              47.49211749173312,
+              28.99483847074156,
+              44.155215708941874,
+              33.06902699294958,
+              32.94992297624021,
+              23.55036262937152,
+              28.225388508397796
+            ],
+            "squared_error_sum": [
+              11.976669180252237,
+              4.742355608526139,
+              10.77824088897012,
+              5.6860000218393525,
+              6.366358883548567,
+              3.1153440722716286,
+              4.108740770638368
+            ],
+            "mae_per_channel": [
+              0.16320315289255366,
+              0.09963862017436961,
+              0.15173613645684492,
+              0.11363926801700887,
+              0.11322997586336842,
+              0.08092908120058942,
+              0.09699446222817112
+            ],
+            "rmse_per_channel": [
+              0.2028717298288586,
+              0.12765874301619418,
+              0.19245422438708223,
+              0.13978382944887782,
+              0.14791052003354263,
+              0.1034681097386639,
+              0.11882501458674762
+            ],
+            "max_abs_per_channel": [
+              0.6542569845598774,
+              0.4044598968215798,
+              0.591521702883722,
+              0.43635516078434466,
+              0.5461555722088329,
+              0.3331766279902936,
+              0.323791947052556
+            ],
+            "pooled_mae": 0.11705295669041516,
+            "pooled_rmse": 0.15153236177373391,
+            "pooled_max_abs": 0.6542569845598774
+          }
+        },
+        "hold_state_vs_recorded": {
+          "joint_deg": {
+            "valid_per_channel": [
+              9312,
+              9312,
+              9312,
+              9312,
+              9312,
+              9312,
+              9312
+            ],
+            "absolute_error_sum": [
+              10049.892015321704,
+              17491.504116450436,
+              19191.153242792934,
+              18458.362106323242,
+              14585.47502282937,
+              14331.29271697998,
+              9939.492072648369
+            ],
+            "squared_error_sum": [
+              63219.74946913644,
+              79211.39594625,
+              139266.93415671887,
+              119634.46145644593,
+              77279.87259761455,
+              79468.61334793229,
+              56143.58785665172
+            ],
+            "mae_per_channel": [
+              1.0792409810268153,
+              1.8783831740174437,
+              2.0609056317432275,
+              1.982212425507221,
+              1.5663096029670716,
+              1.5390133931464756,
+              1.0673853170799366
+            ],
+            "rmse_per_channel": [
+              2.605582937269788,
+              2.9165696341171072,
+              3.8672524555077166,
+              3.584319094258168,
+              2.8807907578714045,
+              2.921301178294604,
+              2.4554358803709255
+            ],
+            "max_abs_per_channel": [
+              15.670973777770996,
+              13.788545608520508,
+              16.053624629974365,
+              20.045726776123047,
+              14.497371673583984,
+              15.922088623046875,
+              20.130277633666992
+            ],
+            "pooled_mae": 1.5962072179268845,
+            "pooled_rmse": 3.0696800001976774,
+            "pooled_max_abs": 20.130277633666992
+          },
+          "gripper_openness": {
+            "valid_per_channel": [
+              9312
+            ],
+            "absolute_error_sum": [
+              2334.536734600668
+            ],
+            "squared_error_sum": [
+              1450.386875713572
+            ],
+            "mae_per_channel": [
+              0.250701968921893
+            ],
+            "rmse_per_channel": [
+              0.3946575786054086
+            ],
+            "max_abs_per_channel": [
+              1.0
+            ],
+            "pooled_mae": 0.250701968921893,
+            "pooled_rmse": 0.3946575786054086,
+            "pooled_max_abs": 1.0
+          },
+          "joint_velocity_deg_s": {
+            "valid_per_channel": [
+              9021,
+              9021,
+              9021,
+              9021,
+              9021,
+              9021,
+              9021
+            ],
+            "absolute_error_sum": [
+              20316.102411471,
+              29510.32978249339,
+              34665.37414873976,
+              34602.636449867874,
+              24235.888880433286,
+              27203.01011919271,
+              20113.62606983735
+            ],
+            "squared_error_sum": [
+              259183.36035584362,
+              225365.90116693592,
+              480561.1497547624,
+              382726.72282923723,
+              236670.02815644038,
+              306672.9104867477,
+              264488.85415084125
+            ],
+            "mae_per_channel": [
+              2.25208983610143,
+              3.271292515518611,
+              3.8427418411195826,
+              3.8357872131546253,
+              2.686607790758595,
+              3.0155204654908223,
+              2.2296448364745984
+            ],
+            "rmse_per_channel": [
+              5.360141032619722,
+              4.99823603921488,
+              7.298724779813113,
+              6.513539511347401,
+              5.122055616297199,
+              5.830561304588567,
+              5.414724268488883
+            ],
+            "max_abs_per_channel": [
+              34.852813720703125,
+              21.995136260986328,
+              45.971405029296875,
+              35.44355773925781,
+              31.79741668701172,
+              45.6876106262207,
+              49.74765396118164
+            ],
+            "pooled_mae": 3.019097785516895,
+            "pooled_rmse": 5.8427145542534,
+            "pooled_max_abs": 49.74765396118164
+          }
+        }
+      },
+      "median_joint_core_ms": 1919.512858032249,
+      "p95_joint_core_ms": 1957.610546000069
+    },
+    "v4_f4_a4": {
+      "records": 291,
+      "metrics": {
+        "action_vs_recorded": {
+          "joint_deg": {
+            "valid_per_channel": [
+              9312,
+              9312,
+              9312,
+              9312,
+              9312,
+              9312,
+              9312
+            ],
+            "absolute_error_sum": [
+              1307.7723506025648,
+              937.4811792236203,
+              1625.2043015676188,
+              1219.1665337102845,
+              1106.396272478498,
+              908.2899038693242,
+              1086.1848059182116
+            ],
+            "squared_error_sum": [
+              307.7864463326998,
+              154.62938723845744,
+              490.6823621827898,
+              276.87940498358097,
+              225.8804302271578,
+              198.83540607480563,
+              236.73993569490068
+            ],
+            "mae_per_channel": [
+              0.1404394706403098,
+              0.1006745252602685,
+              0.1745279533470381,
+              0.13092424116304602,
+              0.11881403269743321,
+              0.09753972335366455,
+              0.1166435573365777
+            ],
+            "rmse_per_channel": [
+              0.1818039279163989,
+              0.12886190097554134,
+              0.22955076266461064,
+              0.1724343732500388,
+              0.15574632918179393,
+              0.14612528682474504,
+              0.1594462387766466
+            ],
+            "max_abs_per_channel": [
+              0.8542531538795132,
+              0.6152911092096858,
+              1.5116046994348409,
+              0.9005798438735724,
+              0.7866172318726914,
+              1.44631938108283,
+              1.1454745516139724
+            ],
+            "pooled_mae": 0.12565192911404824,
+            "pooled_rmse": 0.17034328575393892,
+            "pooled_max_abs": 1.5116046994348409
+          },
+          "gripper_openness": {
+            "valid_per_channel": [
+              9312
+            ],
+            "absolute_error_sum": [
+              115.45682576886611
+            ],
+            "squared_error_sum": [
+              23.825165694573226
+            ],
+            "mae_per_channel": [
+              0.012398714107481326
+            ],
+            "rmse_per_channel": [
+              0.050582056363532905
+            ],
+            "max_abs_per_channel": [
+              0.990991473197937
+            ],
+            "pooled_mae": 0.012398714107481326,
+            "pooled_rmse": 0.050582056363532905,
+            "pooled_max_abs": 0.990991473197937
+          },
+          "joint_velocity_deg_s": {
+            "valid_per_channel": [
+              9021,
+              9021,
+              9021,
+              9021,
+              9021,
+              9021,
+              9021
+            ],
+            "absolute_error_sum": [
+              15748.447325461791,
+              12058.57072457092,
+              22421.58435356586,
+              18764.71289187997,
+              13359.809557395205,
+              13259.686049117527,
+              14582.209021181367
+            ],
+            "squared_error_sum": [
+              56846.66655997168,
+              29074.992334209488,
+              111872.5049258376,
+              67144.44697277977,
+              36530.09539962556,
+              36510.241595888256,
+              46903.19436953798
+            ],
+            "mae_per_channel": [
+              1.7457540544797463,
+              1.3367221732148231,
+              2.485487679144869,
+              2.0801144986010387,
+              1.4809676928716555,
+              1.4698687561376262,
+              1.6164736748898534
+            ],
+            "rmse_per_channel": [
+              2.5102973067842487,
+              1.7952811173898797,
+              3.5215538986009163,
+              2.728209451671834,
+              2.012324717927765,
+              2.011777802713338,
+              2.2802048726193815
+            ],
+            "max_abs_per_channel": [
+              15.354299260458504,
+              10.864918516522684,
+              24.62371991216273,
+              13.127997748649387,
+              11.244813638993444,
+              14.915495679540406,
+              14.185875965107705
+            ],
+            "pooled_mae": 1.7450555041913731,
+            "pooled_rmse": 2.468809154541577,
+            "pooled_max_abs": 24.62371991216273
+          }
+        },
+        "action_vs_training_target": {
+          "joint_deg": {
+            "valid_per_channel": [
+              9312,
+              9312,
+              9312,
+              9312,
+              9312,
+              9312,
+              9312
+            ],
+            "absolute_error_sum": [
+              1307.7695796716102,
+              937.4785329295767,
+              1625.2033675004711,
+              1219.1703509497263,
+              1106.394595760434,
+              908.2997840562364,
+              1086.1856237401983
+            ],
+            "squared_error_sum": [
+              307.78522619053604,
+              154.62873310732812,
+              490.681820721851,
+              276.88015828895516,
+              225.87981970789963,
+              198.83973036153316,
+              236.7400792579584
+            ],
+            "mae_per_channel": [
+              0.1404391730747004,
+              0.10067424107920711,
+              0.17452785303913995,
+              0.130924651089962,
+              0.11881385263750364,
+              0.0975407843703003,
+              0.11664364516110376
+            ],
+            "rmse_per_channel": [
+              0.18180356755800678,
+              0.12886162841198967,
+              0.22955063601159095,
+              0.17243460782084719,
+              0.15574611870274202,
+              0.14612687578773534,
+              0.15944628712207265
+            ],
+            "max_abs_per_channel": [
+              0.8542532535973756,
+              0.6152907611914316,
+              1.5116028255938616,
+              0.9005775175391051,
+              0.7866166650110902,
+              1.4463267076960449,
+              1.1454722426826223
+            ],
+            "pooled_mae": 0.12565202863598818,
+            "pooled_rmse": 0.17034338459079437,
+            "pooled_max_abs": 1.5116028255938616
+          },
+          "gripper_openness": {
+            "valid_per_channel": [
+              9312
+            ],
+            "absolute_error_sum": [
+              115.45680187857943
+            ],
+            "squared_error_sum": [
+              23.825165615572494
+            ],
+            "mae_per_channel": [
+              0.012398711541943667
+            ],
+            "rmse_per_channel": [
+              0.050582056279671585
+            ],
+            "max_abs_per_channel": [
+              0.990991473197937
+            ],
+            "pooled_mae": 0.012398711541943667,
+            "pooled_rmse": 0.050582056279671585,
+            "pooled_max_abs": 0.990991473197937
+          },
+          "joint_velocity_deg_s": {
+            "valid_per_channel": [
+              9021,
+              9021,
+              9021,
+              9021,
+              9021,
+              9021,
+              9021
+            ],
+            "absolute_error_sum": [
+              15748.447519894555,
+              12058.569762842093,
+              22421.58218552293,
+              18764.713244427203,
+              13359.808920194248,
+              13259.700523688562,
+              14582.209073742082
+            ],
+            "squared_error_sum": [
+              56846.6616167645,
+              29074.98175422729,
+              111872.48403647292,
+              67144.49297330655,
+              36530.09355100226,
+              36510.31765731771,
+              46903.19338342833
+            ],
+            "mae_per_channel": [
+              1.7457540760330956,
+              1.3367220666048214,
+              2.4854874388119863,
+              2.080114537681765,
+              1.4809676222363648,
+              1.4698703606793662,
+              1.6164736807163376
+            ],
+            "rmse_per_channel": [
+              2.51029719764047,
+              1.795280790751032,
+              3.5215535698202785,
+              2.728210386217102,
+              2.012324667010427,
+              2.011779898270763,
+              2.280204848649457
+            ],
+            "max_abs_per_channel": [
+              15.354299405134514,
+              10.864918516522684,
+              24.62371988248807,
+              13.127999245168857,
+              11.244813638158792,
+              14.915493901907041,
+              14.185876019293357
+            ],
+            "pooled_mae": 1.7450556832519624,
+            "pooled_rmse": 2.468809420147045,
+            "pooled_max_abs": 24.62371988248807
+          }
+        },
+        "force_vs_recorded": {
+          "force_N": {
+            "valid_per_channel": [
+              9312,
+              9312,
+              9312
+            ],
+            "absolute_error_sum": [
+              718.8550400733948,
+              893.6107192006893,
+              416.43939208984375
+            ],
+            "squared_error_sum": [
+              97.62534574190772,
+              157.23521611373994,
+              34.19057863703347
+            ],
+            "mae_per_channel": [
+              0.07719663231028724,
+              0.0959633504296273,
+              0.04472072509555882
+            ],
+            "rmse_per_channel": [
+              0.10239053419580572,
+              0.1299431610286782,
+              0.06059429567266467
+            ],
+            "max_abs_per_channel": [
+              0.9159145355224609,
+              0.9017577171325684,
+              0.5248489379882812
+            ],
+            "pooled_mae": 0.07262690261182445,
+            "pooled_rmse": 0.10171973793892997,
+            "pooled_max_abs": 0.9159145355224609
+          },
+          "torque_Nm": {
+            "valid_per_channel": [
+              9312,
+              9312,
+              9312
+            ],
+            "absolute_error_sum": [
+              37.99340271949768,
+              80.61164944959455,
+              29.068999878294562
+            ],
+            "squared_error_sum": [
+              0.33898490329801234,
+              1.232575978951057,
+              0.18136891101440134
+            ],
+            "mae_per_channel": [
+              0.004080047542901383,
+              0.00865674929656299,
+              0.0031216709491295705
+            ],
+            "rmse_per_channel": [
+              0.006033491357899822,
+              0.011504966706078482,
+              0.004413264319754018
+            ],
+            "max_abs_per_channel": [
+              0.053354501724243164,
+              0.07990734279155731,
+              0.047681331634521484
+            ],
+            "pooled_mae": 0.005286155929531315,
+            "pooled_rmse": 0.007921367281596448,
+            "pooled_max_abs": 0.07990734279155731
+          }
+        },
+        "action_dynamics": {
+          "acceleration_deg_s2": {
+            "valid_per_channel": [
+              8730,
+              8730,
+              8730,
+              8730,
+              8730,
+              8730,
+              8730
+            ],
+            "absolute_error_sum": [
+              760597.9862824794,
+              571427.3089689988,
+              1074609.268101363,
+              904398.2490731425,
+              619553.1631198353,
+              614696.0959815866,
+              686136.045485761
+            ],
+            "squared_error_sum": [
+              128711618.95872836,
+              65576739.192476586,
+              250618517.56657997,
+              160810872.15770736,
+              79148022.84911416,
+              77657737.7508933,
+              101676742.28546175
+            ],
+            "mae_per_channel": [
+              87.1246261491958,
+              65.45559094719346,
+              123.09384514334054,
+              103.59659210459823,
+              70.96828901716327,
+              70.41192393832607,
+              78.59519421371833
+            ],
+            "rmse_per_channel": [
+              121.42322250848311,
+              86.6697985110024,
+              169.43356801699997,
+              135.72210345092662,
+              95.21665344795264,
+              94.31597216833848,
+              107.92043560957566
+            ],
+            "max_abs_per_channel": [
+              749.9793617176767,
+              443.9363344535839,
+              932.5595372747418,
+              640.2093421654769,
+              568.1860151782917,
+              527.7960352217547,
+              774.3513548939959
+            ],
+            "pooled_mae": 85.60658021621938,
+            "pooled_rmse": 118.91894622355454,
+            "pooled_max_abs": 932.5595372747418
+          },
+          "first_jump_deg": {
+            "valid_per_channel": [
+              291,
+              291,
+              291,
+              291,
+              291,
+              291,
+              291
+            ],
+            "absolute_error_sum": [
+              29.166033713116345,
+              19.503435262803194,
+              40.15055320252833,
+              30.866723037456982,
+              25.375072881122783,
+              19.04659733890341,
+              24.72828761994118
+            ],
+            "squared_error_sum": [
+              4.9473173502727965,
+              2.1552000074270343,
+              8.5998331519231,
+              5.232072235597316,
+              3.6471803516642076,
+              1.9671593106387906,
+              3.2577388279538355
+            ],
+            "mae_per_channel": [
+              0.10022691997634482,
+              0.06702211430516561,
+              0.13797440963068155,
+              0.1060712131871374,
+              0.08719956316537039,
+              0.06545222453231413,
+              0.08497693340185973
+            ],
+            "rmse_per_channel": [
+              0.13038823010826409,
+              0.08605919818667128,
+              0.17190896208086998,
+              0.13408814144282913,
+              0.11195206926751762,
+              0.08221920475814112,
+              0.1058063267967439
+            ],
+            "max_abs_per_channel": [
+              0.51799813107656,
+              0.24717686108763592,
+              0.5264197739958403,
+              0.34428592809566505,
+              0.41217800336477056,
+              0.2883296055450223,
+              0.2741006075142488
+            ],
+            "pooled_mae": 0.09270333974269623,
+            "pooled_rmse": 0.12096507128516308,
+            "pooled_max_abs": 0.5264197739958403
+          }
+        },
+        "hold_state_vs_recorded": {
+          "joint_deg": {
+            "valid_per_channel": [
+              9312,
+              9312,
+              9312,
+              9312,
+              9312,
+              9312,
+              9312
+            ],
+            "absolute_error_sum": [
+              10049.892015321704,
+              17491.504116450436,
+              19191.153242792934,
+              18458.362106323242,
+              14585.47502282937,
+              14331.29271697998,
+              9939.492072648369
+            ],
+            "squared_error_sum": [
+              63219.74946913644,
+              79211.39594625,
+              139266.93415671887,
+              119634.46145644593,
+              77279.87259761455,
+              79468.61334793229,
+              56143.58785665172
+            ],
+            "mae_per_channel": [
+              1.0792409810268153,
+              1.8783831740174437,
+              2.0609056317432275,
+              1.982212425507221,
+              1.5663096029670716,
+              1.5390133931464756,
+              1.0673853170799366
+            ],
+            "rmse_per_channel": [
+              2.605582937269788,
+              2.9165696341171072,
+              3.8672524555077166,
+              3.584319094258168,
+              2.8807907578714045,
+              2.921301178294604,
+              2.4554358803709255
+            ],
+            "max_abs_per_channel": [
+              15.670973777770996,
+              13.788545608520508,
+              16.053624629974365,
+              20.045726776123047,
+              14.497371673583984,
+              15.922088623046875,
+              20.130277633666992
+            ],
+            "pooled_mae": 1.5962072179268845,
+            "pooled_rmse": 3.0696800001976774,
+            "pooled_max_abs": 20.130277633666992
+          },
+          "gripper_openness": {
+            "valid_per_channel": [
+              9312
+            ],
+            "absolute_error_sum": [
+              2334.536734600668
+            ],
+            "squared_error_sum": [
+              1450.386875713572
+            ],
+            "mae_per_channel": [
+              0.250701968921893
+            ],
+            "rmse_per_channel": [
+              0.3946575786054086
+            ],
+            "max_abs_per_channel": [
+              1.0
+            ],
+            "pooled_mae": 0.250701968921893,
+            "pooled_rmse": 0.3946575786054086,
+            "pooled_max_abs": 1.0
+          },
+          "joint_velocity_deg_s": {
+            "valid_per_channel": [
+              9021,
+              9021,
+              9021,
+              9021,
+              9021,
+              9021,
+              9021
+            ],
+            "absolute_error_sum": [
+              20316.102411471,
+              29510.32978249339,
+              34665.37414873976,
+              34602.636449867874,
+              24235.888880433286,
+              27203.01011919271,
+              20113.62606983735
+            ],
+            "squared_error_sum": [
+              259183.36035584362,
+              225365.90116693592,
+              480561.1497547624,
+              382726.72282923723,
+              236670.02815644038,
+              306672.9104867477,
+              264488.85415084125
+            ],
+            "mae_per_channel": [
+              2.25208983610143,
+              3.271292515518611,
+              3.8427418411195826,
+              3.8357872131546253,
+              2.686607790758595,
+              3.0155204654908223,
+              2.2296448364745984
+            ],
+            "rmse_per_channel": [
+              5.360141032619722,
+              4.99823603921488,
+              7.298724779813113,
+              6.513539511347401,
+              5.122055616297199,
+              5.830561304588567,
+              5.414724268488883
+            ],
+            "max_abs_per_channel": [
+              34.852813720703125,
+              21.995136260986328,
+              45.971405029296875,
+              35.44355773925781,
+              31.79741668701172,
+              45.6876106262207,
+              49.74765396118164
+            ],
+            "pooled_mae": 3.019097785516895,
+            "pooled_rmse": 5.8427145542534,
+            "pooled_max_abs": 49.74765396118164
+          }
+        }
+      },
+      "median_joint_core_ms": 540.3851040173322,
+      "p95_joint_core_ms": 553.5945234878454
+    },
+    "v4_f4_a8": {
+      "records": 291,
+      "metrics": {
+        "action_vs_recorded": {
+          "joint_deg": {
+            "valid_per_channel": [
+              9312,
+              9312,
+              9312,
+              9312,
+              9312,
+              9312,
+              9312
+            ],
+            "absolute_error_sum": [
+              1390.8559002647798,
+              989.4519258379545,
+              1658.6559264692612,
+              1250.0282467763639,
+              1120.2248396177977,
+              970.0445180411572,
+              1091.5769830761596
+            ],
+            "squared_error_sum": [
+              344.9245493661439,
+              176.25770203167875,
+              515.0401104505503,
+              290.9589752392108,
+              236.3332074602065,
+              220.00238706109755,
+              238.98132797747152
+            ],
+            "mae_per_channel": [
+              0.1493616731383999,
+              0.10625557622830267,
+              0.17812026701774714,
+              0.13423842856275386,
+              0.12029905923730645,
+              0.10417144738414488,
+              0.11722261416195873
+            ],
+            "rmse_per_channel": [
+              0.19246003885389454,
+              0.1375791329739449,
+              0.23517927249571566,
+              0.17676423399550698,
+              0.1593092125389001,
+              0.15370649269219702,
+              0.16019925843485977
+            ],
+            "max_abs_per_channel": [
+              0.9539901863446669,
+              0.5593917191506828,
+              1.5122711196186174,
+              0.872018862222447,
+              0.880580144284556,
+              1.4691936846132023,
+              1.1454745516139724
+            ],
+            "pooled_mae": 0.12995272367580193,
+            "pooled_rmse": 0.17614632006849842,
+            "pooled_max_abs": 1.5122711196186174
+          },
+          "gripper_openness": {
+            "valid_per_channel": [
+              9312
+            ],
+            "absolute_error_sum": [
+              114.97310107015073
+            ],
+            "squared_error_sum": [
+              27.407798233298745
+            ],
+            "mae_per_channel": [
+              0.012346767726605534
+            ],
+            "rmse_per_channel": [
+              0.054251979702918326
+            ],
+            "max_abs_per_channel": [
+              1.0022176504135132
+            ],
+            "pooled_mae": 0.012346767726605534,
+            "pooled_rmse": 0.054251979702918326,
+            "pooled_max_abs": 1.0022176504135132
+          },
+          "joint_velocity_deg_s": {
+            "valid_per_channel": [
+              9021,
+              9021,
+              9021,
+              9021,
+              9021,
+              9021,
+              9021
+            ],
+            "absolute_error_sum": [
+              13601.96808217788,
+              10703.334745755661,
+              20633.062970140436,
+              15790.69308048421,
+              11541.097886146335,
+              12453.118257110018,
+              13441.733725450094
+            ],
+            "squared_error_sum": [
+              44082.99065150155,
+              23346.63029897797,
+              97175.52377608117,
+              49653.362537516245,
+              28700.098536493213,
+              33226.384486538635,
+              40786.08266567612
+            ],
+            "mae_per_channel": [
+              1.5078115599354707,
+              1.186490937341277,
+              2.2872256922891516,
+              1.7504371001534431,
+              1.2793590384820237,
+              1.3804587359616471,
+              1.4900491880556583
+            ],
+            "rmse_per_channel": [
+              2.210589910927783,
+              1.6087359303300401,
+              3.2820946685919203,
+              2.3461025457662044,
+              1.7836693618696169,
+              1.9191733386527223,
+              2.126320156725888
+            ],
+            "max_abs_per_channel": [
+              14.82884248126876,
+              11.13016651804487,
+              18.35073757463962,
+              14.580061900536862,
+              8.94643809032522,
+              14.915495679540406,
+              17.548734905297554
+            ],
+            "pooled_mae": 1.5545474646026674,
+            "pooled_rmse": 2.240440700329397,
+            "pooled_max_abs": 18.35073757463962
+          }
+        },
+        "action_vs_training_target": {
+          "joint_deg": {
+            "valid_per_channel": [
+              9312,
+              9312,
+              9312,
+              9312,
+              9312,
+              9312,
+              9312
+            ],
+            "absolute_error_sum": [
+              1390.8528416361405,
+              989.4485855773571,
+              1658.654164257396,
+              1250.0314644690677,
+              1120.223097700477,
+              970.0579447201414,
+              1091.5769384391572
+            ],
+            "squared_error_sum": [
+              344.9230713634708,
+              176.25674595824626,
+              515.0389314899063,
+              290.9595365349565,
+              236.332580402241,
+              220.00779011912067,
+              238.98124816223745
+            ],
+            "mae_per_channel": [
+              0.1493613446774206,
+              0.10625521752334162,
+              0.1781200777767822,
+              0.1342387741053552,
+              0.12029887217573851,
+              0.10417288925259251,
+              0.1172226093684662
+            ],
+            "rmse_per_channel": [
+              0.19245962650754644,
+              0.1375787598386698,
+              0.2351790033251602,
+              0.17676440449542813,
+              0.15930900119285601,
+              0.15370838012626245,
+              0.16019923168309952
+            ],
+            "max_abs_per_channel": [
+              0.9539902905396935,
+              0.5593907854767517,
+              1.512268769037938,
+              0.8720170815246995,
+              0.8805795774229548,
+              1.469201011226417,
+              1.1454722426826223
+            ],
+            "pooled_mae": 0.12995282641138528,
+            "pooled_rmse": 0.1761463916786141,
+            "pooled_max_abs": 1.512268769037938
+          },
+          "gripper_openness": {
+            "valid_per_channel": [
+              9312
+            ],
+            "absolute_error_sum": [
+              114.97308068163693
+            ],
+            "squared_error_sum": [
+              27.407798192166503
+            ],
+            "mae_per_channel": [
+              0.012346765537117367
+            ],
+            "rmse_per_channel": [
+              0.054251979662209
+            ],
+            "max_abs_per_channel": [
+              1.0022176504135132
+            ],
+            "pooled_mae": 0.012346765537117367,
+            "pooled_rmse": 0.054251979662209,
+            "pooled_max_abs": 1.0022176504135132
+          },
+          "joint_velocity_deg_s": {
+            "valid_per_channel": [
+              9021,
+              9021,
+              9021,
+              9021,
+              9021,
+              9021,
+              9021
+            ],
+            "absolute_error_sum": [
+              13601.970853691133,
+              10703.337040045242,
+              20633.062207450297,
+              15790.69398818875,
+              11541.098147687562,
+              12453.11679101637,
+              13441.733485245224
+            ],
+            "squared_error_sum": [
+              44083.00979441809,
+              23346.630081245003,
+              97175.51600186934,
+              49653.392173655724,
+              28700.098681097472,
+              33226.417701679246,
+              40786.08409157525
+            ],
+            "mae_per_channel": [
+              1.5078118671645198,
+              1.1864911916689105,
+              2.287225607743077,
+              1.7504372007747202,
+              1.2793590674745108,
+              1.3804585734415662,
+              1.4900491614283586
+            ],
+            "rmse_per_channel": [
+              2.2105903908990028,
+              1.6087359228284255,
+              3.2820945373052615,
+              2.346103245914274,
+              1.783669366363089,
+              1.9191742979144257,
+              2.126320193894425
+            ],
+            "max_abs_per_channel": [
+              14.828870027758358,
+              11.130168912940128,
+              18.35073754496496,
+              14.579960858930164,
+              8.946437906976577,
+              14.915493901907041,
+              17.54873673262206
+            ],
+            "pooled_mae": 1.5545475242422375,
+            "pooled_rmse": 2.2404409674141266,
+            "pooled_max_abs": 18.35073754496496
+          }
+        },
+        "force_vs_recorded": {
+          "force_N": {
+            "valid_per_channel": [
+              9312,
+              9312,
+              9312
+            ],
+            "absolute_error_sum": [
+              718.8550400733948,
+              893.6107192006893,
+              416.43939208984375
+            ],
+            "squared_error_sum": [
+              97.62534574190772,
+              157.23521611373994,
+              34.19057863703347
+            ],
+            "mae_per_channel": [
+              0.07719663231028724,
+              0.0959633504296273,
+              0.04472072509555882
+            ],
+            "rmse_per_channel": [
+              0.10239053419580572,
+              0.1299431610286782,
+              0.06059429567266467
+            ],
+            "max_abs_per_channel": [
+              0.9159145355224609,
+              0.9017577171325684,
+              0.5248489379882812
+            ],
+            "pooled_mae": 0.07262690261182445,
+            "pooled_rmse": 0.10171973793892997,
+            "pooled_max_abs": 0.9159145355224609
+          },
+          "torque_Nm": {
+            "valid_per_channel": [
+              9312,
+              9312,
+              9312
+            ],
+            "absolute_error_sum": [
+              37.99340271949768,
+              80.61164944959455,
+              29.068999878294562
+            ],
+            "squared_error_sum": [
+              0.33898490329801234,
+              1.232575978951057,
+              0.18136891101440134
+            ],
+            "mae_per_channel": [
+              0.004080047542901383,
+              0.00865674929656299,
+              0.0031216709491295705
+            ],
+            "rmse_per_channel": [
+              0.006033491357899822,
+              0.011504966706078482,
+              0.004413264319754018
+            ],
+            "max_abs_per_channel": [
+              0.053354501724243164,
+              0.07990734279155731,
+              0.047681331634521484
+            ],
+            "pooled_mae": 0.005286155929531315,
+            "pooled_rmse": 0.007921367281596448,
+            "pooled_max_abs": 0.07990734279155731
+          }
+        },
+        "action_dynamics": {
+          "acceleration_deg_s2": {
+            "valid_per_channel": [
+              8730,
+              8730,
+              8730,
+              8730,
+              8730,
+              8730,
+              8730
+            ],
+            "absolute_error_sum": [
+              653378.6912206353,
+              495677.82660882984,
+              1011145.1037018029,
+              750786.1394197291,
+              517905.73164614796,
+              571398.5943070053,
+              631403.0758639233
+            ],
+            "squared_error_sum": [
+              99170352.31284468,
+              50812333.59878888,
+              223670834.90290153,
+              113762396.02400663,
+              58055116.53424413,
+              67810110.97577722,
+              87562661.89827575
+            ],
+            "mae_per_channel": [
+              74.8429199565447,
+              56.77867429654408,
+              115.82418140914123,
+              86.00070325540997,
+              59.324826076305605,
+              65.45230175337976,
+              72.32566733836464
+            ],
+            "rmse_per_channel": [
+              106.5819854546933,
+              76.29172743191927,
+              160.0654343943335,
+              114.15429161315244,
+              81.5479651645538,
+              88.13331499171716,
+              100.15032338225926
+            ],
+            "max_abs_per_channel": [
+              538.5197765701722,
+              606.9101122014241,
+              822.7218926487694,
+              667.1062786722921,
+              409.08956318273226,
+              527.7960352217547,
+              782.0187823256044
+            ],
+            "pooled_mae": 75.79275344081287,
+            "pooled_rmse": 107.09137085887897,
+            "pooled_max_abs": 822.7218926487694
+          },
+          "first_jump_deg": {
+            "valid_per_channel": [
+              291,
+              291,
+              291,
+              291,
+              291,
+              291,
+              291
+            ],
+            "absolute_error_sum": [
+              33.42967823555772,
+              23.44566374959546,
+              39.23447689244498,
+              33.60988066495044,
+              26.34885582286095,
+              22.400479625608327,
+              24.54521027940358
+            ],
+            "squared_error_sum": [
+              6.482228339849297,
+              3.0520067170318654,
+              8.395406866322471,
+              6.535896408092384,
+              4.063704486664265,
+              2.612423737269595,
+              3.105872936287463
+            ],
+            "mae_per_channel": [
+              0.11487861936617771,
+              0.08056929123572323,
+              0.1348263810736941,
+              0.11549787170086061,
+              0.09054589629849125,
+              0.0769775932151489,
+              0.08434780164743498
+            ],
+            "rmse_per_channel": [
+              0.14925045648964938,
+              0.1024109153907668,
+              0.16985345276713013,
+              0.1498670247710267,
+              0.11817199426719861,
+              0.09474914859249155,
+              0.10331071035396126
+            ],
+            "max_abs_per_channel": [
+              0.51799813107656,
+              0.31391826885365604,
+              0.5264197739958403,
+              0.5628007453414983,
+              0.41217800336477056,
+              0.30070591388305584,
+              0.2670552731645526
+            ],
+            "pooled_mae": 0.09966335064821867,
+            "pooled_rmse": 0.12966392776608948,
+            "pooled_max_abs": 0.5628007453414983
+          }
+        },
+        "hold_state_vs_recorded": {
+          "joint_deg": {
+            "valid_per_channel": [
+              9312,
+              9312,
+              9312,
+              9312,
+              9312,
+              9312,
+              9312
+            ],
+            "absolute_error_sum": [
+              10049.892015321704,
+              17491.504116450436,
+              19191.153242792934,
+              18458.362106323242,
+              14585.47502282937,
+              14331.29271697998,
+              9939.492072648369
+            ],
+            "squared_error_sum": [
+              63219.74946913644,
+              79211.39594625,
+              139266.93415671887,
+              119634.46145644593,
+              77279.87259761455,
+              79468.61334793229,
+              56143.58785665172
+            ],
+            "mae_per_channel": [
+              1.0792409810268153,
+              1.8783831740174437,
+              2.0609056317432275,
+              1.982212425507221,
+              1.5663096029670716,
+              1.5390133931464756,
+              1.0673853170799366
+            ],
+            "rmse_per_channel": [
+              2.605582937269788,
+              2.9165696341171072,
+              3.8672524555077166,
+              3.584319094258168,
+              2.8807907578714045,
+              2.921301178294604,
+              2.4554358803709255
+            ],
+            "max_abs_per_channel": [
+              15.670973777770996,
+              13.788545608520508,
+              16.053624629974365,
+              20.045726776123047,
+              14.497371673583984,
+              15.922088623046875,
+              20.130277633666992
+            ],
+            "pooled_mae": 1.5962072179268845,
+            "pooled_rmse": 3.0696800001976774,
+            "pooled_max_abs": 20.130277633666992
+          },
+          "gripper_openness": {
+            "valid_per_channel": [
+              9312
+            ],
+            "absolute_error_sum": [
+              2334.536734600668
+            ],
+            "squared_error_sum": [
+              1450.386875713572
+            ],
+            "mae_per_channel": [
+              0.250701968921893
+            ],
+            "rmse_per_channel": [
+              0.3946575786054086
+            ],
+            "max_abs_per_channel": [
+              1.0
+            ],
+            "pooled_mae": 0.250701968921893,
+            "pooled_rmse": 0.3946575786054086,
+            "pooled_max_abs": 1.0
+          },
+          "joint_velocity_deg_s": {
+            "valid_per_channel": [
+              9021,
+              9021,
+              9021,
+              9021,
+              9021,
+              9021,
+              9021
+            ],
+            "absolute_error_sum": [
+              20316.102411471,
+              29510.32978249339,
+              34665.37414873976,
+              34602.636449867874,
+              24235.888880433286,
+              27203.01011919271,
+              20113.62606983735
+            ],
+            "squared_error_sum": [
+              259183.36035584362,
+              225365.90116693592,
+              480561.1497547624,
+              382726.72282923723,
+              236670.02815644038,
+              306672.9104867477,
+              264488.85415084125
+            ],
+            "mae_per_channel": [
+              2.25208983610143,
+              3.271292515518611,
+              3.8427418411195826,
+              3.8357872131546253,
+              2.686607790758595,
+              3.0155204654908223,
+              2.2296448364745984
+            ],
+            "rmse_per_channel": [
+              5.360141032619722,
+              4.99823603921488,
+              7.298724779813113,
+              6.513539511347401,
+              5.122055616297199,
+              5.830561304588567,
+              5.414724268488883
+            ],
+            "max_abs_per_channel": [
+              34.852813720703125,
+              21.995136260986328,
+              45.971405029296875,
+              35.44355773925781,
+              31.79741668701172,
+              45.6876106262207,
+              49.74765396118164
+            ],
+            "pooled_mae": 3.019097785516895,
+            "pooled_rmse": 5.8427145542534,
+            "pooled_max_abs": 49.74765396118164
+          }
+        }
+      },
+      "median_joint_core_ms": 587.2406809940003,
+      "p95_joint_core_ms": 605.0013714993838
+    },
+    "v4_f4_a16": {
+      "records": 291,
+      "metrics": {
+        "action_vs_recorded": {
+          "joint_deg": {
+            "valid_per_channel": [
+              9312,
+              9312,
+              9312,
+              9312,
+              9312,
+              9312,
+              9312
+            ],
+            "absolute_error_sum": [
+              1492.3629050390768,
+              1181.93346272149,
+              1914.3311282676955,
+              1264.7755135002008,
+              1150.4314646590562,
+              1041.5009253289993,
+              1151.1329912311012
+            ],
+            "squared_error_sum": [
+              395.39781118890204,
+              245.80460325224297,
+              669.0977298828111,
+              300.3252847026965,
+              258.366146260925,
+              243.39429867816176,
+              256.7236862136781
+            ],
+            "mae_per_channel": [
+              0.16026233945866375,
+              0.12692584436442117,
+              0.20557679642049995,
+              0.13582211270405936,
+              0.12354289783709796,
+              0.11184503064100078,
+              0.1236182335944052
+            ],
+            "rmse_per_channel": [
+              0.20606092582886107,
+              0.16247012785577794,
+              0.26805461859984314,
+              0.1795868219604466,
+              0.166569821388618,
+              0.16167159272998674,
+              0.16603952655502435
+            ],
+            "max_abs_per_channel": [
+              0.9717744559558104,
+              0.6783363913638851,
+              1.7207041106856167,
+              0.9864182017421541,
+              0.9745439104700679,
+              1.577389649159855,
+              0.9407367592353584
+            ],
+            "pooled_mae": 0.14108475071716403,
+            "pooled_rmse": 0.1906435291492566,
+            "pooled_max_abs": 1.7207041106856167
+          },
+          "gripper_openness": {
+            "valid_per_channel": [
+              9312
+            ],
+            "absolute_error_sum": [
+              120.92836311459541
+            ],
+            "squared_error_sum": [
+              28.857781678720976
+            ],
+            "mae_per_channel": [
+              0.012986293289797618
+            ],
+            "rmse_per_channel": [
+              0.055668560088589274
+            ],
+            "max_abs_per_channel": [
+              1.0097017288208008
+            ],
+            "pooled_mae": 0.012986293289797618,
+            "pooled_rmse": 0.055668560088589274,
+            "pooled_max_abs": 1.0097017288208008
+          },
+          "joint_velocity_deg_s": {
+            "valid_per_channel": [
+              9021,
+              9021,
+              9021,
+              9021,
+              9021,
+              9021,
+              9021
+            ],
+            "absolute_error_sum": [
+              12613.762345287483,
+              9758.4894859393,
+              20157.07237462766,
+              14117.272673723175,
+              11761.337294446043,
+              12168.619235023356,
+              12458.502312297487
+            ],
+            "squared_error_sum": [
+              39521.63179211898,
+              20483.793758593158,
+              94720.68412131278,
+              41633.84967704832,
+              30359.46745886489,
+              32471.510729602836,
+              36734.307524338576
+            ],
+            "mae_per_channel": [
+              1.3982665275787034,
+              1.081752520334697,
+              2.234460966037874,
+              1.5649343391778268,
+              1.3037731176639,
+              1.348921320809595,
+              1.3810555716990895
+            ],
+            "rmse_per_channel": [
+              2.0931005529728437,
+              1.506877179360089,
+              3.240373498580003,
+              2.148305021104121,
+              1.8345085205312244,
+              1.897247135809079,
+              2.0179415714599487
+            ],
+            "max_abs_per_channel": [
+              13.74402061086856,
+              12.488281332610205,
+              17.256841801744503,
+              14.580061900536862,
+              12.435520595858662,
+              14.915495679540406,
+              17.548747711902248
+            ],
+            "pooled_mae": 1.4733091947573835,
+            "pooled_rmse": 2.164784384664008,
+            "pooled_max_abs": 17.548747711902248
+          }
+        },
+        "action_vs_training_target": {
+          "joint_deg": {
+            "valid_per_channel": [
+              9312,
+              9312,
+              9312,
+              9312,
+              9312,
+              9312,
+              9312
+            ],
+            "absolute_error_sum": [
+              1492.3604819284492,
+              1181.9299607658254,
+              1914.328571803989,
+              1264.7805698401526,
+              1150.4301122816003,
+              1041.5135464959276,
+              1151.1335310514096
+            ],
+            "squared_error_sum": [
+              395.39649426062806,
+              245.80331639440394,
+              669.0958923953524,
+              300.3262862291735,
+              258.36562513807473,
+              243.39982788384927,
+              256.7238275002065
+            ],
+            "mae_per_channel": [
+              0.1602620792448936,
+              0.12692546829529913,
+              0.2055765218861672,
+              0.13582265569589266,
+              0.12354275260756016,
+              0.11184638600686507,
+              0.12361829156479914
+            ],
+            "rmse_per_channel": [
+              0.20606058267106195,
+              0.1624697025662827,
+              0.2680542505315356,
+              0.17958712140377742,
+              0.1665696534034057,
+              0.1616734290721241,
+              0.16603957224450747
+            ],
+            "max_abs_per_channel": [
+              0.9717745556736728,
+              0.678333407230646,
+              1.7207022368446374,
+              0.9864159199332505,
+              0.9745433436084667,
+              1.577404868057755,
+              0.9407364685378425
+            ],
+            "pooled_mae": 0.14108487932878241,
+            "pooled_rmse": 0.19064359793635915,
+            "pooled_max_abs": 1.7207022368446374
+          },
+          "gripper_openness": {
+            "valid_per_channel": [
+              9312
+            ],
+            "absolute_error_sum": [
+              120.92834798619151
+            ],
+            "squared_error_sum": [
+              28.857781708561085
+            ],
+            "mae_per_channel": [
+              0.012986291665183796
+            ],
+            "rmse_per_channel": [
+              0.05566856011737104
+            ],
+            "max_abs_per_channel": [
+              1.0097017288208008
+            ],
+            "pooled_mae": 0.012986291665183796,
+            "pooled_rmse": 0.05566856011737104,
+            "pooled_max_abs": 1.0097017288208008
+          },
+          "joint_velocity_deg_s": {
+            "valid_per_channel": [
+              9021,
+              9021,
+              9021,
+              9021,
+              9021,
+              9021,
+              9021
+            ],
+            "absolute_error_sum": [
+              12613.760588833917,
+              9758.490854888027,
+              20157.07372535907,
+              14117.270218326123,
+              11761.337137725548,
+              12168.609973970015,
+              12458.502373348987
+            ],
+            "squared_error_sum": [
+              39521.60837304926,
+              20483.797366813553,
+              94720.69188315794,
+              41633.85251636064,
+              30359.470383701897,
+              32471.517845550985,
+              36734.31281702435
+            ],
+            "mae_per_channel": [
+              1.3982663328715128,
+              1.0817526720860244,
+              2.234461115769767,
+              1.5649340669910345,
+              1.3037731002910484,
+              1.3489202941990928,
+              1.3810555784667982
+            ],
+            "rmse_per_channel": [
+              2.0930999328254356,
+              1.5068773120782952,
+              3.240373631345497,
+              2.148305094358322,
+              1.8345086088996763,
+              1.8972473436945638,
+              2.0179417168326395
+            ],
+            "max_abs_per_channel": [
+              13.744048157358158,
+              12.488283727505463,
+              17.256848598441564,
+              14.579960858930164,
+              12.435494902957727,
+              14.915493901907041,
+              17.548749539226755
+            ],
+            "pooled_mae": 1.4733090229536112,
+            "pooled_rmse": 2.1647844070626734,
+            "pooled_max_abs": 17.548749539226755
+          }
+        },
+        "force_vs_recorded": {
+          "force_N": {
+            "valid_per_channel": [
+              9312,
+              9312,
+              9312
+            ],
+            "absolute_error_sum": [
+              718.8550400733948,
+              893.6107192006893,
+              416.43939208984375
+            ],
+            "squared_error_sum": [
+              97.62534574190772,
+              157.23521611373994,
+              34.19057863703347
+            ],
+            "mae_per_channel": [
+              0.07719663231028724,
+              0.0959633504296273,
+              0.04472072509555882
+            ],
+            "rmse_per_channel": [
+              0.10239053419580572,
+              0.1299431610286782,
+              0.06059429567266467
+            ],
+            "max_abs_per_channel": [
+              0.9159145355224609,
+              0.9017577171325684,
+              0.5248489379882812
+            ],
+            "pooled_mae": 0.07262690261182445,
+            "pooled_rmse": 0.10171973793892997,
+            "pooled_max_abs": 0.9159145355224609
+          },
+          "torque_Nm": {
+            "valid_per_channel": [
+              9312,
+              9312,
+              9312
+            ],
+            "absolute_error_sum": [
+              37.99340271949768,
+              80.61164944959455,
+              29.068999878294562
+            ],
+            "squared_error_sum": [
+              0.33898490329801234,
+              1.232575978951057,
+              0.18136891101440134
+            ],
+            "mae_per_channel": [
+              0.004080047542901383,
+              0.00865674929656299,
+              0.0031216709491295705
+            ],
+            "rmse_per_channel": [
+              0.006033491357899822,
+              0.011504966706078482,
+              0.004413264319754018
+            ],
+            "max_abs_per_channel": [
+              0.053354501724243164,
+              0.07990734279155731,
+              0.047681331634521484
+            ],
+            "pooled_mae": 0.005286155929531315,
+            "pooled_rmse": 0.007921367281596448,
+            "pooled_max_abs": 0.07990734279155731
+          }
+        },
+        "action_dynamics": {
+          "acceleration_deg_s2": {
+            "valid_per_channel": [
+              8730,
+              8730,
+              8730,
+              8730,
+              8730,
+              8730,
+              8730
+            ],
+            "absolute_error_sum": [
+              593217.6266068993,
+              445868.95873746416,
+              983948.9708700613,
+              658816.2979221335,
+              529651.0817969583,
+              555699.9262789134,
+              575079.7293902381
+            ],
+            "squared_error_sum": [
+              85174804.69219783,
+              43822502.64998483,
+              221040921.55330527,
+              91540028.26386549,
+              61369684.15530575,
+              65931236.02121837,
+              75163965.44170417
+            ],
+            "mae_per_channel": [
+              67.9516181680297,
+              51.0731911497668,
+              112.70893137114105,
+              75.46578441261552,
+              60.67022700996086,
+              63.65405799300268,
+              65.87396671136747
+            ],
+            "rmse_per_channel": [
+              98.77532136805664,
+              70.85026290509484,
+              159.12163017807327,
+              102.39963278939379,
+              83.84358162940914,
+              86.9037439505643,
+              92.78926193064542
+            ],
+            "max_abs_per_channel": [
+              574.7219952635274,
+              668.0252788568642,
+              759.4828842221032,
+              610.2049972252913,
+              580.3766263291291,
+              569.535338203232,
+              833.08294141923
+            ],
+            "pooled_mae": 71.05682525941201,
+            "pooled_rmse": 102.66001855898688,
+            "pooled_max_abs": 833.08294141923
+          },
+          "first_jump_deg": {
+            "valid_per_channel": [
+              291,
+              291,
+              291,
+              291,
+              291,
+              291,
+              291
+            ],
+            "absolute_error_sum": [
+              38.70980014329865,
+              29.47445729828459,
+              44.659024718543456,
+              34.40559261347673,
+              25.925353832320333,
+              24.878642989403115,
+              26.366768477207277
+            ],
+            "squared_error_sum": [
+              8.302846976252736,
+              5.065283050676115,
+              10.870402112675134,
+              6.580638910223678,
+              3.8424311507166724,
+              3.4616565247510547,
+              3.668598256145475
+            ],
+            "mae_per_channel": [
+              0.13302336819002972,
+              0.10128679483946595,
+              0.15346743889533834,
+              0.11823227702225679,
+              0.08909056299766438,
+              0.08549361852028561,
+              0.09060745181170886
+            ],
+            "rmse_per_channel": [
+              0.1689145351747693,
+              0.13193358543040787,
+              0.19327527964158558,
+              0.1503791189513232,
+              0.11490966346864191,
+              0.10906753361646573,
+              0.11228030486067644
+            ],
+            "max_abs_per_channel": [
+              0.6542569845598774,
+              0.49500131134609193,
+              0.591521702883722,
+              0.5628007453414983,
+              0.35822974738510205,
+              0.32381926838793806,
+              0.3309593679300121
+            ],
+            "pooled_mae": 0.11017164461096424,
+            "pooled_rmse": 0.14323538509450712,
+            "pooled_max_abs": 0.6542569845598774
+          }
+        },
+        "hold_state_vs_recorded": {
+          "joint_deg": {
+            "valid_per_channel": [
+              9312,
+              9312,
+              9312,
+              9312,
+              9312,
+              9312,
+              9312
+            ],
+            "absolute_error_sum": [
+              10049.892015321704,
+              17491.504116450436,
+              19191.153242792934,
+              18458.362106323242,
+              14585.47502282937,
+              14331.29271697998,
+              9939.492072648369
+            ],
+            "squared_error_sum": [
+              63219.74946913644,
+              79211.39594625,
+              139266.93415671887,
+              119634.46145644593,
+              77279.87259761455,
+              79468.61334793229,
+              56143.58785665172
+            ],
+            "mae_per_channel": [
+              1.0792409810268153,
+              1.8783831740174437,
+              2.0609056317432275,
+              1.982212425507221,
+              1.5663096029670716,
+              1.5390133931464756,
+              1.0673853170799366
+            ],
+            "rmse_per_channel": [
+              2.605582937269788,
+              2.9165696341171072,
+              3.8672524555077166,
+              3.584319094258168,
+              2.8807907578714045,
+              2.921301178294604,
+              2.4554358803709255
+            ],
+            "max_abs_per_channel": [
+              15.670973777770996,
+              13.788545608520508,
+              16.053624629974365,
+              20.045726776123047,
+              14.497371673583984,
+              15.922088623046875,
+              20.130277633666992
+            ],
+            "pooled_mae": 1.5962072179268845,
+            "pooled_rmse": 3.0696800001976774,
+            "pooled_max_abs": 20.130277633666992
+          },
+          "gripper_openness": {
+            "valid_per_channel": [
+              9312
+            ],
+            "absolute_error_sum": [
+              2334.536734600668
+            ],
+            "squared_error_sum": [
+              1450.386875713572
+            ],
+            "mae_per_channel": [
+              0.250701968921893
+            ],
+            "rmse_per_channel": [
+              0.3946575786054086
+            ],
+            "max_abs_per_channel": [
+              1.0
+            ],
+            "pooled_mae": 0.250701968921893,
+            "pooled_rmse": 0.3946575786054086,
+            "pooled_max_abs": 1.0
+          },
+          "joint_velocity_deg_s": {
+            "valid_per_channel": [
+              9021,
+              9021,
+              9021,
+              9021,
+              9021,
+              9021,
+              9021
+            ],
+            "absolute_error_sum": [
+              20316.102411471,
+              29510.32978249339,
+              34665.37414873976,
+              34602.636449867874,
+              24235.888880433286,
+              27203.01011919271,
+              20113.62606983735
+            ],
+            "squared_error_sum": [
+              259183.36035584362,
+              225365.90116693592,
+              480561.1497547624,
+              382726.72282923723,
+              236670.02815644038,
+              306672.9104867477,
+              264488.85415084125
+            ],
+            "mae_per_channel": [
+              2.25208983610143,
+              3.271292515518611,
+              3.8427418411195826,
+              3.8357872131546253,
+              2.686607790758595,
+              3.0155204654908223,
+              2.2296448364745984
+            ],
+            "rmse_per_channel": [
+              5.360141032619722,
+              4.99823603921488,
+              7.298724779813113,
+              6.513539511347401,
+              5.122055616297199,
+              5.830561304588567,
+              5.414724268488883
+            ],
+            "max_abs_per_channel": [
+              34.852813720703125,
+              21.995136260986328,
+              45.971405029296875,
+              35.44355773925781,
+              31.79741668701172,
+              45.6876106262207,
+              49.74765396118164
+            ],
+            "pooled_mae": 3.019097785516895,
+            "pooled_rmse": 5.8427145542534,
+            "pooled_max_abs": 49.74765396118164
+          }
+        }
+      },
+      "median_joint_core_ms": 633.3383120363578,
+      "p95_joint_core_ms": 726.9346175016835
+    },
+    "v4_f8_a8": {
+      "records": 291,
+      "metrics": {
+        "action_vs_recorded": {
+          "joint_deg": {
+            "valid_per_channel": [
+              9312,
+              9312,
+              9312,
+              9312,
+              9312,
+              9312,
+              9312
+            ],
+            "absolute_error_sum": [
+              1392.737097170666,
+              984.5598186931974,
+              1725.209482330417,
+              1236.2187394718098,
+              1117.0399265323604,
+              950.5693064856085,
+              1084.775975318393
+            ],
+            "squared_error_sum": [
+              345.98096468257023,
+              174.72899728323344,
+              550.6621045639159,
+              286.71223333945545,
+              236.75848587478853,
+              210.87734605015945,
+              231.8272638822235
+            ],
+            "mae_per_channel": [
+              0.14956369170647185,
+              0.10573022107959594,
+              0.18526734131555164,
+              0.13275544882644005,
+              0.1199570367839734,
+              0.10208003720850607,
+              0.1164922653907209
+            ],
+            "rmse_per_channel": [
+              0.1927545413670712,
+              0.13698121331421517,
+              0.24317622453150403,
+              0.17546949580560964,
+              0.1594524855014868,
+              0.15048509263964024,
+              0.157783204132292
+            ],
+            "max_abs_per_channel": [
+              0.9449500574521849,
+              0.5750492996395824,
+              1.6513901845080525,
+              0.8644579265358843,
+              0.8335986880786237,
+              1.4691936846132023,
+              1.1454745516139724
+            ],
+            "pooled_mae": 0.13026372033017997,
+            "pooled_rmse": 0.17680044598358072,
+            "pooled_max_abs": 1.6513901845080525
+          },
+          "gripper_openness": {
+            "valid_per_channel": [
+              9312
+            ],
+            "absolute_error_sum": [
+              115.48238512413809
+            ],
+            "squared_error_sum": [
+              27.57650204378948
+            ],
+            "mae_per_channel": [
+              0.012401458883605894
+            ],
+            "rmse_per_channel": [
+              0.05441869274268497
+            ],
+            "max_abs_per_channel": [
+              1.0022176504135132
+            ],
+            "pooled_mae": 0.012401458883605894,
+            "pooled_rmse": 0.05441869274268497,
+            "pooled_max_abs": 1.0022176504135132
+          },
+          "joint_velocity_deg_s": {
+            "valid_per_channel": [
+              9021,
+              9021,
+              9021,
+              9021,
+              9021,
+              9021,
+              9021
+            ],
+            "absolute_error_sum": [
+              14008.96611743376,
+              10858.015129160718,
+              22373.08213866333,
+              15054.574229327067,
+              11142.268140625896,
+              12007.628521191542,
+              12967.712901533632
+            ],
+            "squared_error_sum": [
+              46892.333025931395,
+              23868.239537843892,
+              110314.92099555962,
+              46045.07718711681,
+              27178.929669999867,
+              31504.6844154715,
+              38072.19891346148
+            ],
+            "mae_per_channel": [
+              1.5529282914791884,
+              1.2036376376411393,
+              2.480111089531463,
+              1.6688365180497802,
+              1.23514778191175,
+              1.3310751048876557,
+              1.4375028158223735
+            ],
+            "rmse_per_channel": [
+              2.2799408445197944,
+              1.6266078071904808,
+              3.4969529390051317,
+              2.2592498455107606,
+              1.7357566328754435,
+              1.8687888119010334,
+              2.054360419046474
+            ],
+            "max_abs_per_channel": [
+              12.659198740468359,
+              11.13016651804487,
+              18.35073757463962,
+              14.076404571533203,
+              8.94643809032522,
+              17.661026820210438,
+              15.846634688657451
+            ],
+            "pooled_mae": 1.5584627484747642,
+            "pooled_rmse": 2.2647135542107764,
+            "pooled_max_abs": 18.35073757463962
+          }
+        },
+        "action_vs_training_target": {
+          "joint_deg": {
+            "valid_per_channel": [
+              9312,
+              9312,
+              9312,
+              9312,
+              9312,
+              9312,
+              9312
+            ],
+            "absolute_error_sum": [
+              1392.7337711204975,
+              984.5562508376313,
+              1725.2081079009804,
+              1236.220171391785,
+              1117.0380204174774,
+              950.5816534716604,
+              1084.7752312463617
+            ],
+            "squared_error_sum": [
+              345.9793707013773,
+              174.72798879343244,
+              550.6611587995671,
+              286.7120625936818,
+              236.7578069821906,
+              210.88230646167392,
+              231.82701285290028
+            ],
+            "mae_per_channel": [
+              0.14956333452754483,
+              0.10572983793359443,
+              0.1852671937178888,
+              0.13275560259791505,
+              0.11995683208950574,
+              0.10208136313054772,
+              0.11649218548607837
+            ],
+            "rmse_per_channel": [
+              0.19275409734341234,
+              0.13698081800388306,
+              0.2431760157033493,
+              0.17546944355691602,
+              0.15945225689048406,
+              0.15048686253956212,
+              0.15778311870614103
+            ],
+            "max_abs_per_channel": [
+              0.9449501616472115,
+              0.57504814037536,
+              1.6513894771473403,
+              0.8644560621134971,
+              0.8335981212170225,
+              1.469201011226417,
+              1.1454722426826223
+            ],
+            "pooled_mae": 0.13026376421186783,
+            "pooled_rmse": 0.1768004594985634,
+            "pooled_max_abs": 1.6513894771473403
+          },
+          "gripper_openness": {
+            "valid_per_channel": [
+              9312
+            ],
+            "absolute_error_sum": [
+              115.48236419918248
+            ],
+            "squared_error_sum": [
+              27.57650199671005
+            ],
+            "mae_per_channel": [
+              0.012401456636510147
+            ],
+            "rmse_per_channel": [
+              0.054418692696232354
+            ],
+            "max_abs_per_channel": [
+              1.0022176504135132
+            ],
+            "pooled_mae": 0.012401456636510147,
+            "pooled_rmse": 0.054418692696232354,
+            "pooled_max_abs": 1.0022176504135132
+          },
+          "joint_velocity_deg_s": {
+            "valid_per_channel": [
+              9021,
+              9021,
+              9021,
+              9021,
+              9021,
+              9021,
+              9021
+            ],
+            "absolute_error_sum": [
+              14008.967462526507,
+              10858.016911913566,
+              22373.076809259088,
+              15054.579263787502,
+              11142.267118312993,
+              12007.635665799793,
+              12967.711468260393
+            ],
+            "squared_error_sum": [
+              46892.34062942748,
+              23868.23853092244,
+              110314.89816662188,
+              46045.12887426641,
+              27178.9251644225,
+              31504.73943856212,
+              38072.19419028262
+            ],
+            "mae_per_channel": [
+              1.5529284405860222,
+              1.2036378352636699,
+              2.480110498753917,
+              1.668837076132081,
+              1.2351476685858545,
+              1.3310758968850231,
+              1.4375026569405158
+            ],
+            "rmse_per_channel": [
+              2.279941029363664,
+              1.6266077728799002,
+              3.49695257716956,
+              2.259251113552418,
+              1.7357564890032193,
+              1.8687904438248752,
+              2.054360291616062
+            ],
+            "max_abs_per_channel": [
+              12.659226286957956,
+              11.130168912940128,
+              18.35073754496496,
+              14.076405162370978,
+              8.946437906976577,
+              17.661025042577073,
+              15.846636515981958
+            ],
+            "pooled_mae": 1.5584628675924408,
+            "pooled_rmse": 2.2647138382789938,
+            "pooled_max_abs": 18.35073754496496
+          }
+        },
+        "force_vs_recorded": {
+          "force_N": {
+            "valid_per_channel": [
+              9312,
+              9312,
+              9312
+            ],
+            "absolute_error_sum": [
+              714.4090914726257,
+              962.8902752115391,
+              417.16796112060547
+            ],
+            "squared_error_sum": [
+              99.13335206726174,
+              194.26780501580612,
+              35.38021592705627
+            ],
+            "mae_per_channel": [
+              0.07671918937635586,
+              0.10340316529333539,
+              0.044798964896972236
+            ],
+            "rmse_per_channel": [
+              0.10317831047719085,
+              0.14443715748739172,
+              0.06163945013927799
+            ],
+            "max_abs_per_channel": [
+              0.8597259521484375,
+              1.237087368965149,
+              0.61883544921875
+            ],
+            "pooled_mae": 0.07497377318888783,
+            "pooled_rmse": 0.10848544914632212,
+            "pooled_max_abs": 1.237087368965149
+          },
+          "torque_Nm": {
+            "valid_per_channel": [
+              9312,
+              9312,
+              9312
+            ],
+            "absolute_error_sum": [
+              39.410481691360474,
+              79.8465928856458,
+              29.259056530896487
+            ],
+            "squared_error_sum": [
+              0.3842994084030238,
+              1.2351239753576635,
+              0.18699048431818158
+            ],
+            "mae_per_channel": [
+              0.004232225267543006,
+              0.008574591160400108,
+              0.0031420808130258257
+            ],
+            "rmse_per_channel": [
+              0.006424115998820702,
+              0.011516852171997308,
+              0.00448113749479163
+            ],
+            "max_abs_per_channel": [
+              0.05800890922546387,
+              0.07742086052894592,
+              0.04265475273132324
+            ],
+            "pooled_mae": 0.00531629908032298,
+            "pooled_rmse": 0.008041304694413103,
+            "pooled_max_abs": 0.07742086052894592
+          }
+        },
+        "action_dynamics": {
+          "acceleration_deg_s2": {
+            "valid_per_channel": [
+              8730,
+              8730,
+              8730,
+              8730,
+              8730,
+              8730,
+              8730
+            ],
+            "absolute_error_sum": [
+              679556.2100529358,
+              505278.5833644048,
+              1102562.8624478306,
+              712067.514373999,
+              498514.8627225212,
+              548927.7917745727,
+              607246.4861744685
+            ],
+            "squared_error_sum": [
+              106550246.15055439,
+              52287351.06093821,
+              259897769.07198417,
+              103549279.32811448,
+              54744656.55638467,
+              64499120.31136866,
+              81525811.33248928
+            ],
+            "mae_per_channel": [
+              77.84149026952299,
+              57.878417338419794,
+              126.29586053239755,
+              81.56558011156919,
+              57.10364979639418,
+              62.87832666375403,
+              69.55858948161152
+            ],
+            "rmse_per_channel": [
+              110.47655084938985,
+              77.39113187054244,
+              172.54173228014767,
+              108.90966407424341,
+              79.18879709228943,
+              85.95472869503168,
+              96.63633327401817
+            ],
+            "max_abs_per_channel": [
+              542.4508909813401,
+              586.5383899829442,
+              768.5438120899926,
+              553.3006421931641,
+              454.72155289801816,
+              651.9135667638387,
+              875.3631886153487
+            ],
+            "pooled_mae": 76.16027345623846,
+            "pooled_rmse": 108.77505081943038,
+            "pooled_max_abs": 875.3631886153487
+          },
+          "first_jump_deg": {
+            "valid_per_channel": [
+              291,
+              291,
+              291,
+              291,
+              291,
+              291,
+              291
+            ],
+            "absolute_error_sum": [
+              31.27976458679013,
+              22.71724595509772,
+              43.480516387687025,
+              32.564042079785615,
+              27.030498117335995,
+              22.468105350628612,
+              24.899237320996924
+            ],
+            "squared_error_sum": [
+              6.187341258471226,
+              2.744738925948209,
+              9.79195748609366,
+              6.014117880022878,
+              4.430361608043962,
+              2.6184976590134332,
+              3.2222804563638454
+            ],
+            "mae_per_channel": [
+              0.10749059995460526,
+              0.07806613730274131,
+              0.14941758208827158,
+              0.1119039246728028,
+              0.09288830968156699,
+              0.07720998402277873,
+              0.08556438941923342
+            ],
+            "rmse_per_channel": [
+              0.14581612083169282,
+              0.09711896070815239,
+              0.1834375600584144,
+              0.14376046658471842,
+              0.12338804778794757,
+              0.09485923119187824,
+              0.10522893478519565
+            ],
+            "max_abs_per_channel": [
+              0.51799813107656,
+              0.31391826885365604,
+              0.5264197739958403,
+              0.4707315126528186,
+              0.41217800336477056,
+              0.2883296055450223,
+              0.2742226940420087
+            ],
+            "pooled_mae": 0.10036298959171429,
+            "pooled_rmse": 0.1310980312653402,
+            "pooled_max_abs": 0.5264197739958403
+          }
+        },
+        "hold_state_vs_recorded": {
+          "joint_deg": {
+            "valid_per_channel": [
+              9312,
+              9312,
+              9312,
+              9312,
+              9312,
+              9312,
+              9312
+            ],
+            "absolute_error_sum": [
+              10049.892015321704,
+              17491.504116450436,
+              19191.153242792934,
+              18458.362106323242,
+              14585.47502282937,
+              14331.29271697998,
+              9939.492072648369
+            ],
+            "squared_error_sum": [
+              63219.74946913644,
+              79211.39594625,
+              139266.93415671887,
+              119634.46145644593,
+              77279.87259761455,
+              79468.61334793229,
+              56143.58785665172
+            ],
+            "mae_per_channel": [
+              1.0792409810268153,
+              1.8783831740174437,
+              2.0609056317432275,
+              1.982212425507221,
+              1.5663096029670716,
+              1.5390133931464756,
+              1.0673853170799366
+            ],
+            "rmse_per_channel": [
+              2.605582937269788,
+              2.9165696341171072,
+              3.8672524555077166,
+              3.584319094258168,
+              2.8807907578714045,
+              2.921301178294604,
+              2.4554358803709255
+            ],
+            "max_abs_per_channel": [
+              15.670973777770996,
+              13.788545608520508,
+              16.053624629974365,
+              20.045726776123047,
+              14.497371673583984,
+              15.922088623046875,
+              20.130277633666992
+            ],
+            "pooled_mae": 1.5962072179268845,
+            "pooled_rmse": 3.0696800001976774,
+            "pooled_max_abs": 20.130277633666992
+          },
+          "gripper_openness": {
+            "valid_per_channel": [
+              9312
+            ],
+            "absolute_error_sum": [
+              2334.536734600668
+            ],
+            "squared_error_sum": [
+              1450.386875713572
+            ],
+            "mae_per_channel": [
+              0.250701968921893
+            ],
+            "rmse_per_channel": [
+              0.3946575786054086
+            ],
+            "max_abs_per_channel": [
+              1.0
+            ],
+            "pooled_mae": 0.250701968921893,
+            "pooled_rmse": 0.3946575786054086,
+            "pooled_max_abs": 1.0
+          },
+          "joint_velocity_deg_s": {
+            "valid_per_channel": [
+              9021,
+              9021,
+              9021,
+              9021,
+              9021,
+              9021,
+              9021
+            ],
+            "absolute_error_sum": [
+              20316.102411471,
+              29510.32978249339,
+              34665.37414873976,
+              34602.636449867874,
+              24235.888880433286,
+              27203.01011919271,
+              20113.62606983735
+            ],
+            "squared_error_sum": [
+              259183.36035584362,
+              225365.90116693592,
+              480561.1497547624,
+              382726.72282923723,
+              236670.02815644038,
+              306672.9104867477,
+              264488.85415084125
+            ],
+            "mae_per_channel": [
+              2.25208983610143,
+              3.271292515518611,
+              3.8427418411195826,
+              3.8357872131546253,
+              2.686607790758595,
+              3.0155204654908223,
+              2.2296448364745984
+            ],
+            "rmse_per_channel": [
+              5.360141032619722,
+              4.99823603921488,
+              7.298724779813113,
+              6.513539511347401,
+              5.122055616297199,
+              5.830561304588567,
+              5.414724268488883
+            ],
+            "max_abs_per_channel": [
+              34.852813720703125,
+              21.995136260986328,
+              45.971405029296875,
+              35.44355773925781,
+              31.79741668701172,
+              45.6876106262207,
+              49.74765396118164
+            ],
+            "pooled_mae": 3.019097785516895,
+            "pooled_rmse": 5.8427145542534,
+            "pooled_max_abs": 49.74765396118164
+          }
+        }
+      },
+      "median_joint_core_ms": 619.6805909858085,
+      "p95_joint_core_ms": 636.5170005010441
+    },
+    "v4_f8_a16": {
+      "records": 291,
+      "metrics": {
+        "action_vs_recorded": {
+          "joint_deg": {
+            "valid_per_channel": [
+              9312,
+              9312,
+              9312,
+              9312,
+              9312,
+              9312,
+              9312
+            ],
+            "absolute_error_sum": [
+              1459.8560100719737,
+              1167.7780161367332,
+              1855.9683319787873,
+              1265.5786750669279,
+              1146.2064336055223,
+              1030.3999948975913,
+              1137.4663647177988
+            ],
+            "squared_error_sum": [
+              381.85043652692946,
+              240.1825070073042,
+              630.5518762687681,
+              303.0610695970914,
+              256.46063081105586,
+              237.1163277783005,
+              248.44995754536586
+            ],
+            "mae_per_channel": [
+              0.15677147874484254,
+              0.12540571479131585,
+              0.19930931400115842,
+              0.13590836287230754,
+              0.12308917886657242,
+              0.11065292041426024,
+              0.12215059758567427
+            ],
+            "rmse_per_channel": [
+              0.2025000627166043,
+              0.16060135427974714,
+              0.2602189544181679,
+              0.18040293222399162,
+              0.16595443742748958,
+              0.159572939974384,
+              0.16334204170584696
+            ],
+            "max_abs_per_channel": [
+              0.9630302618762961,
+              0.6695868234461795,
+              1.8604895957588212,
+              0.9864182017421541,
+              0.9745439104700679,
+              1.5545085154403182,
+              0.9407367592353584
+            ],
+            "pooled_mae": 0.13904108103944732,
+            "pooled_rmse": 0.18774725170246215,
+            "pooled_max_abs": 1.8604895957588212
+          },
+          "gripper_openness": {
+            "valid_per_channel": [
+              9312
+            ],
+            "absolute_error_sum": [
+              119.59883520979201
+            ],
+            "squared_error_sum": [
+              28.712345039461198
+            ],
+            "mae_per_channel": [
+              0.012843517526824744
+            ],
+            "rmse_per_channel": [
+              0.055528104474581855
+            ],
+            "max_abs_per_channel": [
+              1.0059596300125122
+            ],
+            "pooled_mae": 0.012843517526824744,
+            "pooled_rmse": 0.055528104474581855,
+            "pooled_max_abs": 1.0059596300125122
+          },
+          "joint_velocity_deg_s": {
+            "valid_per_channel": [
+              9021,
+              9021,
+              9021,
+              9021,
+              9021,
+              9021,
+              9021
+            ],
+            "absolute_error_sum": [
+              12679.346747586353,
+              9871.701785066629,
+              20806.605283207868,
+              14095.678896828975,
+              11211.295190770421,
+              11517.670980821502,
+              12281.116449367726
+            ],
+            "squared_error_sum": [
+              39962.042207024,
+              20588.38029890414,
+              98540.05841287151,
+              42029.74889917607,
+              27625.035013035395,
+              29740.564113347613,
+              35197.74120229879
+            ],
+            "mae_per_channel": [
+              1.4055367196082864,
+              1.0943023816723898,
+              2.3064632838053285,
+              1.562540615988136,
+              1.2427995999080392,
+              1.276762108504767,
+              1.3613919132432908
+            ],
+            "rmse_per_channel": [
+              2.104730505485964,
+              1.5107192023899034,
+              3.305057855551299,
+              2.158495046220356,
+              1.749943702296038,
+              1.8157132362812711,
+              1.9752863175172917
+            ],
+            "max_abs_per_channel": [
+              13.615777011407612,
+              11.13016651804487,
+              18.040964593934895,
+              15.173470146858426,
+              11.334459866747476,
+              17.661026820210438,
+              15.846621882052757
+            ],
+            "pooled_mae": 1.4642566603900338,
+            "pooled_rmse": 2.1565695264230427,
+            "pooled_max_abs": 18.040964593934895
+          }
+        },
+        "action_vs_training_target": {
+          "joint_deg": {
+            "valid_per_channel": [
+              9312,
+              9312,
+              9312,
+              9312,
+              9312,
+              9312,
+              9312
+            ],
+            "absolute_error_sum": [
+              1459.8533019018412,
+              1167.7742395164519,
+              1855.9664887592214,
+              1265.5819491052816,
+              1146.2050308438743,
+              1030.4125083397971,
+              1137.4664724562056
+            ],
+            "squared_error_sum": [
+              381.84906134181387,
+              240.1811902297648,
+              630.5505270881388,
+              303.0614742354334,
+              256.4600980389063,
+              237.12170171730943,
+              248.44996413256865
+            ],
+            "mae_per_channel": [
+              0.15677118791901215,
+              0.1254053092264231,
+              0.19930911606091295,
+              0.13590871446577338,
+              0.12308902822636107,
+              0.11065426421174797,
+              0.12215060915552035
+            ],
+            "rmse_per_channel": [
+              0.2024996980773421,
+              0.16060091403838944,
+              0.2602186760250858,
+              0.18040305265833034,
+              0.1659542650502557,
+              0.15957474822267345,
+              0.16334204387120685
+            ],
+            "max_abs_per_channel": [
+              0.9630303660713228,
+              0.6695856424511533,
+              1.860488888398109,
+              0.9864159199332505,
+              0.9745433436084667,
+              1.5545237343382183,
+              0.9407364685378425
+            ],
+            "pooled_mae": 0.139041175609393,
+            "pooled_rmse": 0.1877473011892,
+            "pooled_max_abs": 1.860488888398109
+          },
+          "gripper_openness": {
+            "valid_per_channel": [
+              9312
+            ],
+            "absolute_error_sum": [
+              119.59881903830683
+            ],
+            "squared_error_sum": [
+              28.71234506415871
+            ],
+            "mae_per_channel": [
+              0.01284351579019618
+            ],
+            "rmse_per_channel": [
+              0.055528104498463675
+            ],
+            "max_abs_per_channel": [
+              1.0059596300125122
+            ],
+            "pooled_mae": 0.01284351579019618,
+            "pooled_rmse": 0.055528104498463675,
+            "pooled_max_abs": 1.0059596300125122
+          },
+          "joint_velocity_deg_s": {
+            "valid_per_channel": [
+              9021,
+              9021,
+              9021,
+              9021,
+              9021,
+              9021,
+              9021
+            ],
+            "absolute_error_sum": [
+              12679.346814203756,
+              9871.701914953885,
+              20806.606455210032,
+              14095.68714498285,
+              11211.295196190506,
+              11517.662141914634,
+              12281.117195873516
+            ],
+            "squared_error_sum": [
+              39962.043626842904,
+              20588.37900826698,
+              98540.06884435972,
+              42029.799218875596,
+              27625.034752276788,
+              29740.594114687057,
+              35197.74443066487
+            ],
+            "mae_per_channel": [
+              1.4055367269929893,
+              1.094302396070711,
+              2.306463413724646,
+              1.5625415303162455,
+              1.2427996005088688,
+              1.2767611286902376,
+              1.3613919959952905
+            ],
+            "rmse_per_channel": [
+              2.104730542875646,
+              1.5107191550381853,
+              3.305058030488637,
+              2.1584963383383498,
+              1.7499436940369917,
+              1.8157141520980524,
+              1.9752864081047408
+            ],
+            "max_abs_per_channel": [
+              13.615725978326545,
+              11.130168912940128,
+              18.040971390631952,
+              15.173470146858426,
+              11.33445987101521,
+              17.661025042577073,
+              15.846623709377264
+            ],
+            "pooled_mae": 1.4642566846141414,
+            "pooled_rmse": 2.1565698709989403,
+            "pooled_max_abs": 18.040971390631952
+          }
+        },
+        "force_vs_recorded": {
+          "force_N": {
+            "valid_per_channel": [
+              9312,
+              9312,
+              9312
+            ],
+            "absolute_error_sum": [
+              714.4090914726257,
+              962.8902752115391,
+              417.16796112060547
+            ],
+            "squared_error_sum": [
+              99.13335206726174,
+              194.26780501580612,
+              35.38021592705627
+            ],
+            "mae_per_channel": [
+              0.07671918937635586,
+              0.10340316529333539,
+              0.044798964896972236
+            ],
+            "rmse_per_channel": [
+              0.10317831047719085,
+              0.14443715748739172,
+              0.06163945013927799
+            ],
+            "max_abs_per_channel": [
+              0.8597259521484375,
+              1.237087368965149,
+              0.61883544921875
+            ],
+            "pooled_mae": 0.07497377318888783,
+            "pooled_rmse": 0.10848544914632212,
+            "pooled_max_abs": 1.237087368965149
+          },
+          "torque_Nm": {
+            "valid_per_channel": [
+              9312,
+              9312,
+              9312
+            ],
+            "absolute_error_sum": [
+              39.410481691360474,
+              79.8465928856458,
+              29.259056530896487
+            ],
+            "squared_error_sum": [
+              0.3842994084030238,
+              1.2351239753576635,
+              0.18699048431818158
+            ],
+            "mae_per_channel": [
+              0.004232225267543006,
+              0.008574591160400108,
+              0.0031420808130258257
+            ],
+            "rmse_per_channel": [
+              0.006424115998820702,
+              0.011516852171997308,
+              0.00448113749479163
+            ],
+            "max_abs_per_channel": [
+              0.05800890922546387,
+              0.07742086052894592,
+              0.04265475273132324
+            ],
+            "pooled_mae": 0.00531629908032298,
+            "pooled_rmse": 0.008041304694413103,
+            "pooled_max_abs": 0.07742086052894592
+          }
+        },
+        "action_dynamics": {
+          "acceleration_deg_s2": {
+            "valid_per_channel": [
+              8730,
+              8730,
+              8730,
+              8730,
+              8730,
+              8730,
+              8730
+            ],
+            "absolute_error_sum": [
+              600785.2533929507,
+              449948.8257707019,
+              1024432.0423123364,
+              657789.1978318465,
+              500339.12495755823,
+              519903.1154524515,
+              561861.3797454197
+            ],
+            "squared_error_sum": [
+              87208684.20845236,
+              43511847.09577963,
+              230221409.48754016,
+              92507967.78357333,
+              54741407.193617195,
+              59404493.618636906,
+              71770579.83367154
+            ],
+            "mae_per_channel": [
+              68.81847117903216,
+              51.540529870641684,
+              117.34616750427679,
+              75.34813262678655,
+              57.312614542675625,
+              59.55362147221667,
+              64.35983731333559
+            ],
+            "rmse_per_channel": [
+              99.94768632123605,
+              70.59868925880046,
+              162.39241199620454,
+              102.93959337189374,
+              79.18644693646264,
+              82.49023241747052,
+              90.67051982518365
+            ],
+            "max_abs_per_channel": [
+              574.7219952635274,
+              586.5383899829442,
+              836.4054950890335,
+              682.8061566086293,
+              508.6506760492274,
+              651.9135667638387,
+              875.3631886153487
+            ],
+            "pooled_mae": 70.61133921556645,
+            "pooled_rmse": 102.28660383704998,
+            "pooled_max_abs": 875.3631886153487
+          },
+          "first_jump_deg": {
+            "valid_per_channel": [
+              291,
+              291,
+              291,
+              291,
+              291,
+              291,
+              291
+            ],
+            "absolute_error_sum": [
+              36.14821238248949,
+              28.750512628368508,
+              44.73886271534985,
+              34.15496215777591,
+              26.327295314480338,
+              24.069955438123742,
+              26.086978229082177
+            ],
+            "squared_error_sum": [
+              7.265640347164891,
+              4.733552497702519,
+              10.63214584227845,
+              6.586348698133428,
+              4.031913355297139,
+              3.275430425303959,
+              3.7051844843255095
+            ],
+            "mae_per_channel": [
+              0.12422066110821131,
+              0.0987990124686203,
+              0.15374179627267992,
+              0.11737100397861139,
+              0.09047180520439979,
+              0.08271462349870702,
+              0.08964597329581504
+            ],
+            "rmse_per_channel": [
+              0.15801213954805146,
+              0.12754020318523487,
+              0.1911454515557234,
+              0.15044434413054844,
+              0.1177088456955253,
+              0.106093235681649,
+              0.11283879089054848
+            ],
+            "max_abs_per_channel": [
+              0.43173284246204385,
+              0.4044598968215798,
+              0.5264197739958403,
+              0.5628007453414983,
+              0.35822974738510205,
+              0.32381926838793806,
+              0.3309593679300121
+            ],
+            "pooled_mae": 0.10813783940386355,
+            "pooled_rmse": 0.14053375992286998,
+            "pooled_max_abs": 0.5628007453414983
+          }
+        },
+        "hold_state_vs_recorded": {
+          "joint_deg": {
+            "valid_per_channel": [
+              9312,
+              9312,
+              9312,
+              9312,
+              9312,
+              9312,
+              9312
+            ],
+            "absolute_error_sum": [
+              10049.892015321704,
+              17491.504116450436,
+              19191.153242792934,
+              18458.362106323242,
+              14585.47502282937,
+              14331.29271697998,
+              9939.492072648369
+            ],
+            "squared_error_sum": [
+              63219.74946913644,
+              79211.39594625,
+              139266.93415671887,
+              119634.46145644593,
+              77279.87259761455,
+              79468.61334793229,
+              56143.58785665172
+            ],
+            "mae_per_channel": [
+              1.0792409810268153,
+              1.8783831740174437,
+              2.0609056317432275,
+              1.982212425507221,
+              1.5663096029670716,
+              1.5390133931464756,
+              1.0673853170799366
+            ],
+            "rmse_per_channel": [
+              2.605582937269788,
+              2.9165696341171072,
+              3.8672524555077166,
+              3.584319094258168,
+              2.8807907578714045,
+              2.921301178294604,
+              2.4554358803709255
+            ],
+            "max_abs_per_channel": [
+              15.670973777770996,
+              13.788545608520508,
+              16.053624629974365,
+              20.045726776123047,
+              14.497371673583984,
+              15.922088623046875,
+              20.130277633666992
+            ],
+            "pooled_mae": 1.5962072179268845,
+            "pooled_rmse": 3.0696800001976774,
+            "pooled_max_abs": 20.130277633666992
+          },
+          "gripper_openness": {
+            "valid_per_channel": [
+              9312
+            ],
+            "absolute_error_sum": [
+              2334.536734600668
+            ],
+            "squared_error_sum": [
+              1450.386875713572
+            ],
+            "mae_per_channel": [
+              0.250701968921893
+            ],
+            "rmse_per_channel": [
+              0.3946575786054086
+            ],
+            "max_abs_per_channel": [
+              1.0
+            ],
+            "pooled_mae": 0.250701968921893,
+            "pooled_rmse": 0.3946575786054086,
+            "pooled_max_abs": 1.0
+          },
+          "joint_velocity_deg_s": {
+            "valid_per_channel": [
+              9021,
+              9021,
+              9021,
+              9021,
+              9021,
+              9021,
+              9021
+            ],
+            "absolute_error_sum": [
+              20316.102411471,
+              29510.32978249339,
+              34665.37414873976,
+              34602.636449867874,
+              24235.888880433286,
+              27203.01011919271,
+              20113.62606983735
+            ],
+            "squared_error_sum": [
+              259183.36035584362,
+              225365.90116693592,
+              480561.1497547624,
+              382726.72282923723,
+              236670.02815644038,
+              306672.9104867477,
+              264488.85415084125
+            ],
+            "mae_per_channel": [
+              2.25208983610143,
+              3.271292515518611,
+              3.8427418411195826,
+              3.8357872131546253,
+              2.686607790758595,
+              3.0155204654908223,
+              2.2296448364745984
+            ],
+            "rmse_per_channel": [
+              5.360141032619722,
+              4.99823603921488,
+              7.298724779813113,
+              6.513539511347401,
+              5.122055616297199,
+              5.830561304588567,
+              5.414724268488883
+            ],
+            "max_abs_per_channel": [
+              34.852813720703125,
+              21.995136260986328,
+              45.971405029296875,
+              35.44355773925781,
+              31.79741668701172,
+              45.6876106262207,
+              49.74765396118164
+            ],
+            "pooled_mae": 3.019097785516895,
+            "pooled_rmse": 5.8427145542534,
+            "pooled_max_abs": 49.74765396118164
+          }
+        }
+      },
+      "median_joint_core_ms": 710.6998219969682,
+      "p95_joint_core_ms": 725.5890014930628
+    },
+    "v4_f16_a16": {
+      "records": 291,
+      "metrics": {
+        "action_vs_recorded": {
+          "joint_deg": {
+            "valid_per_channel": [
+              9312,
+              9312,
+              9312,
+              9312,
+              9312,
+              9312,
+              9312
+            ],
+            "absolute_error_sum": [
+              1424.7415959302268,
+              1163.0797581042941,
+              1861.8344372557976,
+              1233.3222643605284,
+              1163.718796889864,
+              1009.2615174641935,
+              1140.2653462134112
+            ],
+            "squared_error_sum": [
+              366.2642837771308,
+              237.7517968678654,
+              645.1141406024032,
+              295.94848821743903,
+              262.48104703655616,
+              234.90123324633853,
+              248.85991943569266
+            ],
+            "mae_per_channel": [
+              0.15300060093752435,
+              0.12490117677236835,
+              0.19993926516922225,
+              0.13244440124146567,
+              0.12496980207150601,
+              0.10838289491668744,
+              0.12245117549542646
+            ],
+            "rmse_per_channel": [
+              0.19832424133512364,
+              0.159786623744176,
+              0.2632066132995566,
+              0.17827341309675104,
+              0.1678910291315781,
+              0.1588258414117968,
+              0.16347674974051513
+            ],
+            "max_abs_per_channel": [
+              0.9356140604478009,
+              0.6492847838540801,
+              1.8604895957588212,
+              0.9984661543268913,
+              0.9275624542641356,
+              1.5545085154403182,
+              1.1454745516139724
+            ],
+            "pooled_mae": 0.13801275951488579,
+            "pooled_rmse": 0.18748755928222888,
+            "pooled_max_abs": 1.8604895957588212
+          },
+          "gripper_openness": {
+            "valid_per_channel": [
+              9312
+            ],
+            "absolute_error_sum": [
+              120.56782768521225
+            ],
+            "squared_error_sum": [
+              28.972476463912518
+            ],
+            "mae_per_channel": [
+              0.012947575997123309
+            ],
+            "rmse_per_channel": [
+              0.05577907727983601
+            ],
+            "max_abs_per_channel": [
+              1.0059596300125122
+            ],
+            "pooled_mae": 0.012947575997123309,
+            "pooled_rmse": 0.05577907727983601,
+            "pooled_max_abs": 1.0059596300125122
+          },
+          "joint_velocity_deg_s": {
+            "valid_per_channel": [
+              9021,
+              9021,
+              9021,
+              9021,
+              9021,
+              9021,
+              9021
+            ],
+            "absolute_error_sum": [
+              12398.262437165393,
+              9696.423801224848,
+              20084.349137445693,
+              13719.578158638531,
+              11312.091390908367,
+              11556.80756192057,
+              12041.056000672123
+            ],
+            "squared_error_sum": [
+              38830.81119430453,
+              19896.616882539216,
+              94195.84187029878,
+              39655.96804137436,
+              28201.05526204018,
+              30295.473539582737,
+              34555.897134232975
+            ],
+            "mae_per_channel": [
+              1.3743778336287986,
+              1.0748723867891419,
+              2.2263994166329337,
+              1.5208489256887852,
+              1.2539731061864945,
+              1.281100494614851,
+              1.3347806230653056
+            ],
+            "rmse_per_channel": [
+              2.074726672446062,
+              1.4851224983893323,
+              3.2313836599955987,
+              2.096654818498261,
+              1.7680939511681586,
+              1.8325740445667469,
+              1.9571934102825983
+            ],
+            "max_abs_per_channel": [
+              12.659198740468359,
+              12.488281332610205,
+              16.472722211205287,
+              13.413841247558594,
+              9.834662521022434,
+              19.033689937707898,
+              15.846621882052757
+            ],
+            "pooled_mae": 1.4380503980866157,
+            "pooled_rmse": 2.1268007926336745,
+            "pooled_max_abs": 19.033689937707898
+          }
+        },
+        "action_vs_training_target": {
+          "joint_deg": {
+            "valid_per_channel": [
+              9312,
+              9312,
+              9312,
+              9312,
+              9312,
+              9312,
+              9312
+            ],
+            "absolute_error_sum": [
+              1424.7391316803912,
+              1163.0759498657446,
+              1861.8320926654278,
+              1233.324263391252,
+              1163.717428288834,
+              1009.2731206699318,
+              1140.2651401607618
+            ],
+            "squared_error_sum": [
+              366.263047149674,
+              237.75048776048374,
+              645.1124537869639,
+              295.94838336604226,
+              262.48050953070515,
+              234.90631568175277,
+              248.85978276945505
+            ],
+            "mae_per_channel": [
+              0.15300033630588394,
+              0.12490076781204303,
+              0.1999390133876104,
+              0.13244461591400902,
+              0.12496965509974593,
+              0.10838414096541364,
+              0.1224511533677794
+            ],
+            "rmse_per_channel": [
+              0.19832390653124013,
+              0.15978618383554158,
+              0.26320626918892465,
+              0.17827338151656263,
+              0.16789085722877276,
+              0.15882755961843115,
+              0.16347670485229962
+            ],
+            "max_abs_per_channel": [
+              0.9356141601656633,
+              0.6492837589169351,
+              1.860488888398109,
+              0.9984643736291439,
+              0.9275618874025344,
+              1.5545237343382183,
+              1.1454722426826223
+            ],
+            "pooled_mae": 0.13801281183606934,
+            "pooled_rmse": 0.18748756218135965,
+            "pooled_max_abs": 1.860488888398109
+          },
+          "gripper_openness": {
+            "valid_per_channel": [
+              9312
+            ],
+            "absolute_error_sum": [
+              120.56781172234332
+            ],
+            "squared_error_sum": [
+              28.97247648887599
+            ],
+            "mae_per_channel": [
+              0.012947574282897693
+            ],
+            "rmse_per_channel": [
+              0.0557790773038664
+            ],
+            "max_abs_per_channel": [
+              1.0059596300125122
+            ],
+            "pooled_mae": 0.012947574282897693,
+            "pooled_rmse": 0.0557790773038664,
+            "pooled_max_abs": 1.0059596300125122
+          },
+          "joint_velocity_deg_s": {
+            "valid_per_channel": [
+              9021,
+              9021,
+              9021,
+              9021,
+              9021,
+              9021,
+              9021
+            ],
+            "absolute_error_sum": [
+              12398.262705829613,
+              9696.425210822068,
+              20084.349449088702,
+              13719.579090033942,
+              11312.092291580533,
+              11556.817977180917,
+              12041.05474782563
+            ],
+            "squared_error_sum": [
+              38830.81041477448,
+              19896.616308498742,
+              94195.8355500787,
+              39655.98835206236,
+              28201.060028000902,
+              30295.5366857308,
+              34555.89838901172
+            ],
+            "mae_per_channel": [
+              1.3743778634108872,
+              1.0748725430464547,
+              2.226399451179326,
+              1.5208490289362533,
+              1.2539732060282156,
+              1.281101649172034,
+              1.3347804841841957
+            ],
+            "rmse_per_channel": [
+              2.074726651620953,
+              1.4851224769655789,
+              3.2313835515881792,
+              2.096655355422443,
+              1.7680941005715387,
+              1.8325759544218858,
+              1.9571934458169773
+            ],
+            "max_abs_per_channel": [
+              12.659226286957956,
+              12.488283727505463,
+              16.472729007902352,
+              13.413842661933892,
+              9.834665588722658,
+              19.033688160074533,
+              15.846623709377264
+            ],
+            "pooled_mae": 1.4380506037081955,
+            "pooled_rmse": 2.1268010971873434,
+            "pooled_max_abs": 19.033688160074533
+          }
+        },
+        "force_vs_recorded": {
+          "force_N": {
+            "valid_per_channel": [
+              9312,
+              9312,
+              9312
+            ],
+            "absolute_error_sum": [
+              728.3418374061584,
+              1114.4750063768588,
+              425.8343925476074
+            ],
+            "squared_error_sum": [
+              105.58324160724123,
+              252.9316623568634,
+              37.36560237496451
+            ],
+            "mae_per_channel": [
+              0.07821540350152045,
+              0.11968159432741181,
+              0.04572963837495784
+            ],
+            "rmse_per_channel": [
+              0.10648195401093673,
+              0.16480869310151122,
+              0.0633453164884573
+            ],
+            "max_abs_per_channel": [
+              0.8878192901611328,
+              1.3281751871109009,
+              0.5790252685546875
+            ],
+            "pooled_mae": 0.08120887873463004,
+            "pooled_rmse": 0.1190419267496935,
+            "pooled_max_abs": 1.3281751871109009
+          },
+          "torque_Nm": {
+            "valid_per_channel": [
+              9312,
+              9312,
+              9312
+            ],
+            "absolute_error_sum": [
+              41.74372577667236,
+              82.20151873049326,
+              31.078659958049684
+            ],
+            "squared_error_sum": [
+              0.43176884880892885,
+              1.319268965853574,
+              0.21727833588750814
+            ],
+            "mae_per_channel": [
+              0.004482788421034403,
+              0.008827482681539225,
+              0.003337484961130765
+            ],
+            "rmse_per_channel": [
+              0.006809326665694201,
+              0.01190269182973137,
+              0.004830440417508009
+            ],
+            "max_abs_per_channel": [
+              0.060712575912475586,
+              0.0823938399553299,
+              0.047681331634521484
+            ],
+            "pooled_mae": 0.005549252021234798,
+            "pooled_rmse": 0.008393929494199622,
+            "pooled_max_abs": 0.0823938399553299
+          }
+        },
+        "action_dynamics": {
+          "acceleration_deg_s2": {
+            "valid_per_channel": [
+              8730,
+              8730,
+              8730,
+              8730,
+              8730,
+              8730,
+              8730
+            ],
+            "absolute_error_sum": [
+              585190.5554090675,
+              443723.2860513439,
+              987580.6709355328,
+              639468.9542029744,
+              504772.3733537201,
+              526533.1707091647,
+              549633.9905731014
+            ],
+            "squared_error_sum": [
+              84472974.97238731,
+              42135421.9352485,
+              221419432.27973533,
+              86512688.0930033,
+              55958982.90590302,
+              60878251.837427415,
+              71332225.3184238
+            ],
+            "mae_per_channel": [
+              67.03213693116467,
+              50.827409627874445,
+              113.12493366959139,
+              73.24959383768321,
+              57.82043222837573,
+              60.313077973558386,
+              62.95921999691884
+            ],
+            "rmse_per_channel": [
+              98.3675314593448,
+              69.47307977010406,
+              159.25781193415426,
+              99.5480555311016,
+              80.06224876714444,
+              83.50720818420533,
+              90.39320071340896
+            ],
+            "max_abs_per_channel": [
+              520.7114242068299,
+              637.4676955291442,
+              764.2899706898461,
+              610.1988500550384,
+              411.2418471952081,
+              693.0934602887627,
+              679.8918088318463
+            ],
+            "pooled_mae": 69.33240060930952,
+            "pooled_rmse": 100.9454550818787,
+            "pooled_max_abs": 764.2899706898461
+          },
+          "first_jump_deg": {
+            "valid_per_channel": [
+              291,
+              291,
+              291,
+              291,
+              291,
+              291,
+              291
+            ],
+            "absolute_error_sum": [
+              37.678957184054866,
+              27.4723539788754,
+              43.09362970131181,
+              29.829140442112866,
+              27.717629255212053,
+              23.706343531620767,
+              26.147810971357256
+            ],
+            "squared_error_sum": [
+              8.111996225388339,
+              4.338458980742991,
+              9.979776126433684,
+              4.94136975263649,
+              4.371325258532011,
+              3.14738488980828,
+              3.640164415758573
+            ],
+            "mae_per_channel": [
+              0.1294809525225253,
+              0.09440671470403918,
+              0.14808807457495468,
+              0.10250563725811981,
+              0.09524958506945723,
+              0.08146509804680677,
+              0.08985502052012803
+            ],
+            "rmse_per_channel": [
+              0.16696189891295474,
+              0.12210157144057443,
+              0.18518845353066146,
+              0.13030983106011523,
+              0.12256319302145795,
+              0.10399882516201805,
+              0.11184433855988812
+            ],
+            "max_abs_per_channel": [
+              0.51799813107656,
+              0.4044598968215798,
+              0.5264197739958403,
+              0.43635516078434466,
+              0.41217800336477056,
+              0.3331766279902936,
+              0.3309593679300121
+            ],
+            "pooled_mae": 0.10586444038514728,
+            "pooled_rmse": 0.1375329221965548,
+            "pooled_max_abs": 0.5264197739958403
+          }
+        },
+        "hold_state_vs_recorded": {
+          "joint_deg": {
+            "valid_per_channel": [
+              9312,
+              9312,
+              9312,
+              9312,
+              9312,
+              9312,
+              9312
+            ],
+            "absolute_error_sum": [
+              10049.892015321704,
+              17491.504116450436,
+              19191.153242792934,
+              18458.362106323242,
+              14585.47502282937,
+              14331.29271697998,
+              9939.492072648369
+            ],
+            "squared_error_sum": [
+              63219.74946913644,
+              79211.39594625,
+              139266.93415671887,
+              119634.46145644593,
+              77279.87259761455,
+              79468.61334793229,
+              56143.58785665172
+            ],
+            "mae_per_channel": [
+              1.0792409810268153,
+              1.8783831740174437,
+              2.0609056317432275,
+              1.982212425507221,
+              1.5663096029670716,
+              1.5390133931464756,
+              1.0673853170799366
+            ],
+            "rmse_per_channel": [
+              2.605582937269788,
+              2.9165696341171072,
+              3.8672524555077166,
+              3.584319094258168,
+              2.8807907578714045,
+              2.921301178294604,
+              2.4554358803709255
+            ],
+            "max_abs_per_channel": [
+              15.670973777770996,
+              13.788545608520508,
+              16.053624629974365,
+              20.045726776123047,
+              14.497371673583984,
+              15.922088623046875,
+              20.130277633666992
+            ],
+            "pooled_mae": 1.5962072179268845,
+            "pooled_rmse": 3.0696800001976774,
+            "pooled_max_abs": 20.130277633666992
+          },
+          "gripper_openness": {
+            "valid_per_channel": [
+              9312
+            ],
+            "absolute_error_sum": [
+              2334.536734600668
+            ],
+            "squared_error_sum": [
+              1450.386875713572
+            ],
+            "mae_per_channel": [
+              0.250701968921893
+            ],
+            "rmse_per_channel": [
+              0.3946575786054086
+            ],
+            "max_abs_per_channel": [
+              1.0
+            ],
+            "pooled_mae": 0.250701968921893,
+            "pooled_rmse": 0.3946575786054086,
+            "pooled_max_abs": 1.0
+          },
+          "joint_velocity_deg_s": {
+            "valid_per_channel": [
+              9021,
+              9021,
+              9021,
+              9021,
+              9021,
+              9021,
+              9021
+            ],
+            "absolute_error_sum": [
+              20316.102411471,
+              29510.32978249339,
+              34665.37414873976,
+              34602.636449867874,
+              24235.888880433286,
+              27203.01011919271,
+              20113.62606983735
+            ],
+            "squared_error_sum": [
+              259183.36035584362,
+              225365.90116693592,
+              480561.1497547624,
+              382726.72282923723,
+              236670.02815644038,
+              306672.9104867477,
+              264488.85415084125
+            ],
+            "mae_per_channel": [
+              2.25208983610143,
+              3.271292515518611,
+              3.8427418411195826,
+              3.8357872131546253,
+              2.686607790758595,
+              3.0155204654908223,
+              2.2296448364745984
+            ],
+            "rmse_per_channel": [
+              5.360141032619722,
+              4.99823603921488,
+              7.298724779813113,
+              6.513539511347401,
+              5.122055616297199,
+              5.830561304588567,
+              5.414724268488883
+            ],
+            "max_abs_per_channel": [
+              34.852813720703125,
+              21.995136260986328,
+              45.971405029296875,
+              35.44355773925781,
+              31.79741668701172,
+              45.6876106262207,
+              49.74765396118164
+            ],
+            "pooled_mae": 3.019097785516895,
+            "pooled_rmse": 5.8427145542534,
+            "pooled_max_abs": 49.74765396118164
+          }
+        }
+      },
+      "median_joint_core_ms": 775.7561269681901,
+      "p95_joint_core_ms": 790.000857465202
+    },
+    "v8_f8_a8": {
+      "records": 291,
+      "metrics": {
+        "action_vs_recorded": {
+          "joint_deg": {
+            "valid_per_channel": [
+              9312,
+              9312,
+              9312,
+              9312,
+              9312,
+              9312,
+              9312
+            ],
+            "absolute_error_sum": [
+              1508.5846853600563,
+              974.0498187011302,
+              1694.2923531720855,
+              1266.9337862147756,
+              1177.5768398361529,
+              957.2841885464035,
+              1097.5128819028503
+            ],
+            "squared_error_sum": [
+              402.36438386630556,
+              169.85066261305957,
+              530.2387379151567,
+              298.9615566983225,
+              256.1850220610071,
+              225.99367811334238,
+              233.53580941301084
+            ],
+            "mae_per_channel": [
+              0.16200436913230845,
+              0.1046015698776987,
+              0.18194720287500918,
+              0.13605388597667264,
+              0.12645799396865903,
+              0.10280113708616875,
+              0.11786006034180094
+            ],
+            "rmse_per_channel": [
+              0.20786830846143603,
+              0.13505545770231767,
+              0.2386240667301762,
+              0.17917862084460628,
+              0.1658652409104761,
+              0.15578536694249803,
+              0.15836356062513698
+            ],
+            "max_abs_per_channel": [
+              0.9627343537437547,
+              0.5750492996395824,
+              1.5122711196186174,
+              0.8644579265358843,
+              0.8335986880786237,
+              1.7250349485993297,
+              1.1454745516139724
+            ],
+            "pooled_mae": 0.13310374560833108,
+            "pooled_rmse": 0.1802201073837983,
+            "pooled_max_abs": 1.7250349485993297
+          },
+          "gripper_openness": {
+            "valid_per_channel": [
+              9312
+            ],
+            "absolute_error_sum": [
+              116.58553280268097
+            ],
+            "squared_error_sum": [
+              27.28745327880243
+            ],
+            "mae_per_channel": [
+              0.012519924055270724
+            ],
+            "rmse_per_channel": [
+              0.05413274110614767
+            ],
+            "max_abs_per_channel": [
+              0.9984755516052246
+            ],
+            "pooled_mae": 0.012519924055270724,
+            "pooled_rmse": 0.05413274110614767,
+            "pooled_max_abs": 0.9984755516052246
+          },
+          "joint_velocity_deg_s": {
+            "valid_per_channel": [
+              9021,
+              9021,
+              9021,
+              9021,
+              9021,
+              9021,
+              9021
+            ],
+            "absolute_error_sum": [
+              14687.886765156594,
+              11077.878467641565,
+              21787.23591361565,
+              14652.878604760743,
+              10721.044959911731,
+              11080.046769301165,
+              12954.205275290678
+            ],
+            "squared_error_sum": [
+              49638.01588350984,
+              24689.89295996802,
+              105751.66916372917,
+              44868.95013239892,
+              25429.716144652426,
+              28377.673663117363,
+              37793.760820092706
+            ],
+            "mae_per_channel": [
+              1.6281883122887257,
+              1.2280100285602,
+              2.4151685970087184,
+              1.6243075717504427,
+              1.1884541580658166,
+              1.2282503901231754,
+              1.4360054622869614
+            ],
+            "rmse_per_channel": [
+              2.345739955956789,
+              1.6543685374572419,
+              3.423862174143745,
+              2.230209248609612,
+              1.6789718503593583,
+              1.7736219449427375,
+              2.046834430290595
+            ],
+            "max_abs_per_channel": [
+              13.74402061086856,
+              9.772051703479534,
+              20.39332336555254,
+              12.289525744589058,
+              9.218654011860016,
+              20.406353055205358,
+              17.548747711902248
+            ],
+            "pooled_mae": 1.5354835028691485,
+            "pooled_rmse": 2.2389509387121898,
+            "pooled_max_abs": 20.406353055205358
+          }
+        },
+        "action_vs_training_target": {
+          "joint_deg": {
+            "valid_per_channel": [
+              9312,
+              9312,
+              9312,
+              9312,
+              9312,
+              9312,
+              9312
+            ],
+            "absolute_error_sum": [
+              1508.5814327463336,
+              974.0463697196482,
+              1694.2902792180114,
+              1266.9344375515172,
+              1177.5746148225692,
+              957.2882981799661,
+              1097.51142308309
+            ],
+            "squared_error_sum": [
+              402.36264152705934,
+              169.84967122669542,
+              530.2375169956676,
+              298.9612980011631,
+              256.18421983233753,
+              225.996759960193,
+              233.5353097511886
+            ],
+            "mae_per_channel": [
+              0.16200401983959767,
+              0.1046011994973849,
+              0.1819469801565734,
+              0.13605395592262856,
+              0.12645775502819687,
+              0.10280157841279705,
+              0.1178599036816033
+            ],
+            "rmse_per_channel": [
+              0.20786785839985197,
+              0.135055063555093,
+              0.23862379200398165,
+              0.1791785433212438,
+              0.1658649812115393,
+              0.15578642915142732,
+              0.15836339121157295
+            ],
+            "max_abs_per_channel": [
+              0.9627344534616171,
+              0.57504814037536,
+              1.512268769037938,
+              0.8644560621134971,
+              0.8335981212170225,
+              1.7250462371567608,
+              1.1454722426826223
+            ],
+            "pooled_mae": 0.13310362750554025,
+            "pooled_rmse": 0.18022000381310938,
+            "pooled_max_abs": 1.7250462371567608
+          },
+          "gripper_openness": {
+            "valid_per_channel": [
+              9312
+            ],
+            "absolute_error_sum": [
+              116.58551168401027
+            ],
+            "squared_error_sum": [
+              27.28745322671155
+            ],
+            "mae_per_channel": [
+              0.012519921787372237
+            ],
+            "rmse_per_channel": [
+              0.05413274105447883
+            ],
+            "max_abs_per_channel": [
+              0.9984755516052246
+            ],
+            "pooled_mae": 0.012519921787372237,
+            "pooled_rmse": 0.05413274105447883,
+            "pooled_max_abs": 0.9984755516052246
+          },
+          "joint_velocity_deg_s": {
+            "valid_per_channel": [
+              9021,
+              9021,
+              9021,
+              9021,
+              9021,
+              9021,
+              9021
+            ],
+            "absolute_error_sum": [
+              14687.886861506628,
+              11077.878538605923,
+              21787.23428947935,
+              14652.885405585093,
+              10721.045065236367,
+              11080.055541792179,
+              12954.204146889084
+            ],
+            "squared_error_sum": [
+              49638.009577278215,
+              24689.88968190844,
+              105751.65156729666,
+              44869.01988801347,
+              25429.718802161904,
+              28377.716422795478,
+              37793.758700304046
+            ],
+            "mae_per_channel": [
+              1.6281883229693634,
+              1.2280100364267734,
+              2.415168416969222,
+              1.6243083256385205,
+              1.1884541697413111,
+              1.228251362575344,
+              1.4360053372008739
+            ],
+            "rmse_per_channel": [
+              2.3457398069502293,
+              1.6543684276325694,
+              3.4238618892888457,
+              2.2302109822088583,
+              1.6789719380890729,
+              1.77362328119524,
+              2.046834372888839
+            ],
+            "max_abs_per_channel": [
+              13.744048157358158,
+              9.772054098374792,
+              20.3933301622496,
+              12.289525222658094,
+              9.218655096347435,
+              20.406351277571993,
+              17.548749539226755
+            ],
+            "pooled_mae": 1.535483710217344,
+            "pooled_rmse": 2.238951242398852,
+            "pooled_max_abs": 20.406351277571993
+          }
+        },
+        "force_vs_recorded": {
+          "force_N": {
+            "valid_per_channel": [
+              9312,
+              9312,
+              9312
+            ],
+            "absolute_error_sum": [
+              696.0512914657593,
+              965.6667588655837,
+              414.68947982788086
+            ],
+            "squared_error_sum": [
+              98.16922326105123,
+              199.05855528411445,
+              35.473727939024684
+            ],
+            "mae_per_channel": [
+              0.07474777614537793,
+              0.10370132719776456,
+              0.04453280496433428
+            ],
+            "rmse_per_channel": [
+              0.10267535042002914,
+              0.14620726065230877,
+              0.06172085474924774
+            ],
+            "max_abs_per_channel": [
+              0.9721012115478516,
+              1.206724762916565,
+              0.6044769287109375
+            ],
+            "pooled_mae": 0.07432730276915893,
+            "pooled_rmse": 0.10913028079976346,
+            "pooled_max_abs": 1.206724762916565
+          },
+          "torque_Nm": {
+            "valid_per_channel": [
+              9312,
+              9312,
+              9312
+            ],
+            "absolute_error_sum": [
+              39.49569511413574,
+              80.2487556085398,
+              29.48405985185309
+            ],
+            "squared_error_sum": [
+              0.3891202447840669,
+              1.2716477133889812,
+              0.20047549284300617
+            ],
+            "mae_per_channel": [
+              0.0042413761935283225,
+              0.008617778738030477,
+              0.0031662435407917838
+            ],
+            "rmse_per_channel": [
+              0.006464284018180573,
+              0.011685893490802061,
+              0.004639905775551152
+            ],
+            "max_abs_per_channel": [
+              0.057851552963256836,
+              0.09731276333332062,
+              0.05629831552505493
+            ],
+            "pooled_mae": 0.005341799490783528,
+            "pooled_rmse": 0.008162430196783057,
+            "pooled_max_abs": 0.09731276333332062
+          }
+        },
+        "action_dynamics": {
+          "acceleration_deg_s2": {
+            "valid_per_channel": [
+              8730,
+              8730,
+              8730,
+              8730,
+              8730,
+              8730,
+              8730
+            ],
+            "absolute_error_sum": [
+              705424.058226078,
+              515435.98393114645,
+              1064736.7501950276,
+              696759.048803635,
+              477403.6125323077,
+              499556.87350859697,
+              611238.2646533457
+            ],
+            "squared_error_sum": [
+              112966390.75967085,
+              54215530.84731504,
+              246759743.53830856,
+              102313147.29652077,
+              49928235.70156788,
+              55494924.99469901,
+              81873048.28228725
+            ],
+            "mae_per_channel": [
+              80.80458857114296,
+              59.04192255797783,
+              121.962972530931,
+              79.81203308174514,
+              54.68540807930214,
+              57.22300956570412,
+              70.01583787552643
+            ],
+            "rmse_per_channel": [
+              113.75421684953265,
+              78.8051745640213,
+              168.12412351983787,
+              108.25765122547645,
+              75.62510454704304,
+              79.7295866463169,
+              96.84191265191438
+            ],
+            "max_abs_per_channel": [
+              650.8839014847406,
+              545.7949455459841,
+              786.4443696079979,
+              528.1710157216708,
+              409.08956318273226,
+              569.541485373485,
+              730.9559679254719
+            ],
+            "pooled_mae": 74.79225318033279,
+            "pooled_rmse": 107.29800744915451,
+            "pooled_max_abs": 786.4443696079979
+          },
+          "first_jump_deg": {
+            "valid_per_channel": [
+              291,
+              291,
+              291,
+              291,
+              291,
+              291,
+              291
+            ],
+            "absolute_error_sum": [
+              38.17637405380946,
+              20.74314398653188,
+              40.5469812795669,
+              33.86458020455123,
+              30.5757108202982,
+              20.783965266043218,
+              24.83722477675311
+            ],
+            "squared_error_sum": [
+              8.146664430196493,
+              2.3648117695997195,
+              8.750960995188535,
+              6.774414104650615,
+              5.34671653840841,
+              2.4566250690021225,
+              3.2027788500485648
+            ],
+            "mae_per_channel": [
+              0.13119028884470604,
+              0.07128228174065938,
+              0.13933670542806495,
+              0.11637312785069151,
+              0.10507117120377389,
+              0.07142256105169491,
+              0.08535128789262238
+            ],
+            "rmse_per_channel": [
+              0.16731829073070992,
+              0.09014710714415364,
+              0.17341289142189173,
+              0.15257710691811008,
+              0.13554923958443638,
+              0.09188041437868598,
+              0.10491002281367032
+            ],
+            "max_abs_per_channel": [
+              0.51799813107656,
+              0.3101315485081779,
+              0.5264197739958403,
+              0.4707315126528186,
+              0.35822974738510205,
+              0.3331766279902936,
+              0.2738120294832902
+            ],
+            "pooled_mae": 0.10286106057317332,
+            "pooled_rmse": 0.1348520011988751,
+            "pooled_max_abs": 0.5264197739958403
+          }
+        },
+        "hold_state_vs_recorded": {
+          "joint_deg": {
+            "valid_per_channel": [
+              9312,
+              9312,
+              9312,
+              9312,
+              9312,
+              9312,
+              9312
+            ],
+            "absolute_error_sum": [
+              10049.892015321704,
+              17491.504116450436,
+              19191.153242792934,
+              18458.362106323242,
+              14585.47502282937,
+              14331.29271697998,
+              9939.492072648369
+            ],
+            "squared_error_sum": [
+              63219.74946913644,
+              79211.39594625,
+              139266.93415671887,
+              119634.46145644593,
+              77279.87259761455,
+              79468.61334793229,
+              56143.58785665172
+            ],
+            "mae_per_channel": [
+              1.0792409810268153,
+              1.8783831740174437,
+              2.0609056317432275,
+              1.982212425507221,
+              1.5663096029670716,
+              1.5390133931464756,
+              1.0673853170799366
+            ],
+            "rmse_per_channel": [
+              2.605582937269788,
+              2.9165696341171072,
+              3.8672524555077166,
+              3.584319094258168,
+              2.8807907578714045,
+              2.921301178294604,
+              2.4554358803709255
+            ],
+            "max_abs_per_channel": [
+              15.670973777770996,
+              13.788545608520508,
+              16.053624629974365,
+              20.045726776123047,
+              14.497371673583984,
+              15.922088623046875,
+              20.130277633666992
+            ],
+            "pooled_mae": 1.5962072179268845,
+            "pooled_rmse": 3.0696800001976774,
+            "pooled_max_abs": 20.130277633666992
+          },
+          "gripper_openness": {
+            "valid_per_channel": [
+              9312
+            ],
+            "absolute_error_sum": [
+              2334.536734600668
+            ],
+            "squared_error_sum": [
+              1450.386875713572
+            ],
+            "mae_per_channel": [
+              0.250701968921893
+            ],
+            "rmse_per_channel": [
+              0.3946575786054086
+            ],
+            "max_abs_per_channel": [
+              1.0
+            ],
+            "pooled_mae": 0.250701968921893,
+            "pooled_rmse": 0.3946575786054086,
+            "pooled_max_abs": 1.0
+          },
+          "joint_velocity_deg_s": {
+            "valid_per_channel": [
+              9021,
+              9021,
+              9021,
+              9021,
+              9021,
+              9021,
+              9021
+            ],
+            "absolute_error_sum": [
+              20316.102411471,
+              29510.32978249339,
+              34665.37414873976,
+              34602.636449867874,
+              24235.888880433286,
+              27203.01011919271,
+              20113.62606983735
+            ],
+            "squared_error_sum": [
+              259183.36035584362,
+              225365.90116693592,
+              480561.1497547624,
+              382726.72282923723,
+              236670.02815644038,
+              306672.9104867477,
+              264488.85415084125
+            ],
+            "mae_per_channel": [
+              2.25208983610143,
+              3.271292515518611,
+              3.8427418411195826,
+              3.8357872131546253,
+              2.686607790758595,
+              3.0155204654908223,
+              2.2296448364745984
+            ],
+            "rmse_per_channel": [
+              5.360141032619722,
+              4.99823603921488,
+              7.298724779813113,
+              6.513539511347401,
+              5.122055616297199,
+              5.830561304588567,
+              5.414724268488883
+            ],
+            "max_abs_per_channel": [
+              34.852813720703125,
+              21.995136260986328,
+              45.971405029296875,
+              35.44355773925781,
+              31.79741668701172,
+              45.6876106262207,
+              49.74765396118164
+            ],
+            "pooled_mae": 3.019097785516895,
+            "pooled_rmse": 5.8427145542534,
+            "pooled_max_abs": 49.74765396118164
+          }
+        }
+      },
+      "median_joint_core_ms": 998.889536014758,
+      "p95_joint_core_ms": 1013.4466029994655
+    },
+    "v8_f8_a16": {
+      "records": 291,
+      "metrics": {
+        "action_vs_recorded": {
+          "joint_deg": {
+            "valid_per_channel": [
+              9312,
+              9312,
+              9312,
+              9312,
+              9312,
+              9312,
+              9312
+            ],
+            "absolute_error_sum": [
+              1607.7383683322512,
+              1131.9646642366388,
+              1811.024444309383,
+              1265.9374388470108,
+              1197.1949967657388,
+              1024.8369504136776,
+              1116.7983682857878
+            ],
+            "squared_error_sum": [
+              453.33595778140017,
+              224.9707748918236,
+              605.7844507644609,
+              303.0044445510691,
+              274.7618765980792,
+              249.9354330926856,
+              242.94439976784278
+            ],
+            "mae_per_channel": [
+              0.17265231618688265,
+              0.12155977923503423,
+              0.1944828655830523,
+              0.13594688991054668,
+              0.1285647548073173,
+              0.1100555144344585,
+              0.11993109625062154
+            ],
+            "rmse_per_channel": [
+              0.22064221073252802,
+              0.15543240556223858,
+              0.25505719381773306,
+              0.18038607786264935,
+              0.17177373277195873,
+              0.16382962279864133,
+              0.16152210377974058
+            ],
+            "max_abs_per_channel": [
+              0.9539901863446669,
+              0.6423875693386378,
+              1.7023259330232108,
+              0.9864182017421541,
+              0.9295766144203856,
+              1.7208656649606553,
+              1.1454745516139724
+            ],
+            "pooled_mae": 0.14045617377255906,
+            "pooled_rmse": 0.190064379185745,
+            "pooled_max_abs": 1.7208656649606553
+          },
+          "gripper_openness": {
+            "valid_per_channel": [
+              9312
+            ],
+            "absolute_error_sum": [
+              119.59765504108509
+            ],
+            "squared_error_sum": [
+              28.503259530303577
+            ],
+            "mae_per_channel": [
+              0.012843390790494532
+            ],
+            "rmse_per_channel": [
+              0.05532555508786173
+            ],
+            "max_abs_per_channel": [
+              1.0059596300125122
+            ],
+            "pooled_mae": 0.012843390790494532,
+            "pooled_rmse": 0.05532555508786173,
+            "pooled_max_abs": 1.0059596300125122
+          },
+          "joint_velocity_deg_s": {
+            "valid_per_channel": [
+              9021,
+              9021,
+              9021,
+              9021,
+              9021,
+              9021,
+              9021
+            ],
+            "absolute_error_sum": [
+              12255.409034944807,
+              9866.433369136672,
+              19229.70746864247,
+              13417.175317798066,
+              10762.959523123358,
+              10734.527231502983,
+              11108.677310582576
+            ],
+            "squared_error_sum": [
+              38859.93030043876,
+              20413.363974269814,
+              88200.02911127849,
+              38691.441434081935,
+              26066.046570776194,
+              27884.407153907287,
+              30436.20188631215
+            ],
+            "mae_per_channel": [
+              1.3585421832329905,
+              1.093718364830581,
+              2.131660289174423,
+              1.4873268282671617,
+              1.1931004903140847,
+              1.1899487009758323,
+              1.2314241559231323
+            ],
+            "rmse_per_channel": [
+              2.075504442243527,
+              1.5042843877245944,
+              3.1268498191852943,
+              2.0710000688634587,
+              1.6998486004550961,
+              1.7581396417460333,
+              1.8368254439648077
+            ],
+            "max_abs_per_channel": [
+              13.615777011407612,
+              11.13016651804487,
+              18.825084184474107,
+              13.127997748649387,
+              11.24410620720041,
+              20.406353055205358,
+              15.846621882052757
+            ],
+            "pooled_mae": 1.383674430388315,
+            "pooled_rmse": 2.069896107187186,
+            "pooled_max_abs": 20.406353055205358
+          }
+        },
+        "action_vs_training_target": {
+          "joint_deg": {
+            "valid_per_channel": [
+              9312,
+              9312,
+              9312,
+              9312,
+              9312,
+              9312,
+              9312
+            ],
+            "absolute_error_sum": [
+              1607.7357672512287,
+              1131.9609556136138,
+              1811.0217389999239,
+              1265.9407184518138,
+              1197.1932148902238,
+              1024.843110618867,
+              1116.7977299050722
+            ],
+            "squared_error_sum": [
+              453.3344069110617,
+              224.9695094773047,
+              605.7826799539572,
+              303.00478419345694,
+              274.761225864426,
+              249.93900583780982,
+              242.94414512526788
+            ],
+            "mae_per_channel": [
+              0.17265203686117148,
+              0.12155938097225234,
+              0.19448257506442482,
+              0.13594724210178413,
+              0.12856456345470615,
+              0.11005617596852095,
+              0.11993102769599143
+            ],
+            "rmse_per_channel": [
+              0.2206418333217504,
+              0.155431968423905,
+              0.25505682102978233,
+              0.18038617896139914,
+              0.17177352936125231,
+              0.16383079373984621,
+              0.16152201912988814
+            ],
+            "max_abs_per_channel": [
+              0.9539902905396935,
+              0.6423861216288742,
+              1.7023221977881278,
+              0.9864159199332505,
+              0.9295767932076888,
+              1.72087299157387,
+              1.1454722426826223
+            ],
+            "pooled_mae": 0.14045614315983593,
+            "pooled_rmse": 0.19006431541690233,
+            "pooled_max_abs": 1.72087299157387
+          },
+          "gripper_openness": {
+            "valid_per_channel": [
+              9312
+            ],
+            "absolute_error_sum": [
+              119.59763682814082
+            ],
+            "squared_error_sum": [
+              28.503259537159273
+            ],
+            "mae_per_channel": [
+              0.012843388834637115
+            ],
+            "rmse_per_channel": [
+              0.055325555094515276
+            ],
+            "max_abs_per_channel": [
+              1.0059596300125122
+            ],
+            "pooled_mae": 0.012843388834637115,
+            "pooled_rmse": 0.055325555094515276,
+            "pooled_max_abs": 1.0059596300125122
+          },
+          "joint_velocity_deg_s": {
+            "valid_per_channel": [
+              9021,
+              9021,
+              9021,
+              9021,
+              9021,
+              9021,
+              9021
+            ],
+            "absolute_error_sum": [
+              12255.409536991556,
+              9866.432476994882,
+              19229.70710210926,
+              13417.178526324524,
+              10762.960189785621,
+              10734.536420739276,
+              11108.676633221467
+            ],
+            "squared_error_sum": [
+              38859.92719327004,
+              20413.360912245837,
+              88200.02393451252,
+              38691.475726093326,
+              26066.05214750916,
+              27884.43781493644,
+              30436.19942687737
+            ],
+            "mae_per_channel": [
+              1.3585422388861053,
+              1.093718265934473,
+              2.1316602485433167,
+              1.4873271839401978,
+              1.1931005642152335,
+              1.1899497196252384,
+              1.23142408083599
+            ],
+            "rmse_per_channel": [
+              2.075504359266762,
+              1.5042842749025471,
+              3.126849727422456,
+              2.071000986621231,
+              1.6998487822932047,
+              1.7581406083499795,
+              1.8368253697513353
+            ],
+            "max_abs_per_channel": [
+              13.615725978326545,
+              11.130168912940128,
+              18.82509098117117,
+              13.127999245168857,
+              11.244109274900634,
+              20.406351277571993,
+              15.846623709377264
+            ],
+            "pooled_mae": 1.3836746145686505,
+            "pooled_rmse": 2.069896324176561,
+            "pooled_max_abs": 20.406351277571993
+          }
+        },
+        "force_vs_recorded": {
+          "force_N": {
+            "valid_per_channel": [
+              9312,
+              9312,
+              9312
+            ],
+            "absolute_error_sum": [
+              696.0512914657593,
+              965.6667588655837,
+              414.68947982788086
+            ],
+            "squared_error_sum": [
+              98.16922326105123,
+              199.05855528411445,
+              35.473727939024684
+            ],
+            "mae_per_channel": [
+              0.07474777614537793,
+              0.10370132719776456,
+              0.04453280496433428
+            ],
+            "rmse_per_channel": [
+              0.10267535042002914,
+              0.14620726065230877,
+              0.06172085474924774
+            ],
+            "max_abs_per_channel": [
+              0.9721012115478516,
+              1.206724762916565,
+              0.6044769287109375
+            ],
+            "pooled_mae": 0.07432730276915893,
+            "pooled_rmse": 0.10913028079976346,
+            "pooled_max_abs": 1.206724762916565
+          },
+          "torque_Nm": {
+            "valid_per_channel": [
+              9312,
+              9312,
+              9312
+            ],
+            "absolute_error_sum": [
+              39.49569511413574,
+              80.2487556085398,
+              29.48405985185309
+            ],
+            "squared_error_sum": [
+              0.3891202447840669,
+              1.2716477133889812,
+              0.20047549284300617
+            ],
+            "mae_per_channel": [
+              0.0042413761935283225,
+              0.008617778738030477,
+              0.0031662435407917838
+            ],
+            "rmse_per_channel": [
+              0.006464284018180573,
+              0.011685893490802061,
+              0.004639905775551152
+            ],
+            "max_abs_per_channel": [
+              0.057851552963256836,
+              0.09731276333332062,
+              0.05629831552505493
+            ],
+            "pooled_mae": 0.005341799490783528,
+            "pooled_rmse": 0.008162430196783057,
+            "pooled_max_abs": 0.09731276333332062
+          }
+        },
+        "action_dynamics": {
+          "acceleration_deg_s2": {
+            "valid_per_channel": [
+              8730,
+              8730,
+              8730,
+              8730,
+              8730,
+              8730,
+              8730
+            ],
+            "absolute_error_sum": [
+              582883.6912260159,
+              450063.1484520769,
+              937426.0689157038,
+              621603.6203994912,
+              472491.87784476636,
+              479013.4539448382,
+              508602.9309172239
+            ],
+            "squared_error_sum": [
+              86135319.85492904,
+              43330230.72178707,
+              204073079.77199847,
+              84168760.22738801,
+              50140885.40971855,
+              53395102.91276267,
+              61528291.124011904
+            ],
+            "mae_per_channel": [
+              66.76789132027673,
+              51.55362525224248,
+              107.37984752757203,
+              71.20316384873897,
+              54.12278096732719,
+              54.86981144843507,
+              58.259213163484986
+            ],
+            "rmse_per_channel": [
+              99.3307040029609,
+              70.45119741139642,
+              152.89234350485088,
+              98.19024491046497,
+              75.78598114501185,
+              78.20663359773187,
+              83.95185654945264
+            ],
+            "max_abs_per_channel": [
+              650.8839014847406,
+              606.9101122014241,
+              822.7218926487694,
+              467.5537689474969,
+              428.6429494725971,
+              651.9074195935857,
+              628.8284181345024
+            ],
+            "pooled_mae": 66.30804764686822,
+            "pooled_rmse": 97.65468284237039,
+            "pooled_max_abs": 822.7218926487694
+          },
+          "first_jump_deg": {
+            "valid_per_channel": [
+              291,
+              291,
+              291,
+              291,
+              291,
+              291,
+              291
+            ],
+            "absolute_error_sum": [
+              44.75626117321631,
+              25.910691005646648,
+              44.19219045160963,
+              33.89997073195936,
+              29.624882059355716,
+              23.195438853419336,
+              26.070366940489137
+            ],
+            "squared_error_sum": [
+              10.759019581477286,
+              3.741173626917342,
+              10.62338095953897,
+              6.475849030872109,
+              5.003215029356812,
+              3.0902714127634017,
+              3.6651446020008893
+            ],
+            "mae_per_channel": [
+              0.1538015847876849,
+              0.08904017527713624,
+              0.1518631974282118,
+              0.11649474478336548,
+              0.10180371841702995,
+              0.0797094118674204,
+              0.08958888982985957
+            ],
+            "rmse_per_channel": [
+              0.192282541800771,
+              0.11338547860800396,
+              0.19106664747800553,
+              0.14917699802044593,
+              0.13112276230708608,
+              0.10305090679338792,
+              0.11222744152971438
+            ],
+            "max_abs_per_channel": [
+              0.6542569845598774,
+              0.4044598968215798,
+              0.591521702883722,
+              0.5628007453414983,
+              0.35822974738510205,
+              0.3331766279902936,
+              0.323791947052556
+            ],
+            "pooled_mae": 0.11175738891295833,
+            "pooled_rmse": 0.1458946537626641,
+            "pooled_max_abs": 0.6542569845598774
+          }
+        },
+        "hold_state_vs_recorded": {
+          "joint_deg": {
+            "valid_per_channel": [
+              9312,
+              9312,
+              9312,
+              9312,
+              9312,
+              9312,
+              9312
+            ],
+            "absolute_error_sum": [
+              10049.892015321704,
+              17491.504116450436,
+              19191.153242792934,
+              18458.362106323242,
+              14585.47502282937,
+              14331.29271697998,
+              9939.492072648369
+            ],
+            "squared_error_sum": [
+              63219.74946913644,
+              79211.39594625,
+              139266.93415671887,
+              119634.46145644593,
+              77279.87259761455,
+              79468.61334793229,
+              56143.58785665172
+            ],
+            "mae_per_channel": [
+              1.0792409810268153,
+              1.8783831740174437,
+              2.0609056317432275,
+              1.982212425507221,
+              1.5663096029670716,
+              1.5390133931464756,
+              1.0673853170799366
+            ],
+            "rmse_per_channel": [
+              2.605582937269788,
+              2.9165696341171072,
+              3.8672524555077166,
+              3.584319094258168,
+              2.8807907578714045,
+              2.921301178294604,
+              2.4554358803709255
+            ],
+            "max_abs_per_channel": [
+              15.670973777770996,
+              13.788545608520508,
+              16.053624629974365,
+              20.045726776123047,
+              14.497371673583984,
+              15.922088623046875,
+              20.130277633666992
+            ],
+            "pooled_mae": 1.5962072179268845,
+            "pooled_rmse": 3.0696800001976774,
+            "pooled_max_abs": 20.130277633666992
+          },
+          "gripper_openness": {
+            "valid_per_channel": [
+              9312
+            ],
+            "absolute_error_sum": [
+              2334.536734600668
+            ],
+            "squared_error_sum": [
+              1450.386875713572
+            ],
+            "mae_per_channel": [
+              0.250701968921893
+            ],
+            "rmse_per_channel": [
+              0.3946575786054086
+            ],
+            "max_abs_per_channel": [
+              1.0
+            ],
+            "pooled_mae": 0.250701968921893,
+            "pooled_rmse": 0.3946575786054086,
+            "pooled_max_abs": 1.0
+          },
+          "joint_velocity_deg_s": {
+            "valid_per_channel": [
+              9021,
+              9021,
+              9021,
+              9021,
+              9021,
+              9021,
+              9021
+            ],
+            "absolute_error_sum": [
+              20316.102411471,
+              29510.32978249339,
+              34665.37414873976,
+              34602.636449867874,
+              24235.888880433286,
+              27203.01011919271,
+              20113.62606983735
+            ],
+            "squared_error_sum": [
+              259183.36035584362,
+              225365.90116693592,
+              480561.1497547624,
+              382726.72282923723,
+              236670.02815644038,
+              306672.9104867477,
+              264488.85415084125
+            ],
+            "mae_per_channel": [
+              2.25208983610143,
+              3.271292515518611,
+              3.8427418411195826,
+              3.8357872131546253,
+              2.686607790758595,
+              3.0155204654908223,
+              2.2296448364745984
+            ],
+            "rmse_per_channel": [
+              5.360141032619722,
+              4.99823603921488,
+              7.298724779813113,
+              6.513539511347401,
+              5.122055616297199,
+              5.830561304588567,
+              5.414724268488883
+            ],
+            "max_abs_per_channel": [
+              34.852813720703125,
+              21.995136260986328,
+              45.971405029296875,
+              35.44355773925781,
+              31.79741668701172,
+              45.6876106262207,
+              49.74765396118164
+            ],
+            "pooled_mae": 3.019097785516895,
+            "pooled_rmse": 5.8427145542534,
+            "pooled_max_abs": 49.74765396118164
+          }
+        }
+      },
+      "median_joint_core_ms": 1092.2196650062688,
+      "p95_joint_core_ms": 1109.40094848047
+    }
+  },
+  "finished": "2026-10-21 06:01:26 -0500"
+}

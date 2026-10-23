@@ -1,0 +1,7603 @@
+{
+  "schema": "expert-sweep-input-protocol-v1",
+  "selection": [
+    {
+      "sample": 454,
+      "episode": 0,
+      "frame": 461,
+      "strata": [
+        "midpoint"
+      ]
+    },
+    {
+      "sample": 494,
+      "episode": 0,
+      "frame": 501,
+      "strata": [
+        "gripper_change"
+      ]
+    },
+    {
+      "sample": 566,
+      "episode": 0,
+      "frame": 573,
+      "strata": [
+        "force_change"
+      ]
+    },
+    {
+      "sample": 1083,
+      "episode": 1,
+      "frame": 455,
+      "strata": [
+        "midpoint"
+      ]
+    },
+    {
+      "sample": 1145,
+      "episode": 1,
+      "frame": 517,
+      "strata": [
+        "gripper_change"
+      ]
+    },
+    {
+      "sample": 1229,
+      "episode": 1,
+      "frame": 601,
+      "strata": [
+        "force_change"
+      ]
+    },
+    {
+      "sample": 1410,
+      "episode": 2,
+      "frame": 144,
+      "strata": [
+        "gripper_change"
+      ]
+    },
+    {
+      "sample": 1499,
+      "episode": 2,
+      "frame": 233,
+      "strata": [
+        "force_change"
+      ]
+    },
+    {
+      "sample": 1541,
+      "episode": 2,
+      "frame": 275,
+      "strata": [
+        "midpoint"
+      ]
+    },
+    {
+      "sample": 2134,
+      "episode": 3,
+      "frame": 400,
+      "strata": [
+        "midpoint"
+      ]
+    },
+    {
+      "sample": 2229,
+      "episode": 3,
+      "frame": 495,
+      "strata": [
+        "gripper_change"
+      ]
+    },
+    {
+      "sample": 2311,
+      "episode": 3,
+      "frame": 583,
+      "strata": [
+        "force_change"
+      ]
+    },
+    {
+      "sample": 2852,
+      "episode": 4,
+      "frame": 454,
+      "strata": [
+        "midpoint"
+      ]
+    },
+    {
+      "sample": 2900,
+      "episode": 4,
+      "frame": 502,
+      "strata": [
+        "gripper_change"
+      ]
+    },
+    {
+      "sample": 2980,
+      "episode": 4,
+      "frame": 582,
+      "strata": [
+        "force_change"
+      ]
+    },
+    {
+      "sample": 3213,
+      "episode": 5,
+      "frame": 174,
+      "strata": [
+        "gripper_change"
+      ]
+    },
+    {
+      "sample": 3302,
+      "episode": 5,
+      "frame": 263,
+      "strata": [
+        "midpoint"
+      ]
+    },
+    {
+      "sample": 3634,
+      "episode": 5,
+      "frame": 595,
+      "strata": [
+        "force_change"
+      ]
+    },
+    {
+      "sample": 3789,
+      "episode": 6,
+      "frame": 68,
+      "strata": [
+        "force_change"
+      ]
+    },
+    {
+      "sample": 4022,
+      "episode": 6,
+      "frame": 305,
+      "strata": [
+        "midpoint"
+      ]
+    },
+    {
+      "sample": 4138,
+      "episode": 6,
+      "frame": 421,
+      "strata": [
+        "gripper_change"
+      ]
+    },
+    {
+      "sample": 4344,
+      "episode": 7,
+      "frame": 31,
+      "strata": [
+        "gripper_change"
+      ]
+    },
+    {
+      "sample": 4425,
+      "episode": 7,
+      "frame": 112,
+      "strata": [
+        "midpoint"
+      ]
+    },
+    {
+      "sample": 4921,
+      "episode": 7,
+      "frame": 644,
+      "strata": [
+        "force_change"
+      ]
+    },
+    {
+      "sample": 5127,
+      "episode": 8,
+      "frame": 152,
+      "strata": [
+        "gripper_change"
+      ]
+    },
+    {
+      "sample": 5391,
+      "episode": 8,
+      "frame": 416,
+      "strata": [
+        "midpoint"
+      ]
+    },
+    {
+      "sample": 5502,
+      "episode": 8,
+      "frame": 527,
+      "strata": [
+        "force_change"
+      ]
+    },
+    {
+      "sample": 5776,
+      "episode": 9,
+      "frame": 247,
+      "strata": [
+        "force_change"
+      ]
+    },
+    {
+      "sample": 5816,
+      "episode": 9,
+      "frame": 287,
+      "strata": [
+        "midpoint"
+      ]
+    },
+    {
+      "sample": 5889,
+      "episode": 9,
+      "frame": 360,
+      "strata": [
+        "gripper_change"
+      ]
+    },
+    {
+      "sample": 6048,
+      "episode": 10,
+      "frame": 62,
+      "strata": [
+        "force_change"
+      ]
+    },
+    {
+      "sample": 6387,
+      "episode": 10,
+      "frame": 433,
+      "strata": [
+        "midpoint"
+      ]
+    },
+    {
+      "sample": 6427,
+      "episode": 10,
+      "frame": 473,
+      "strata": [
+        "gripper_change"
+      ]
+    },
+    {
+      "sample": 6889,
+      "episode": 11,
+      "frame": 348,
+      "strata": [
+        "midpoint"
+      ]
+    },
+    {
+      "sample": 6977,
+      "episode": 11,
+      "frame": 436,
+      "strata": [
+        "gripper_change"
+      ]
+    },
+    {
+      "sample": 7062,
+      "episode": 11,
+      "frame": 523,
+      "strata": [
+        "force_change"
+      ]
+    },
+    {
+      "sample": 7457,
+      "episode": 12,
+      "frame": 371,
+      "strata": [
+        "midpoint"
+      ]
+    },
+    {
+      "sample": 7509,
+      "episode": 12,
+      "frame": 423,
+      "strata": [
+        "gripper_change"
+      ]
+    },
+    {
+      "sample": 7573,
+      "episode": 12,
+      "frame": 487,
+      "strata": [
+        "force_change"
+      ]
+    },
+    {
+      "sample": 8041,
+      "episode": 13,
+      "frame": 416,
+      "strata": [
+        "midpoint"
+      ]
+    },
+    {
+      "sample": 8161,
+      "episode": 13,
+      "frame": 536,
+      "strata": [
+        "gripper_change"
+      ]
+    },
+    {
+      "sample": 8231,
+      "episode": 13,
+      "frame": 613,
+      "strata": [
+        "force_change"
+      ]
+    },
+    {
+      "sample": 8664,
+      "episode": 14,
+      "frame": 369,
+      "strata": [
+        "midpoint"
+      ]
+    },
+    {
+      "sample": 8738,
+      "episode": 14,
+      "frame": 443,
+      "strata": [
+        "gripper_change"
+      ]
+    },
+    {
+      "sample": 8812,
+      "episode": 14,
+      "frame": 517,
+      "strata": [
+        "force_change"
+      ]
+    },
+    {
+      "sample": 9030,
+      "episode": 15,
+      "frame": 143,
+      "strata": [
+        "gripper_change"
+      ]
+    },
+    {
+      "sample": 9145,
+      "episode": 15,
+      "frame": 258,
+      "strata": [
+        "midpoint"
+      ]
+    },
+    {
+      "sample": 9358,
+      "episode": 15,
+      "frame": 471,
+      "strata": [
+        "force_change"
+      ]
+    },
+    {
+      "sample": 9464,
+      "episode": 16,
+      "frame": 55,
+      "strata": [
+        "force_change"
+      ]
+    },
+    {
+      "sample": 9706,
+      "episode": 16,
+      "frame": 318,
+      "strata": [
+        "midpoint"
+      ]
+    },
+    {
+      "sample": 9872,
+      "episode": 16,
+      "frame": 503,
+      "strata": [
+        "gripper_change"
+      ]
+    },
+    {
+      "sample": 9947,
+      "episode": 17,
+      "frame": 31,
+      "strata": [
+        "gripper_change"
+      ]
+    },
+    {
+      "sample": 10029,
+      "episode": 17,
+      "frame": 113,
+      "strata": [
+        "midpoint"
+      ]
+    },
+    {
+      "sample": 10189,
+      "episode": 18,
+      "frame": 86,
+      "strata": [
+        "midpoint"
+      ]
+    },
+    {
+      "sample": 10436,
+      "episode": 19,
+      "frame": 208,
+      "strata": [
+        "midpoint"
+      ]
+    },
+    {
+      "sample": 10481,
+      "episode": 19,
+      "frame": 253,
+      "strata": [
+        "gripper_change"
+      ]
+    },
+    {
+      "sample": 10602,
+      "episode": 19,
+      "frame": 374,
+      "strata": [
+        "force_change"
+      ]
+    },
+    {
+      "sample": 11160,
+      "episode": 20,
+      "frame": 299,
+      "strata": [
+        "force_change"
+      ]
+    },
+    {
+      "sample": 11211,
+      "episode": 20,
+      "frame": 350,
+      "strata": [
+        "midpoint"
+      ]
+    },
+    {
+      "sample": 11306,
+      "episode": 20,
+      "frame": 445,
+      "strata": [
+        "gripper_change"
+      ]
+    },
+    {
+      "sample": 11565,
+      "episode": 21,
+      "frame": 146,
+      "strata": [
+        "gripper_change"
+      ]
+    },
+    {
+      "sample": 11748,
+      "episode": 21,
+      "frame": 329,
+      "strata": [
+        "midpoint"
+      ]
+    },
+    {
+      "sample": 11916,
+      "episode": 21,
+      "frame": 497,
+      "strata": [
+        "force_change"
+      ]
+    },
+    {
+      "sample": 12216,
+      "episode": 22,
+      "frame": 233,
+      "strata": [
+        "midpoint"
+      ]
+    },
+    {
+      "sample": 12275,
+      "episode": 22,
+      "frame": 292,
+      "strata": [
+        "force_change"
+      ]
+    },
+    {
+      "sample": 12398,
+      "episode": 22,
+      "frame": 415,
+      "strata": [
+        "gripper_change"
+      ]
+    },
+    {
+      "sample": 12600,
+      "episode": 23,
+      "frame": 104,
+      "strata": [
+        "gripper_change"
+      ]
+    },
+    {
+      "sample": 12756,
+      "episode": 23,
+      "frame": 262,
+      "strata": [
+        "midpoint"
+      ]
+    },
+    {
+      "sample": 12992,
+      "episode": 23,
+      "frame": 500,
+      "strata": [
+        "force_change"
+      ]
+    },
+    {
+      "sample": 13280,
+      "episode": 24,
+      "frame": 220,
+      "strata": [
+        "midpoint"
+      ]
+    },
+    {
+      "sample": 13466,
+      "episode": 24,
+      "frame": 406,
+      "strata": [
+        "gripper_change"
+      ]
+    },
+    {
+      "sample": 13540,
+      "episode": 24,
+      "frame": 486,
+      "strata": [
+        "force_change"
+      ]
+    },
+    {
+      "sample": 13978,
+      "episode": 25,
+      "frame": 418,
+      "strata": [
+        "midpoint"
+      ]
+    },
+    {
+      "sample": 14119,
+      "episode": 25,
+      "frame": 559,
+      "strata": [
+        "gripper_change"
+      ]
+    },
+    {
+      "sample": 14186,
+      "episode": 25,
+      "frame": 630,
+      "strata": [
+        "force_change"
+      ]
+    },
+    {
+      "sample": 14306,
+      "episode": 26,
+      "frame": 74,
+      "strata": [
+        "midpoint"
+      ]
+    },
+    {
+      "sample": 14623,
+      "episode": 26,
+      "frame": 430,
+      "strata": [
+        "gripper_change"
+      ]
+    },
+    {
+      "sample": 14701,
+      "episode": 26,
+      "frame": 508,
+      "strata": [
+        "force_change"
+      ]
+    },
+    {
+      "sample": 15007,
+      "episode": 27,
+      "frame": 272,
+      "strata": [
+        "force_change"
+      ]
+    },
+    {
+      "sample": 15095,
+      "episode": 27,
+      "frame": 360,
+      "strata": [
+        "midpoint"
+      ]
+    },
+    {
+      "sample": 15149,
+      "episode": 27,
+      "frame": 414,
+      "strata": [
+        "gripper_change"
+      ]
+    },
+    {
+      "sample": 15432,
+      "episode": 28,
+      "frame": 168,
+      "strata": [
+        "gripper_change"
+      ]
+    },
+    {
+      "sample": 15596,
+      "episode": 28,
+      "frame": 338,
+      "strata": [
+        "midpoint"
+      ]
+    },
+    {
+      "sample": 15816,
+      "episode": 28,
+      "frame": 565,
+      "strata": [
+        "force_change"
+      ]
+    },
+    {
+      "sample": 15997,
+      "episode": 29,
+      "frame": 147,
+      "strata": [
+        "gripper_change"
+      ]
+    },
+    {
+      "sample": 16116,
+      "episode": 29,
+      "frame": 266,
+      "strata": [
+        "force_change"
+      ]
+    },
+    {
+      "sample": 16156,
+      "episode": 29,
+      "frame": 306,
+      "strata": [
+        "midpoint"
+      ]
+    },
+    {
+      "sample": 16604,
+      "episode": 30,
+      "frame": 214,
+      "strata": [
+        "force_change"
+      ]
+    },
+    {
+      "sample": 16665,
+      "episode": 30,
+      "frame": 275,
+      "strata": [
+        "midpoint"
+      ]
+    },
+    {
+      "sample": 16819,
+      "episode": 30,
+      "frame": 458,
+      "strata": [
+        "gripper_change"
+      ]
+    },
+    {
+      "sample": 17018,
+      "episode": 31,
+      "frame": 152,
+      "strata": [
+        "gripper_change"
+      ]
+    },
+    {
+      "sample": 17221,
+      "episode": 31,
+      "frame": 357,
+      "strata": [
+        "midpoint"
+      ]
+    },
+    {
+      "sample": 17475,
+      "episode": 31,
+      "frame": 629,
+      "strata": [
+        "force_change"
+      ]
+    },
+    {
+      "sample": 17540,
+      "episode": 32,
+      "frame": 31,
+      "strata": [
+        "gripper_change"
+      ]
+    },
+    {
+      "sample": 17803,
+      "episode": 32,
+      "frame": 331,
+      "strata": [
+        "midpoint"
+      ]
+    },
+    {
+      "sample": 17943,
+      "episode": 32,
+      "frame": 522,
+      "strata": [
+        "force_change"
+      ]
+    },
+    {
+      "sample": 18256,
+      "episode": 33,
+      "frame": 258,
+      "strata": [
+        "midpoint"
+      ]
+    },
+    {
+      "sample": 18367,
+      "episode": 33,
+      "frame": 369,
+      "strata": [
+        "gripper_change"
+      ]
+    },
+    {
+      "sample": 18444,
+      "episode": 33,
+      "frame": 447,
+      "strata": [
+        "force_change"
+      ]
+    },
+    {
+      "sample": 18894,
+      "episode": 34,
+      "frame": 356,
+      "strata": [
+        "midpoint"
+      ]
+    },
+    {
+      "sample": 18934,
+      "episode": 34,
+      "frame": 396,
+      "strata": [
+        "force_change"
+      ]
+    },
+    {
+      "sample": 19051,
+      "episode": 34,
+      "frame": 513,
+      "strata": [
+        "gripper_change"
+      ]
+    },
+    {
+      "sample": 19539,
+      "episode": 35,
+      "frame": 371,
+      "strata": [
+        "midpoint"
+      ]
+    },
+    {
+      "sample": 19612,
+      "episode": 35,
+      "frame": 444,
+      "strata": [
+        "gripper_change"
+      ]
+    },
+    {
+      "sample": 19682,
+      "episode": 35,
+      "frame": 514,
+      "strata": [
+        "force_change"
+      ]
+    },
+    {
+      "sample": 19764,
+      "episode": 36,
+      "frame": 31,
+      "strata": [
+        "gripper_change"
+      ]
+    },
+    {
+      "sample": 19939,
+      "episode": 36,
+      "frame": 223,
+      "strata": [
+        "force_change"
+      ]
+    },
+    {
+      "sample": 20197,
+      "episode": 36,
+      "frame": 487,
+      "strata": [
+        "midpoint"
+      ]
+    },
+    {
+      "sample": 20479,
+      "episode": 37,
+      "frame": 123,
+      "strata": [
+        "midpoint"
+      ]
+    },
+    {
+      "sample": 20532,
+      "episode": 37,
+      "frame": 176,
+      "strata": [
+        "gripper_change"
+      ]
+    },
+    {
+      "sample": 20900,
+      "episode": 37,
+      "frame": 548,
+      "strata": [
+        "force_change"
+      ]
+    },
+    {
+      "sample": 21158,
+      "episode": 38,
+      "frame": 148,
+      "strata": [
+        "midpoint"
+      ]
+    },
+    {
+      "sample": 21429,
+      "episode": 38,
+      "frame": 420,
+      "strata": [
+        "force_change"
+      ]
+    },
+    {
+      "sample": 21551,
+      "episode": 38,
+      "frame": 542,
+      "strata": [
+        "gripper_change"
+      ]
+    },
+    {
+      "sample": 22041,
+      "episode": 39,
+      "frame": 366,
+      "strata": [
+        "force_change"
+      ]
+    },
+    {
+      "sample": 22109,
+      "episode": 39,
+      "frame": 434,
+      "strata": [
+        "midpoint"
+      ]
+    },
+    {
+      "sample": 22163,
+      "episode": 39,
+      "frame": 488,
+      "strata": [
+        "gripper_change"
+      ]
+    },
+    {
+      "sample": 22497,
+      "episode": 40,
+      "frame": 197,
+      "strata": [
+        "gripper_change"
+      ]
+    },
+    {
+      "sample": 22732,
+      "episode": 40,
+      "frame": 444,
+      "strata": [
+        "midpoint"
+      ]
+    },
+    {
+      "sample": 22907,
+      "episode": 40,
+      "frame": 645,
+      "strata": [
+        "force_change"
+      ]
+    },
+    {
+      "sample": 23048,
+      "episode": 41,
+      "frame": 84,
+      "strata": [
+        "gripper_change"
+      ]
+    },
+    {
+      "sample": 23224,
+      "episode": 41,
+      "frame": 276,
+      "strata": [
+        "midpoint"
+      ]
+    },
+    {
+      "sample": 23406,
+      "episode": 41,
+      "frame": 459,
+      "strata": [
+        "force_change"
+      ]
+    },
+    {
+      "sample": 23741,
+      "episode": 42,
+      "frame": 297,
+      "strata": [
+        "midpoint"
+      ]
+    },
+    {
+      "sample": 23835,
+      "episode": 42,
+      "frame": 391,
+      "strata": [
+        "force_change"
+      ]
+    },
+    {
+      "sample": 23946,
+      "episode": 42,
+      "frame": 502,
+      "strata": [
+        "gripper_change"
+      ]
+    },
+    {
+      "sample": 24331,
+      "episode": 43,
+      "frame": 284,
+      "strata": [
+        "midpoint"
+      ]
+    },
+    {
+      "sample": 24422,
+      "episode": 43,
+      "frame": 375,
+      "strata": [
+        "gripper_change"
+      ]
+    },
+    {
+      "sample": 24496,
+      "episode": 43,
+      "frame": 450,
+      "strata": [
+        "force_change"
+      ]
+    },
+    {
+      "sample": 24673,
+      "episode": 44,
+      "frame": 135,
+      "strata": [
+        "gripper_change"
+      ]
+    },
+    {
+      "sample": 24808,
+      "episode": 44,
+      "frame": 270,
+      "strata": [
+        "midpoint"
+      ]
+    },
+    {
+      "sample": 25072,
+      "episode": 44,
+      "frame": 552,
+      "strata": [
+        "force_change"
+      ]
+    },
+    {
+      "sample": 25497,
+      "episode": 45,
+      "frame": 407,
+      "strata": [
+        "midpoint"
+      ]
+    },
+    {
+      "sample": 25618,
+      "episode": 45,
+      "frame": 528,
+      "strata": [
+        "gripper_change"
+      ]
+    },
+    {
+      "sample": 25689,
+      "episode": 45,
+      "frame": 599,
+      "strata": [
+        "force_change"
+      ]
+    },
+    {
+      "sample": 25836,
+      "episode": 46,
+      "frame": 101,
+      "strata": [
+        "midpoint"
+      ]
+    },
+    {
+      "sample": 25876,
+      "episode": 46,
+      "frame": 141,
+      "strata": [
+        "gripper_change"
+      ]
+    },
+    {
+      "sample": 26199,
+      "episode": 46,
+      "frame": 503,
+      "strata": [
+        "force_change"
+      ]
+    },
+    {
+      "sample": 26392,
+      "episode": 47,
+      "frame": 136,
+      "strata": [
+        "gripper_change"
+      ]
+    },
+    {
+      "sample": 26520,
+      "episode": 47,
+      "frame": 268,
+      "strata": [
+        "midpoint"
+      ]
+    },
+    {
+      "sample": 26688,
+      "episode": 47,
+      "frame": 456,
+      "strata": [
+        "force_change"
+      ]
+    },
+    {
+      "sample": 26832,
+      "episode": 48,
+      "frame": 110,
+      "strata": [
+        "gripper_change"
+      ]
+    },
+    {
+      "sample": 27063,
+      "episode": 48,
+      "frame": 342,
+      "strata": [
+        "midpoint"
+      ]
+    },
+    {
+      "sample": 27203,
+      "episode": 48,
+      "frame": 482,
+      "strata": [
+        "force_change"
+      ]
+    },
+    {
+      "sample": 27475,
+      "episode": 49,
+      "frame": 234,
+      "strata": [
+        "force_change"
+      ]
+    },
+    {
+      "sample": 27603,
+      "episode": 49,
+      "frame": 362,
+      "strata": [
+        "midpoint"
+      ]
+    },
+    {
+      "sample": 27650,
+      "episode": 49,
+      "frame": 409,
+      "strata": [
+        "gripper_change"
+      ]
+    }
+  ],
+  "baseline": "v16_f16_a16",
+  "grid": [
+    4,
+    8,
+    16
+  ],
+  "seed_offsets": [
+    0,
+    1,
+    2
+  ],
+  "dataset_identity": "ad0c88e323f88345f3e1a54cba506e25bd33d4531431e8ed5ebcebefa58451e9",
+  "source_inventory": "e4feb413686fdcc44e1bc046e4510250d187ef0bd6ae1dc6c1c32e1aad02d60d",
+  "checkpoint_sha256": "2e8409d495d11961614b72d81b25bec7cc71bc2e194acb15ea220a72edace1d8",
+  "scope": "All episodes were training data; review subset is not training-heldout.",
+  "selection_episodes": [
+    0,
+    2,
+    4,
+    6,
+    8,
+    10,
+    12,
+    14,
+    16,
+    18,
+    20,
+    22,
+    24,
+    26,
+    28,
+    30,
+    32,
+    34,
+    36,
+    38,
+    40,
+    42,
+    44,
+    46,
+    48
+  ],
+  "review_episodes": [
+    1,
+    3,
+    5,
+    7,
+    9,
+    11,
+    13,
+    15,
+    17,
+    19,
+    21,
+    23,
+    25,
+    27,
+    29,
+    31,
+    33,
+    35,
+    37,
+    39,
+    41,
+    43,
+    45,
+    47,
+    49
+  ],
+  "stratum_rule": "50 original midpoint windows; max within-window gripper range and force-vector change, full 32-step horizons, >=40-frame separation",
+  "checks": [
+    {
+      "sample": 454,
+      "episode": 0,
+      "frame": 461,
+      "checks": {
+        "action": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "proprio": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "wrench_future": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "raw_wrench_future64": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "action_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "image_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "force_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history_channel_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "wrench_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "sample_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "episode_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "frame_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "cosmos_text_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history_channel_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "current_proprio": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "rgb_camera_order_resize": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        }
+      }
+    },
+    {
+      "sample": 1083,
+      "episode": 1,
+      "frame": 455,
+      "checks": {
+        "action": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "proprio": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "wrench_future": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "raw_wrench_future64": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "action_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "image_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "force_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history_channel_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "wrench_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "sample_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "episode_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "frame_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "cosmos_text_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history_channel_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "current_proprio": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "rgb_camera_order_resize": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        }
+      }
+    },
+    {
+      "sample": 1541,
+      "episode": 2,
+      "frame": 275,
+      "checks": {
+        "action": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "proprio": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "wrench_future": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "raw_wrench_future64": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "action_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "image_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "force_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history_channel_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "wrench_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "sample_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "episode_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "frame_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "cosmos_text_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history_channel_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "current_proprio": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "rgb_camera_order_resize": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        }
+      }
+    },
+    {
+      "sample": 2134,
+      "episode": 3,
+      "frame": 400,
+      "checks": {
+        "action": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "proprio": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "wrench_future": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "raw_wrench_future64": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "action_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "image_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "force_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history_channel_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "wrench_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "sample_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "episode_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "frame_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "cosmos_text_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history_channel_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "current_proprio": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "rgb_camera_order_resize": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        }
+      }
+    },
+    {
+      "sample": 2852,
+      "episode": 4,
+      "frame": 454,
+      "checks": {
+        "action": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "proprio": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "wrench_future": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "raw_wrench_future64": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "action_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "image_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "force_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history_channel_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "wrench_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "sample_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "episode_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "frame_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "cosmos_text_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history_channel_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "current_proprio": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "rgb_camera_order_resize": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        }
+      }
+    },
+    {
+      "sample": 3302,
+      "episode": 5,
+      "frame": 263,
+      "checks": {
+        "action": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "proprio": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "wrench_future": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "raw_wrench_future64": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "action_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "image_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "force_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history_channel_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "wrench_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "sample_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "episode_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "frame_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "cosmos_text_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history_channel_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "current_proprio": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "rgb_camera_order_resize": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        }
+      }
+    },
+    {
+      "sample": 4022,
+      "episode": 6,
+      "frame": 305,
+      "checks": {
+        "action": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "proprio": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "wrench_future": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "raw_wrench_future64": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "action_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "image_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "force_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history_channel_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "wrench_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "sample_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "episode_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "frame_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "cosmos_text_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history_channel_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "current_proprio": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "rgb_camera_order_resize": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        }
+      }
+    },
+    {
+      "sample": 4425,
+      "episode": 7,
+      "frame": 112,
+      "checks": {
+        "action": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "proprio": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "wrench_future": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "raw_wrench_future64": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "action_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "image_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "force_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history_channel_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "wrench_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "sample_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "episode_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "frame_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "cosmos_text_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history_channel_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "current_proprio": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "rgb_camera_order_resize": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        }
+      }
+    },
+    {
+      "sample": 5391,
+      "episode": 8,
+      "frame": 416,
+      "checks": {
+        "action": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "proprio": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "wrench_future": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "raw_wrench_future64": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "action_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "image_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "force_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history_channel_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "wrench_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "sample_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "episode_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "frame_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "cosmos_text_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history_channel_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "current_proprio": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "rgb_camera_order_resize": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        }
+      }
+    },
+    {
+      "sample": 5816,
+      "episode": 9,
+      "frame": 287,
+      "checks": {
+        "action": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "proprio": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "wrench_future": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "raw_wrench_future64": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "action_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "image_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "force_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history_channel_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "wrench_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "sample_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "episode_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "frame_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "cosmos_text_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history_channel_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "current_proprio": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "rgb_camera_order_resize": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        }
+      }
+    },
+    {
+      "sample": 6387,
+      "episode": 10,
+      "frame": 433,
+      "checks": {
+        "action": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "proprio": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "wrench_future": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "raw_wrench_future64": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "action_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "image_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "force_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history_channel_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "wrench_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "sample_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "episode_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "frame_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "cosmos_text_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history_channel_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "current_proprio": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "rgb_camera_order_resize": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        }
+      }
+    },
+    {
+      "sample": 6889,
+      "episode": 11,
+      "frame": 348,
+      "checks": {
+        "action": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "proprio": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "wrench_future": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "raw_wrench_future64": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "action_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "image_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "force_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history_channel_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "wrench_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "sample_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "episode_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "frame_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "cosmos_text_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history_channel_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "current_proprio": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "rgb_camera_order_resize": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        }
+      }
+    },
+    {
+      "sample": 7457,
+      "episode": 12,
+      "frame": 371,
+      "checks": {
+        "action": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "proprio": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "wrench_future": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "raw_wrench_future64": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "action_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "image_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "force_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history_channel_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "wrench_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "sample_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "episode_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "frame_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "cosmos_text_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history_channel_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "current_proprio": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "rgb_camera_order_resize": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        }
+      }
+    },
+    {
+      "sample": 8041,
+      "episode": 13,
+      "frame": 416,
+      "checks": {
+        "action": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "proprio": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "wrench_future": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "raw_wrench_future64": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "action_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "image_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "force_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history_channel_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "wrench_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "sample_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "episode_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "frame_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "cosmos_text_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history_channel_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "current_proprio": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "rgb_camera_order_resize": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        }
+      }
+    },
+    {
+      "sample": 8664,
+      "episode": 14,
+      "frame": 369,
+      "checks": {
+        "action": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "proprio": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "wrench_future": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "raw_wrench_future64": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "action_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "image_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "force_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history_channel_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "wrench_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "sample_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "episode_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "frame_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "cosmos_text_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history_channel_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "current_proprio": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "rgb_camera_order_resize": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        }
+      }
+    },
+    {
+      "sample": 9145,
+      "episode": 15,
+      "frame": 258,
+      "checks": {
+        "action": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "proprio": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "wrench_future": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "raw_wrench_future64": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "action_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "image_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "force_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history_channel_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "wrench_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "sample_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "episode_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "frame_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "cosmos_text_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history_channel_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "current_proprio": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "rgb_camera_order_resize": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        }
+      }
+    },
+    {
+      "sample": 9706,
+      "episode": 16,
+      "frame": 318,
+      "checks": {
+        "action": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "proprio": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "wrench_future": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "raw_wrench_future64": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "action_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "image_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "force_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history_channel_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "wrench_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "sample_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "episode_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "frame_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "cosmos_text_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history_channel_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "current_proprio": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "rgb_camera_order_resize": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        }
+      }
+    },
+    {
+      "sample": 10029,
+      "episode": 17,
+      "frame": 113,
+      "checks": {
+        "action": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "proprio": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "wrench_future": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "raw_wrench_future64": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "action_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "image_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "force_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history_channel_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "wrench_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "sample_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "episode_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "frame_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "cosmos_text_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history_channel_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "current_proprio": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "rgb_camera_order_resize": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        }
+      }
+    },
+    {
+      "sample": 10189,
+      "episode": 18,
+      "frame": 86,
+      "checks": {
+        "action": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "proprio": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "wrench_future": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "raw_wrench_future64": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "action_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "image_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "force_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history_channel_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "wrench_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "sample_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "episode_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "frame_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "cosmos_text_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history_channel_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "current_proprio": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "rgb_camera_order_resize": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        }
+      }
+    },
+    {
+      "sample": 10436,
+      "episode": 19,
+      "frame": 208,
+      "checks": {
+        "action": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "proprio": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "wrench_future": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "raw_wrench_future64": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "action_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "image_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "force_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history_channel_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "wrench_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "sample_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "episode_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "frame_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "cosmos_text_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history_channel_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "current_proprio": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "rgb_camera_order_resize": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        }
+      }
+    },
+    {
+      "sample": 11211,
+      "episode": 20,
+      "frame": 350,
+      "checks": {
+        "action": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "proprio": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "wrench_future": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "raw_wrench_future64": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "action_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "image_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "force_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history_channel_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "wrench_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "sample_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "episode_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "frame_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "cosmos_text_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history_channel_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "current_proprio": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "rgb_camera_order_resize": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        }
+      }
+    },
+    {
+      "sample": 11748,
+      "episode": 21,
+      "frame": 329,
+      "checks": {
+        "action": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "proprio": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "wrench_future": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "raw_wrench_future64": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "action_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "image_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "force_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history_channel_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "wrench_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "sample_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "episode_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "frame_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "cosmos_text_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history_channel_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "current_proprio": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "rgb_camera_order_resize": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        }
+      }
+    },
+    {
+      "sample": 12216,
+      "episode": 22,
+      "frame": 233,
+      "checks": {
+        "action": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "proprio": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "wrench_future": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "raw_wrench_future64": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "action_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "image_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "force_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history_channel_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "wrench_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "sample_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "episode_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "frame_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "cosmos_text_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history_channel_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "current_proprio": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "rgb_camera_order_resize": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        }
+      }
+    },
+    {
+      "sample": 12756,
+      "episode": 23,
+      "frame": 262,
+      "checks": {
+        "action": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "proprio": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "wrench_future": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "raw_wrench_future64": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "action_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "image_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "force_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history_channel_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "wrench_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "sample_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "episode_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "frame_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "cosmos_text_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history_channel_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "current_proprio": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "rgb_camera_order_resize": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        }
+      }
+    },
+    {
+      "sample": 13280,
+      "episode": 24,
+      "frame": 220,
+      "checks": {
+        "action": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "proprio": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "wrench_future": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "raw_wrench_future64": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "action_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "image_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "force_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history_channel_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "wrench_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "sample_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "episode_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "frame_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "cosmos_text_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history_channel_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "current_proprio": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "rgb_camera_order_resize": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        }
+      }
+    },
+    {
+      "sample": 13978,
+      "episode": 25,
+      "frame": 418,
+      "checks": {
+        "action": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "proprio": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "wrench_future": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "raw_wrench_future64": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "action_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "image_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "force_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history_channel_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "wrench_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "sample_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "episode_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "frame_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "cosmos_text_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history_channel_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "current_proprio": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "rgb_camera_order_resize": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        }
+      }
+    },
+    {
+      "sample": 14306,
+      "episode": 26,
+      "frame": 74,
+      "checks": {
+        "action": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "proprio": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "wrench_future": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "raw_wrench_future64": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "action_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "image_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "force_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history_channel_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "wrench_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "sample_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "episode_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "frame_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "cosmos_text_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history_channel_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "current_proprio": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "rgb_camera_order_resize": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        }
+      }
+    },
+    {
+      "sample": 15095,
+      "episode": 27,
+      "frame": 360,
+      "checks": {
+        "action": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "proprio": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "wrench_future": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "raw_wrench_future64": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "action_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "image_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "force_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history_channel_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "wrench_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "sample_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "episode_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "frame_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "cosmos_text_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history_channel_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "current_proprio": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "rgb_camera_order_resize": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        }
+      }
+    },
+    {
+      "sample": 15596,
+      "episode": 28,
+      "frame": 338,
+      "checks": {
+        "action": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "proprio": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "wrench_future": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "raw_wrench_future64": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "action_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "image_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "force_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history_channel_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "wrench_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "sample_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "episode_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "frame_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "cosmos_text_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history_channel_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "current_proprio": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "rgb_camera_order_resize": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        }
+      }
+    },
+    {
+      "sample": 16156,
+      "episode": 29,
+      "frame": 306,
+      "checks": {
+        "action": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "proprio": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "wrench_future": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "raw_wrench_future64": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "action_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "image_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "force_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history_channel_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "wrench_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "sample_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "episode_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "frame_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "cosmos_text_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history_channel_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "current_proprio": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "rgb_camera_order_resize": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        }
+      }
+    },
+    {
+      "sample": 16665,
+      "episode": 30,
+      "frame": 275,
+      "checks": {
+        "action": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "proprio": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "wrench_future": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "raw_wrench_future64": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "action_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "image_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "force_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history_channel_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "wrench_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "sample_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "episode_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "frame_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "cosmos_text_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history_channel_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "current_proprio": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "rgb_camera_order_resize": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        }
+      }
+    },
+    {
+      "sample": 17221,
+      "episode": 31,
+      "frame": 357,
+      "checks": {
+        "action": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "proprio": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "wrench_future": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "raw_wrench_future64": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "action_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "image_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "force_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history_channel_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "wrench_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "sample_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "episode_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "frame_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "cosmos_text_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history_channel_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "current_proprio": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "rgb_camera_order_resize": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        }
+      }
+    },
+    {
+      "sample": 17803,
+      "episode": 32,
+      "frame": 331,
+      "checks": {
+        "action": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "proprio": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "wrench_future": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "raw_wrench_future64": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "action_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "image_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "force_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history_channel_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "wrench_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "sample_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "episode_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "frame_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "cosmos_text_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history_channel_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "current_proprio": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "rgb_camera_order_resize": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        }
+      }
+    },
+    {
+      "sample": 18256,
+      "episode": 33,
+      "frame": 258,
+      "checks": {
+        "action": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "proprio": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "wrench_future": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "raw_wrench_future64": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "action_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "image_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "force_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history_channel_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "wrench_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "sample_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "episode_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "frame_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "cosmos_text_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history_channel_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "current_proprio": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "rgb_camera_order_resize": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        }
+      }
+    },
+    {
+      "sample": 18894,
+      "episode": 34,
+      "frame": 356,
+      "checks": {
+        "action": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "proprio": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "wrench_future": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "raw_wrench_future64": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "action_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "image_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "force_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history_channel_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "wrench_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "sample_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "episode_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "frame_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "cosmos_text_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history_channel_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "current_proprio": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "rgb_camera_order_resize": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        }
+      }
+    },
+    {
+      "sample": 19539,
+      "episode": 35,
+      "frame": 371,
+      "checks": {
+        "action": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "proprio": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "wrench_future": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "raw_wrench_future64": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "action_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "image_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "force_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history_channel_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "wrench_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "sample_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "episode_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "frame_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "cosmos_text_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history_channel_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "current_proprio": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "rgb_camera_order_resize": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        }
+      }
+    },
+    {
+      "sample": 20197,
+      "episode": 36,
+      "frame": 487,
+      "checks": {
+        "action": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "proprio": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "wrench_future": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "raw_wrench_future64": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "action_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "image_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "force_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history_channel_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "wrench_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "sample_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "episode_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "frame_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "cosmos_text_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history_channel_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "current_proprio": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "rgb_camera_order_resize": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        }
+      }
+    },
+    {
+      "sample": 20479,
+      "episode": 37,
+      "frame": 123,
+      "checks": {
+        "action": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "proprio": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "wrench_future": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "raw_wrench_future64": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "action_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "image_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "force_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history_channel_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "wrench_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "sample_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "episode_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "frame_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "cosmos_text_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history_channel_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "current_proprio": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "rgb_camera_order_resize": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        }
+      }
+    },
+    {
+      "sample": 21158,
+      "episode": 38,
+      "frame": 148,
+      "checks": {
+        "action": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "proprio": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "wrench_future": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "raw_wrench_future64": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "action_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "image_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "force_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history_channel_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "wrench_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "sample_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "episode_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "frame_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "cosmos_text_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history_channel_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "current_proprio": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "rgb_camera_order_resize": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        }
+      }
+    },
+    {
+      "sample": 22109,
+      "episode": 39,
+      "frame": 434,
+      "checks": {
+        "action": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "proprio": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "wrench_future": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "raw_wrench_future64": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "action_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "image_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "force_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history_channel_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "wrench_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "sample_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "episode_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "frame_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "cosmos_text_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history_channel_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "current_proprio": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "rgb_camera_order_resize": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        }
+      }
+    },
+    {
+      "sample": 22732,
+      "episode": 40,
+      "frame": 444,
+      "checks": {
+        "action": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "proprio": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "wrench_future": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "raw_wrench_future64": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "action_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "image_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "force_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history_channel_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "wrench_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "sample_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "episode_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "frame_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "cosmos_text_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history_channel_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "current_proprio": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "rgb_camera_order_resize": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        }
+      }
+    },
+    {
+      "sample": 23224,
+      "episode": 41,
+      "frame": 276,
+      "checks": {
+        "action": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "proprio": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "wrench_future": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "raw_wrench_future64": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "action_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "image_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "force_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history_channel_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "wrench_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "sample_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "episode_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "frame_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "cosmos_text_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history_channel_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "current_proprio": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "rgb_camera_order_resize": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        }
+      }
+    },
+    {
+      "sample": 23741,
+      "episode": 42,
+      "frame": 297,
+      "checks": {
+        "action": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "proprio": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "wrench_future": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "raw_wrench_future64": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "action_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "image_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "force_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history_channel_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "wrench_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "sample_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "episode_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "frame_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "cosmos_text_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history_channel_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "current_proprio": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "rgb_camera_order_resize": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        }
+      }
+    },
+    {
+      "sample": 24331,
+      "episode": 43,
+      "frame": 284,
+      "checks": {
+        "action": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "proprio": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "wrench_future": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "raw_wrench_future64": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "action_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "image_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "force_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history_channel_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "wrench_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "sample_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "episode_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "frame_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "cosmos_text_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history_channel_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "current_proprio": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "rgb_camera_order_resize": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        }
+      }
+    },
+    {
+      "sample": 24808,
+      "episode": 44,
+      "frame": 270,
+      "checks": {
+        "action": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "proprio": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "wrench_future": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "raw_wrench_future64": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "action_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "image_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "force_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history_channel_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "wrench_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "sample_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "episode_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "frame_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "cosmos_text_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history_channel_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "current_proprio": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "rgb_camera_order_resize": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        }
+      }
+    },
+    {
+      "sample": 25497,
+      "episode": 45,
+      "frame": 407,
+      "checks": {
+        "action": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "proprio": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "wrench_future": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "raw_wrench_future64": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "action_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "image_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "force_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history_channel_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "wrench_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "sample_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "episode_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "frame_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "cosmos_text_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history_channel_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "current_proprio": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "rgb_camera_order_resize": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        }
+      }
+    },
+    {
+      "sample": 25836,
+      "episode": 46,
+      "frame": 101,
+      "checks": {
+        "action": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "proprio": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "wrench_future": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "raw_wrench_future64": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "action_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "image_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "force_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history_channel_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "wrench_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "sample_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "episode_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "frame_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "cosmos_text_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history_channel_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "current_proprio": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "rgb_camera_order_resize": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        }
+      }
+    },
+    {
+      "sample": 26520,
+      "episode": 47,
+      "frame": 268,
+      "checks": {
+        "action": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "proprio": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "wrench_future": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "raw_wrench_future64": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "action_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "image_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "force_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history_channel_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "wrench_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "sample_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "episode_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "frame_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "cosmos_text_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history_channel_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "current_proprio": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "rgb_camera_order_resize": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        }
+      }
+    },
+    {
+      "sample": 27063,
+      "episode": 48,
+      "frame": 342,
+      "checks": {
+        "action": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "proprio": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "wrench_future": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "raw_wrench_future64": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "action_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "image_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "force_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history_channel_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "wrench_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "sample_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "episode_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "frame_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "cosmos_text_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history_channel_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "current_proprio": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "rgb_camera_order_resize": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        }
+      }
+    },
+    {
+      "sample": 27603,
+      "episode": 49,
+      "frame": 362,
+      "checks": {
+        "action": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "proprio": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "wrench_future": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "raw_wrench_future64": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "action_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "image_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "force_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "history_channel_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "wrench_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "sample_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "episode_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "frame_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "cosmos_text_index": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history_is_pad": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "online_history_channel_valid": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "current_proprio": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        },
+        "rgb_camera_order_resize": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "rmse": 0.0,
+          "exact": true
+        }
+      }
+    }
+  ]
+}

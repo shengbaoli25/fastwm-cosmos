@@ -69,16 +69,22 @@ def test_warmup_does_not_consume_first_live_seed_and_close_releases_runner():
     assert policy.model is policy.tokenizer is policy.runner is None
 
 
-def test_no_reference_deployment_uses_same_joint_sampler_without_rolling_actions():
+@pytest.mark.parametrize('backend', ['joint_static_cache', 'joint_optimized'])
+def test_no_reference_deployment_uses_same_joint_sampler_without_rolling_actions(backend):
     policy, _ = policy_fixture(False)
     policy.reference_mode = 'none'
-    policy.inference_backend = 'joint_static_cache'
+    policy.inference_backend = backend
+    if backend == 'joint_optimized':
+        policy.runner = Mock()
+    target = policy.runner if policy.runner is not None else policy.model
     policy.config['joint_steps'] = 16
-    policy.model.infer_joint.return_value = {'action': torch.zeros(1,32,7)}
+    target.infer_joint.return_value = {'action': torch.zeros(1,32,7)}
     obs = Observation.now(1, (0.,)*7, (0.,)*6, {'global':bytes(3), 'wrist':bytes(3)})
     history = OnlineHistory(policy.normalizer);history.append(obs.state,obs.force)
     policy.infer(obs, None, history.tensors())
-    call = policy.model.infer_joint.call_args
+    call = target.infer_joint.call_args
     assert call.kwargs == dict(num_inference_steps=16, seed=42, video_seed=44, force_seed=43, use_cache=True)
     assert 'action_condition' not in call.args[0] and 'reference' not in call.args[0]
     policy.model.infer_forcewm.assert_not_called()
+    if backend == 'joint_optimized':
+        policy.model.infer_joint.assert_not_called()

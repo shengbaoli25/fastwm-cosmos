@@ -192,6 +192,47 @@ of 0.00389 on the [0, 1] scale versus the reference. These are implementation
 comparisons, not measured task accuracy. AE compilation was excluded because
 its additional speedup was small and its normalized output difference was larger.
 
+## Joint8 no-reference inference optimization
+
+For `cosmos-noaction-vfa-diffusion28-joint8-v2`, select
+`inference_backend: "joint_optimized"` to enable the dedicated runner:
+
+```json
+{
+  "inference_backend": "joint_optimized",
+  "joint_steps": 16,
+  "inference_optimization": {
+    "compile_layers": true,
+    "cuda_graph": true,
+    "compile_threads": 4
+  }
+}
+```
+
+The runner reuses the trained parameters and 16-step schedule. It caches fixed
+text projections/KV, timestep modulations and positions, recomputes observation,
+history and proprio conditioning on each request, and replaces Action FP64
+complex RoPE with FP32 real arithmetic. Weight updates, text updates, geometry
+and schedule changes invalidate the relevant caches. Inference tensors without
+a version counter are conservatively rebuilt. Requests must be serialized.
+
+Force/Action blocks use full-graph `torch.compile` with BF16 rounding preserved.
+Video uses native operators because compiling all Video reductions caused
+larger accumulated differences in the local validation. CUDA Graph captures
+the complete 16-step rollout, including Video, and copies all changing inputs
+before replay. Returned outputs own their buffers. Loading performs compilation
+and capture during warmup; their cost is excluded from steady-state timing.
+
+On GB10/PyTorch 2.9.1+cu130, official Video/VAE weights with initialized full-size
+Action/Force and synthetic inputs measured 2.399 s median for `joint_static_cache`
+and 1.999 s for this backend (10 optimized trials, P95 2.014 s). Three input/seed
+cases preserved Video exactly; maximum normalized Action/Force differences
+were 0.046875/0.015625. This is implementation/runtime validation; validate the
+trained checkpoint on recorded observations before using its outputs for control.
+The synchronous robot scheduling policy is unchanged. Use `joint_static_cache`
+to return to the original cache-enabled sampler. The legacy
+`video_isolated_reuse` backend applies to a different checkpoint protocol.
+
 ## Container
 
 Build from the repository root:

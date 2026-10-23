@@ -1,0 +1,1399 @@
+{
+  "protocol": "Authenticated HTTPS through Jupyter reverse proxy; persistent Session; 50 interleaved requests/kind, 16KiB response, transport only, no inference, JPEG quality 90 with unmeasured server decode",
+  "records": [
+    {
+      "rep": 0,
+      "sample": 454,
+      "kind": "ping_1KiB",
+      "request_bytes": 1024,
+      "response_bytes": 16457,
+      "transport_ms": 37.898475013207644,
+      "jpeg_encode_ms": 0
+    },
+    {
+      "rep": 0,
+      "sample": 454,
+      "kind": "rgb_2x640x480",
+      "request_bytes": 1843200,
+      "response_bytes": 16461,
+      "transport_ms": 170.68415298126638,
+      "jpeg_encode_ms": 0
+    },
+    {
+      "rep": 0,
+      "sample": 454,
+      "kind": "jpeg90_2x640x480",
+      "request_bytes": 75589,
+      "response_bytes": 16459,
+      "transport_ms": 30.9651349671185,
+      "jpeg_encode_ms": 5.108820972964168
+    },
+    {
+      "rep": 1,
+      "sample": 4425,
+      "kind": "rgb_2x640x480",
+      "request_bytes": 1843200,
+      "response_bytes": 16461,
+      "transport_ms": 808.5724409902468,
+      "jpeg_encode_ms": 0
+    },
+    {
+      "rep": 1,
+      "sample": 4425,
+      "kind": "jpeg90_2x640x480",
+      "request_bytes": 56821,
+      "response_bytes": 16459,
+      "transport_ms": 111.10715800896287,
+      "jpeg_encode_ms": 1.5101979952305555
+    },
+    {
+      "rep": 1,
+      "sample": 4425,
+      "kind": "ping_1KiB",
+      "request_bytes": 1024,
+      "response_bytes": 16458,
+      "transport_ms": 76.0415110271424,
+      "jpeg_encode_ms": 0
+    },
+    {
+      "rep": 2,
+      "sample": 8664,
+      "kind": "jpeg90_2x640x480",
+      "request_bytes": 84253,
+      "response_bytes": 16458,
+      "transport_ms": 21.085013984702528,
+      "jpeg_encode_ms": 1.6263109864667058
+    },
+    {
+      "rep": 2,
+      "sample": 8664,
+      "kind": "ping_1KiB",
+      "request_bytes": 1024,
+      "response_bytes": 16458,
+      "transport_ms": 11.748080025427043,
+      "jpeg_encode_ms": 0
+    },
+    {
+      "rep": 2,
+      "sample": 8664,
+      "kind": "rgb_2x640x480",
+      "request_bytes": 1843200,
+      "response_bytes": 16461,
+      "transport_ms": 176.08062300132588,
+      "jpeg_encode_ms": 0
+    },
+    {
+      "rep": 3,
+      "sample": 11748,
+      "kind": "ping_1KiB",
+      "request_bytes": 1024,
+      "response_bytes": 16457,
+      "transport_ms": 8.97752499440685,
+      "jpeg_encode_ms": 0
+    },
+    {
+      "rep": 3,
+      "sample": 11748,
+      "kind": "rgb_2x640x480",
+      "request_bytes": 1843200,
+      "response_bytes": 16459,
+      "transport_ms": 146.70987898716703,
+      "jpeg_encode_ms": 0
+    },
+    {
+      "rep": 3,
+      "sample": 11748,
+      "kind": "jpeg90_2x640x480",
+      "request_bytes": 66678,
+      "response_bytes": 16458,
+      "transport_ms": 17.460504022892565,
+      "jpeg_encode_ms": 3.5415830207057297
+    },
+    {
+      "rep": 4,
+      "sample": 15596,
+      "kind": "rgb_2x640x480",
+      "request_bytes": 1843200,
+      "response_bytes": 16461,
+      "transport_ms": 122.33459600247443,
+      "jpeg_encode_ms": 0
+    },
+    {
+      "rep": 4,
+      "sample": 15596,
+      "kind": "jpeg90_2x640x480",
+      "request_bytes": 70430,
+      "response_bytes": 16459,
+      "transport_ms": 10.154281975701451,
+      "jpeg_encode_ms": 3.571359033230692
+    },
+    {
+      "rep": 4,
+      "sample": 15596,
+      "kind": "ping_1KiB",
+      "request_bytes": 1024,
+      "response_bytes": 16458,
+      "transport_ms": 9.848440007772297,
+      "jpeg_encode_ms": 0
+    },
+    {
+      "rep": 5,
+      "sample": 19539,
+      "kind": "jpeg90_2x640x480",
+      "request_bytes": 74040,
+      "response_bytes": 16459,
+      "transport_ms": 10.71349997073412,
+      "jpeg_encode_ms": 3.562511003110558
+    },
+    {
+      "rep": 5,
+      "sample": 19539,
+      "kind": "ping_1KiB",
+      "request_bytes": 1024,
+      "response_bytes": 16458,
+      "transport_ms": 12.107728980481625,
+      "jpeg_encode_ms": 0
+    },
+    {
+      "rep": 5,
+      "sample": 19539,
+      "kind": "rgb_2x640x480",
+      "request_bytes": 1843200,
+      "response_bytes": 16461,
+      "transport_ms": 123.97892196895555,
+      "jpeg_encode_ms": 0
+    },
+    {
+      "rep": 6,
+      "sample": 23741,
+      "kind": "ping_1KiB",
+      "request_bytes": 1024,
+      "response_bytes": 16458,
+      "transport_ms": 10.592731006909162,
+      "jpeg_encode_ms": 0
+    },
+    {
+      "rep": 6,
+      "sample": 23741,
+      "kind": "rgb_2x640x480",
+      "request_bytes": 1843200,
+      "response_bytes": 16461,
+      "transport_ms": 208.82613398134708,
+      "jpeg_encode_ms": 0
+    },
+    {
+      "rep": 6,
+      "sample": 23741,
+      "kind": "jpeg90_2x640x480",
+      "request_bytes": 70128,
+      "response_bytes": 16458,
+      "transport_ms": 12.983348977286369,
+      "jpeg_encode_ms": 3.6160459858365357
+    },
+    {
+      "rep": 7,
+      "sample": 27603,
+      "kind": "rgb_2x640x480",
+      "request_bytes": 1843200,
+      "response_bytes": 16460,
+      "transport_ms": 132.18788499943912,
+      "jpeg_encode_ms": 0
+    },
+    {
+      "rep": 7,
+      "sample": 27603,
+      "kind": "jpeg90_2x640x480",
+      "request_bytes": 77372,
+      "response_bytes": 16459,
+      "transport_ms": 12.958356994204223,
+      "jpeg_encode_ms": 3.569391032215208
+    },
+    {
+      "rep": 7,
+      "sample": 27603,
+      "kind": "ping_1KiB",
+      "request_bytes": 1024,
+      "response_bytes": 16458,
+      "transport_ms": 10.501882992684841,
+      "jpeg_encode_ms": 0
+    },
+    {
+      "rep": 8,
+      "sample": 4022,
+      "kind": "jpeg90_2x640x480",
+      "request_bytes": 76517,
+      "response_bytes": 16459,
+      "transport_ms": 12.068481999449432,
+      "jpeg_encode_ms": 3.5979989916086197
+    },
+    {
+      "rep": 8,
+      "sample": 4022,
+      "kind": "ping_1KiB",
+      "request_bytes": 1024,
+      "response_bytes": 16458,
+      "transport_ms": 8.363969973288476,
+      "jpeg_encode_ms": 0
+    },
+    {
+      "rep": 8,
+      "sample": 4022,
+      "kind": "rgb_2x640x480",
+      "request_bytes": 1843200,
+      "response_bytes": 16461,
+      "transport_ms": 101.25940595753491,
+      "jpeg_encode_ms": 0
+    },
+    {
+      "rep": 9,
+      "sample": 8041,
+      "kind": "ping_1KiB",
+      "request_bytes": 1024,
+      "response_bytes": 16456,
+      "transport_ms": 11.478542990516871,
+      "jpeg_encode_ms": 0
+    },
+    {
+      "rep": 9,
+      "sample": 8041,
+      "kind": "rgb_2x640x480",
+      "request_bytes": 1843200,
+      "response_bytes": 16461,
+      "transport_ms": 114.49486797209829,
+      "jpeg_encode_ms": 0
+    },
+    {
+      "rep": 9,
+      "sample": 8041,
+      "kind": "jpeg90_2x640x480",
+      "request_bytes": 81573,
+      "response_bytes": 16459,
+      "transport_ms": 20.41176299098879,
+      "jpeg_encode_ms": 3.554079041350633
+    },
+    {
+      "rep": 10,
+      "sample": 11211,
+      "kind": "rgb_2x640x480",
+      "request_bytes": 1843200,
+      "response_bytes": 16461,
+      "transport_ms": 103.17030997248366,
+      "jpeg_encode_ms": 0
+    },
+    {
+      "rep": 10,
+      "sample": 11211,
+      "kind": "jpeg90_2x640x480",
+      "request_bytes": 60409,
+      "response_bytes": 16459,
+      "transport_ms": 23.953121970407665,
+      "jpeg_encode_ms": 3.501501982100308
+    },
+    {
+      "rep": 10,
+      "sample": 11211,
+      "kind": "ping_1KiB",
+      "request_bytes": 1024,
+      "response_bytes": 16458,
+      "transport_ms": 14.719723956659436,
+      "jpeg_encode_ms": 0
+    },
+    {
+      "rep": 11,
+      "sample": 15095,
+      "kind": "jpeg90_2x640x480",
+      "request_bytes": 84042,
+      "response_bytes": 16458,
+      "transport_ms": 16.13598602125421,
+      "jpeg_encode_ms": 3.668414952699095
+    },
+    {
+      "rep": 11,
+      "sample": 15095,
+      "kind": "ping_1KiB",
+      "request_bytes": 1024,
+      "response_bytes": 16457,
+      "transport_ms": 18.192602030467242,
+      "jpeg_encode_ms": 0
+    },
+    {
+      "rep": 11,
+      "sample": 15095,
+      "kind": "rgb_2x640x480",
+      "request_bytes": 1843200,
+      "response_bytes": 16461,
+      "transport_ms": 109.56579295452684,
+      "jpeg_encode_ms": 0
+    },
+    {
+      "rep": 12,
+      "sample": 18894,
+      "kind": "ping_1KiB",
+      "request_bytes": 1024,
+      "response_bytes": 16458,
+      "transport_ms": 10.339369997382164,
+      "jpeg_encode_ms": 0
+    },
+    {
+      "rep": 12,
+      "sample": 18894,
+      "kind": "rgb_2x640x480",
+      "request_bytes": 1843200,
+      "response_bytes": 16461,
+      "transport_ms": 160.8933309908025,
+      "jpeg_encode_ms": 0
+    },
+    {
+      "rep": 12,
+      "sample": 18894,
+      "kind": "jpeg90_2x640x480",
+      "request_bytes": 69345,
+      "response_bytes": 16457,
+      "transport_ms": 15.551790944300592,
+      "jpeg_encode_ms": 3.5957900108769536
+    },
+    {
+      "rep": 13,
+      "sample": 23224,
+      "kind": "rgb_2x640x480",
+      "request_bytes": 1843200,
+      "response_bytes": 16461,
+      "transport_ms": 78.67948996135965,
+      "jpeg_encode_ms": 0
+    },
+    {
+      "rep": 13,
+      "sample": 23224,
+      "kind": "jpeg90_2x640x480",
+      "request_bytes": 79971,
+      "response_bytes": 16459,
+      "transport_ms": 19.24177398905158,
+      "jpeg_encode_ms": 3.598254988901317
+    },
+    {
+      "rep": 13,
+      "sample": 23224,
+      "kind": "ping_1KiB",
+      "request_bytes": 1024,
+      "response_bytes": 16458,
+      "transport_ms": 10.25433000177145,
+      "jpeg_encode_ms": 0
+    },
+    {
+      "rep": 14,
+      "sample": 27063,
+      "kind": "jpeg90_2x640x480",
+      "request_bytes": 64551,
+      "response_bytes": 16459,
+      "transport_ms": 11.897617019712925,
+      "jpeg_encode_ms": 3.525455016642809
+    },
+    {
+      "rep": 14,
+      "sample": 27063,
+      "kind": "ping_1KiB",
+      "request_bytes": 1024,
+      "response_bytes": 16458,
+      "transport_ms": 10.373002034612,
+      "jpeg_encode_ms": 0
+    },
+    {
+      "rep": 14,
+      "sample": 27063,
+      "kind": "rgb_2x640x480",
+      "request_bytes": 1843200,
+      "response_bytes": 16461,
+      "transport_ms": 91.89997601788491,
+      "jpeg_encode_ms": 0
+    },
+    {
+      "rep": 15,
+      "sample": 3302,
+      "kind": "ping_1KiB",
+      "request_bytes": 1024,
+      "response_bytes": 16458,
+      "transport_ms": 9.169493976514786,
+      "jpeg_encode_ms": 0
+    },
+    {
+      "rep": 15,
+      "sample": 3302,
+      "kind": "rgb_2x640x480",
+      "request_bytes": 1843200,
+      "response_bytes": 16461,
+      "transport_ms": 108.55886002536863,
+      "jpeg_encode_ms": 0
+    },
+    {
+      "rep": 15,
+      "sample": 3302,
+      "kind": "jpeg90_2x640x480",
+      "request_bytes": 60169,
+      "response_bytes": 16459,
+      "transport_ms": 19.335854973178357,
+      "jpeg_encode_ms": 3.5115829668939114
+    },
+    {
+      "rep": 16,
+      "sample": 7457,
+      "kind": "rgb_2x640x480",
+      "request_bytes": 1843200,
+      "response_bytes": 16461,
+      "transport_ms": 110.18121900269762,
+      "jpeg_encode_ms": 0
+    },
+    {
+      "rep": 16,
+      "sample": 7457,
+      "kind": "jpeg90_2x640x480",
+      "request_bytes": 79597,
+      "response_bytes": 16458,
+      "transport_ms": 19.112285983283073,
+      "jpeg_encode_ms": 3.8678079727105796
+    },
+    {
+      "rep": 16,
+      "sample": 7457,
+      "kind": "ping_1KiB",
+      "request_bytes": 1024,
+      "response_bytes": 16458,
+      "transport_ms": 11.088285013101995,
+      "jpeg_encode_ms": 0
+    },
+    {
+      "rep": 17,
+      "sample": 10436,
+      "kind": "jpeg90_2x640x480",
+      "request_bytes": 57162,
+      "response_bytes": 16459,
+      "transport_ms": 15.7241279957816,
+      "jpeg_encode_ms": 3.531773982103914
+    },
+    {
+      "rep": 17,
+      "sample": 10436,
+      "kind": "ping_1KiB",
+      "request_bytes": 1024,
+      "response_bytes": 16458,
+      "transport_ms": 14.077146013733,
+      "jpeg_encode_ms": 0
+    },
+    {
+      "rep": 17,
+      "sample": 10436,
+      "kind": "rgb_2x640x480",
+      "request_bytes": 1843200,
+      "response_bytes": 16461,
+      "transport_ms": 106.86330101452768,
+      "jpeg_encode_ms": 0
+    },
+    {
+      "rep": 18,
+      "sample": 14306,
+      "kind": "ping_1KiB",
+      "request_bytes": 1024,
+      "response_bytes": 16458,
+      "transport_ms": 20.835684961639345,
+      "jpeg_encode_ms": 0
+    },
+    {
+      "rep": 18,
+      "sample": 14306,
+      "kind": "rgb_2x640x480",
+      "request_bytes": 1843200,
+      "response_bytes": 16460,
+      "transport_ms": 103.30327099654824,
+      "jpeg_encode_ms": 0
+    },
+    {
+      "rep": 18,
+      "sample": 14306,
+      "kind": "jpeg90_2x640x480",
+      "request_bytes": 58198,
+      "response_bytes": 16459,
+      "transport_ms": 21.061862003989518,
+      "jpeg_encode_ms": 3.6851989571005106
+    },
+    {
+      "rep": 19,
+      "sample": 18256,
+      "kind": "rgb_2x640x480",
+      "request_bytes": 1843200,
+      "response_bytes": 16461,
+      "transport_ms": 104.06441002851352,
+      "jpeg_encode_ms": 0
+    },
+    {
+      "rep": 19,
+      "sample": 18256,
+      "kind": "jpeg90_2x640x480",
+      "request_bytes": 67915,
+      "response_bytes": 16459,
+      "transport_ms": 14.765196945518255,
+      "jpeg_encode_ms": 3.5658220294862986
+    },
+    {
+      "rep": 19,
+      "sample": 18256,
+      "kind": "ping_1KiB",
+      "request_bytes": 1024,
+      "response_bytes": 16458,
+      "transport_ms": 12.250625994056463,
+      "jpeg_encode_ms": 0
+    },
+    {
+      "rep": 20,
+      "sample": 22732,
+      "kind": "jpeg90_2x640x480",
+      "request_bytes": 85585,
+      "response_bytes": 16459,
+      "transport_ms": 21.658184996340424,
+      "jpeg_encode_ms": 3.622447024099529
+    },
+    {
+      "rep": 20,
+      "sample": 22732,
+      "kind": "ping_1KiB",
+      "request_bytes": 1024,
+      "response_bytes": 16458,
+      "transport_ms": 8.96640500286594,
+      "jpeg_encode_ms": 0
+    },
+    {
+      "rep": 20,
+      "sample": 22732,
+      "kind": "rgb_2x640x480",
+      "request_bytes": 1843200,
+      "response_bytes": 16461,
+      "transport_ms": 110.38515600375831,
+      "jpeg_encode_ms": 0
+    },
+    {
+      "rep": 21,
+      "sample": 26520,
+      "kind": "ping_1KiB",
+      "request_bytes": 1024,
+      "response_bytes": 16458,
+      "transport_ms": 9.008661028929055,
+      "jpeg_encode_ms": 0
+    },
+    {
+      "rep": 21,
+      "sample": 26520,
+      "kind": "rgb_2x640x480",
+      "request_bytes": 1843200,
+      "response_bytes": 16461,
+      "transport_ms": 83.03336397511885,
+      "jpeg_encode_ms": 0
+    },
+    {
+      "rep": 21,
+      "sample": 26520,
+      "kind": "jpeg90_2x640x480",
+      "request_bytes": 60369,
+      "response_bytes": 16457,
+      "transport_ms": 12.567058962304145,
+      "jpeg_encode_ms": 3.495005948934704
+    },
+    {
+      "rep": 22,
+      "sample": 2852,
+      "kind": "rgb_2x640x480",
+      "request_bytes": 1843200,
+      "response_bytes": 16460,
+      "transport_ms": 176.34944204473868,
+      "jpeg_encode_ms": 0
+    },
+    {
+      "rep": 22,
+      "sample": 2852,
+      "kind": "jpeg90_2x640x480",
+      "request_bytes": 79025,
+      "response_bytes": 16459,
+      "transport_ms": 12.47803500154987,
+      "jpeg_encode_ms": 3.584110992960632
+    },
+    {
+      "rep": 22,
+      "sample": 2852,
+      "kind": "ping_1KiB",
+      "request_bytes": 1024,
+      "response_bytes": 16458,
+      "transport_ms": 14.119658037088811,
+      "jpeg_encode_ms": 0
+    },
+    {
+      "rep": 23,
+      "sample": 6889,
+      "kind": "jpeg90_2x640x480",
+      "request_bytes": 63702,
+      "response_bytes": 16459,
+      "transport_ms": 18.93534098053351,
+      "jpeg_encode_ms": 3.5593590000644326
+    },
+    {
+      "rep": 23,
+      "sample": 6889,
+      "kind": "ping_1KiB",
+      "request_bytes": 1024,
+      "response_bytes": 16458,
+      "transport_ms": 12.043825001455843,
+      "jpeg_encode_ms": 0
+    },
+    {
+      "rep": 23,
+      "sample": 6889,
+      "kind": "rgb_2x640x480",
+      "request_bytes": 1843200,
+      "response_bytes": 16460,
+      "transport_ms": 86.96442004293203,
+      "jpeg_encode_ms": 0
+    },
+    {
+      "rep": 24,
+      "sample": 10189,
+      "kind": "ping_1KiB",
+      "request_bytes": 1024,
+      "response_bytes": 16458,
+      "transport_ms": 13.352997950278223,
+      "jpeg_encode_ms": 0
+    },
+    {
+      "rep": 24,
+      "sample": 10189,
+      "kind": "rgb_2x640x480",
+      "request_bytes": 1843200,
+      "response_bytes": 16460,
+      "transport_ms": 79.4266129960306,
+      "jpeg_encode_ms": 0
+    },
+    {
+      "rep": 24,
+      "sample": 10189,
+      "kind": "jpeg90_2x640x480",
+      "request_bytes": 62566,
+      "response_bytes": 16459,
+      "transport_ms": 12.00347300618887,
+      "jpeg_encode_ms": 3.506893990561366
+    },
+    {
+      "rep": 25,
+      "sample": 13978,
+      "kind": "rgb_2x640x480",
+      "request_bytes": 1843200,
+      "response_bytes": 16461,
+      "transport_ms": 111.59015301382169,
+      "jpeg_encode_ms": 0
+    },
+    {
+      "rep": 25,
+      "sample": 13978,
+      "kind": "jpeg90_2x640x480",
+      "request_bytes": 71624,
+      "response_bytes": 16459,
+      "transport_ms": 15.076638024765998,
+      "jpeg_encode_ms": 3.561262972652912
+    },
+    {
+      "rep": 25,
+      "sample": 13978,
+      "kind": "ping_1KiB",
+      "request_bytes": 1024,
+      "response_bytes": 16458,
+      "transport_ms": 8.091745025012642,
+      "jpeg_encode_ms": 0
+    },
+    {
+      "rep": 26,
+      "sample": 17803,
+      "kind": "jpeg90_2x640x480",
+      "request_bytes": 63068,
+      "response_bytes": 16459,
+      "transport_ms": 14.6632120013237,
+      "jpeg_encode_ms": 3.5548469750210643
+    },
+    {
+      "rep": 26,
+      "sample": 17803,
+      "kind": "ping_1KiB",
+      "request_bytes": 1024,
+      "response_bytes": 16458,
+      "transport_ms": 11.849968985188752,
+      "jpeg_encode_ms": 0
+    },
+    {
+      "rep": 26,
+      "sample": 17803,
+      "kind": "rgb_2x640x480",
+      "request_bytes": 1843200,
+      "response_bytes": 16461,
+      "transport_ms": 114.80459797894582,
+      "jpeg_encode_ms": 0
+    },
+    {
+      "rep": 27,
+      "sample": 22109,
+      "kind": "ping_1KiB",
+      "request_bytes": 1024,
+      "response_bytes": 16457,
+      "transport_ms": 9.79706400539726,
+      "jpeg_encode_ms": 0
+    },
+    {
+      "rep": 27,
+      "sample": 22109,
+      "kind": "rgb_2x640x480",
+      "request_bytes": 1843200,
+      "response_bytes": 16461,
+      "transport_ms": 107.67826496157795,
+      "jpeg_encode_ms": 0
+    },
+    {
+      "rep": 27,
+      "sample": 22109,
+      "kind": "jpeg90_2x640x480",
+      "request_bytes": 85779,
+      "response_bytes": 16459,
+      "transport_ms": 13.650487991981208,
+      "jpeg_encode_ms": 3.629951039329171
+    },
+    {
+      "rep": 28,
+      "sample": 25836,
+      "kind": "rgb_2x640x480",
+      "request_bytes": 1843200,
+      "response_bytes": 16461,
+      "transport_ms": 77.23002799320966,
+      "jpeg_encode_ms": 0
+    },
+    {
+      "rep": 28,
+      "sample": 25836,
+      "kind": "jpeg90_2x640x480",
+      "request_bytes": 62173,
+      "response_bytes": 16459,
+      "transport_ms": 14.245402999222279,
+      "jpeg_encode_ms": 3.5155670484527946
+    },
+    {
+      "rep": 28,
+      "sample": 25836,
+      "kind": "ping_1KiB",
+      "request_bytes": 1024,
+      "response_bytes": 16458,
+      "transport_ms": 10.360825981479138,
+      "jpeg_encode_ms": 0
+    },
+    {
+      "rep": 29,
+      "sample": 2134,
+      "kind": "jpeg90_2x640x480",
+      "request_bytes": 67421,
+      "response_bytes": 16459,
+      "transport_ms": 12.056593026500195,
+      "jpeg_encode_ms": 3.5311029641889036
+    },
+    {
+      "rep": 29,
+      "sample": 2134,
+      "kind": "ping_1KiB",
+      "request_bytes": 1024,
+      "response_bytes": 16458,
+      "transport_ms": 8.858868037350476,
+      "jpeg_encode_ms": 0
+    },
+    {
+      "rep": 29,
+      "sample": 2134,
+      "kind": "rgb_2x640x480",
+      "request_bytes": 1843200,
+      "response_bytes": 16461,
+      "transport_ms": 157.66539797186852,
+      "jpeg_encode_ms": 0
+    },
+    {
+      "rep": 30,
+      "sample": 6387,
+      "kind": "ping_1KiB",
+      "request_bytes": 1024,
+      "response_bytes": 16458,
+      "transport_ms": 9.370933985337615,
+      "jpeg_encode_ms": 0
+    },
+    {
+      "rep": 30,
+      "sample": 6387,
+      "kind": "rgb_2x640x480",
+      "request_bytes": 1843200,
+      "response_bytes": 16461,
+      "transport_ms": 89.74291099002585,
+      "jpeg_encode_ms": 0
+    },
+    {
+      "rep": 30,
+      "sample": 6387,
+      "kind": "jpeg90_2x640x480",
+      "request_bytes": 68776,
+      "response_bytes": 16459,
+      "transport_ms": 16.60907600307837,
+      "jpeg_encode_ms": 3.5731339594349265
+    },
+    {
+      "rep": 31,
+      "sample": 10029,
+      "kind": "rgb_2x640x480",
+      "request_bytes": 1843200,
+      "response_bytes": 16460,
+      "transport_ms": 82.04542403109372,
+      "jpeg_encode_ms": 0
+    },
+    {
+      "rep": 31,
+      "sample": 10029,
+      "kind": "jpeg90_2x640x480",
+      "request_bytes": 71208,
+      "response_bytes": 16458,
+      "transport_ms": 15.113356988877058,
+      "jpeg_encode_ms": 3.5436300095170736
+    },
+    {
+      "rep": 31,
+      "sample": 10029,
+      "kind": "ping_1KiB",
+      "request_bytes": 1024,
+      "response_bytes": 16457,
+      "transport_ms": 11.377725983038545,
+      "jpeg_encode_ms": 0
+    },
+    {
+      "rep": 32,
+      "sample": 13280,
+      "kind": "jpeg90_2x640x480",
+      "request_bytes": 56054,
+      "response_bytes": 16459,
+      "transport_ms": 17.318614991381764,
+      "jpeg_encode_ms": 3.4661749959923327
+    },
+    {
+      "rep": 32,
+      "sample": 13280,
+      "kind": "ping_1KiB",
+      "request_bytes": 1024,
+      "response_bytes": 16457,
+      "transport_ms": 10.669594979844987,
+      "jpeg_encode_ms": 0
+    },
+    {
+      "rep": 32,
+      "sample": 13280,
+      "kind": "rgb_2x640x480",
+      "request_bytes": 1843200,
+      "response_bytes": 16461,
+      "transport_ms": 86.49560203775764,
+      "jpeg_encode_ms": 0
+    },
+    {
+      "rep": 33,
+      "sample": 17221,
+      "kind": "ping_1KiB",
+      "request_bytes": 1024,
+      "response_bytes": 16458,
+      "transport_ms": 11.419119022320956,
+      "jpeg_encode_ms": 0
+    },
+    {
+      "rep": 33,
+      "sample": 17221,
+      "kind": "rgb_2x640x480",
+      "request_bytes": 1843200,
+      "response_bytes": 16461,
+      "transport_ms": 1168.891572044231,
+      "jpeg_encode_ms": 0
+    },
+    {
+      "rep": 33,
+      "sample": 17221,
+      "kind": "jpeg90_2x640x480",
+      "request_bytes": 67297,
+      "response_bytes": 16459,
+      "transport_ms": 225.24685901589692,
+      "jpeg_encode_ms": 3.542190999723971
+    },
+    {
+      "rep": 34,
+      "sample": 21158,
+      "kind": "rgb_2x640x480",
+      "request_bytes": 1843200,
+      "response_bytes": 16461,
+      "transport_ms": 159.83511897502467,
+      "jpeg_encode_ms": 0
+    },
+    {
+      "rep": 34,
+      "sample": 21158,
+      "kind": "jpeg90_2x640x480",
+      "request_bytes": 58524,
+      "response_bytes": 16459,
+      "transport_ms": 16.655892017297447,
+      "jpeg_encode_ms": 3.528511035256088
+    },
+    {
+      "rep": 34,
+      "sample": 21158,
+      "kind": "ping_1KiB",
+      "request_bytes": 1024,
+      "response_bytes": 16457,
+      "transport_ms": 8.386801986489445,
+      "jpeg_encode_ms": 0
+    },
+    {
+      "rep": 35,
+      "sample": 25497,
+      "kind": "jpeg90_2x640x480",
+      "request_bytes": 82761,
+      "response_bytes": 16459,
+      "transport_ms": 20.209475012961775,
+      "jpeg_encode_ms": 3.6034390213899314
+    },
+    {
+      "rep": 35,
+      "sample": 25497,
+      "kind": "ping_1KiB",
+      "request_bytes": 1024,
+      "response_bytes": 16457,
+      "transport_ms": 18.4126989915967,
+      "jpeg_encode_ms": 0
+    },
+    {
+      "rep": 35,
+      "sample": 25497,
+      "kind": "rgb_2x640x480",
+      "request_bytes": 1843200,
+      "response_bytes": 16460,
+      "transport_ms": 93.04649400291964,
+      "jpeg_encode_ms": 0
+    },
+    {
+      "rep": 36,
+      "sample": 1541,
+      "kind": "ping_1KiB",
+      "request_bytes": 1024,
+      "response_bytes": 16458,
+      "transport_ms": 12.992101022973657,
+      "jpeg_encode_ms": 0
+    },
+    {
+      "rep": 36,
+      "sample": 1541,
+      "kind": "rgb_2x640x480",
+      "request_bytes": 1843200,
+      "response_bytes": 16459,
+      "transport_ms": 75.41440497152507,
+      "jpeg_encode_ms": 0
+    },
+    {
+      "rep": 36,
+      "sample": 1541,
+      "kind": "jpeg90_2x640x480",
+      "request_bytes": 64296,
+      "response_bytes": 16459,
+      "transport_ms": 12.57467595860362,
+      "jpeg_encode_ms": 3.551069996319711
+    },
+    {
+      "rep": 37,
+      "sample": 5816,
+      "kind": "rgb_2x640x480",
+      "request_bytes": 1843200,
+      "response_bytes": 16461,
+      "transport_ms": 112.55978897679597,
+      "jpeg_encode_ms": 0
+    },
+    {
+      "rep": 37,
+      "sample": 5816,
+      "kind": "jpeg90_2x640x480",
+      "request_bytes": 74540,
+      "response_bytes": 16459,
+      "transport_ms": 20.247155975084752,
+      "jpeg_encode_ms": 3.5971030010841787
+    },
+    {
+      "rep": 37,
+      "sample": 5816,
+      "kind": "ping_1KiB",
+      "request_bytes": 1024,
+      "response_bytes": 16458,
+      "transport_ms": 8.865780022460967,
+      "jpeg_encode_ms": 0
+    },
+    {
+      "rep": 38,
+      "sample": 9706,
+      "kind": "jpeg90_2x640x480",
+      "request_bytes": 59830,
+      "response_bytes": 16458,
+      "transport_ms": 15.61512000625953,
+      "jpeg_encode_ms": 3.5368630196899176
+    },
+    {
+      "rep": 38,
+      "sample": 9706,
+      "kind": "ping_1KiB",
+      "request_bytes": 1024,
+      "response_bytes": 16458,
+      "transport_ms": 8.638002967927605,
+      "jpeg_encode_ms": 0
+    },
+    {
+      "rep": 38,
+      "sample": 9706,
+      "kind": "rgb_2x640x480",
+      "request_bytes": 1843200,
+      "response_bytes": 16461,
+      "transport_ms": 134.62282402906567,
+      "jpeg_encode_ms": 0
+    },
+    {
+      "rep": 39,
+      "sample": 12756,
+      "kind": "ping_1KiB",
+      "request_bytes": 1024,
+      "response_bytes": 16458,
+      "transport_ms": 9.681624011136591,
+      "jpeg_encode_ms": 0
+    },
+    {
+      "rep": 39,
+      "sample": 12756,
+      "kind": "rgb_2x640x480",
+      "request_bytes": 1843200,
+      "response_bytes": 16461,
+      "transport_ms": 119.40082599176094,
+      "jpeg_encode_ms": 0
+    },
+    {
+      "rep": 39,
+      "sample": 12756,
+      "kind": "jpeg90_2x640x480",
+      "request_bytes": 58445,
+      "response_bytes": 16459,
+      "transport_ms": 14.913581020664424,
+      "jpeg_encode_ms": 3.5464779939502478
+    },
+    {
+      "rep": 40,
+      "sample": 16665,
+      "kind": "rgb_2x640x480",
+      "request_bytes": 1843200,
+      "response_bytes": 16461,
+      "transport_ms": 131.22935401042923,
+      "jpeg_encode_ms": 0
+    },
+    {
+      "rep": 40,
+      "sample": 16665,
+      "kind": "jpeg90_2x640x480",
+      "request_bytes": 81273,
+      "response_bytes": 16459,
+      "transport_ms": 15.208351018372923,
+      "jpeg_encode_ms": 3.602126962505281
+    },
+    {
+      "rep": 40,
+      "sample": 16665,
+      "kind": "ping_1KiB",
+      "request_bytes": 1024,
+      "response_bytes": 16458,
+      "transport_ms": 9.553511044941843,
+      "jpeg_encode_ms": 0
+    },
+    {
+      "rep": 41,
+      "sample": 20479,
+      "kind": "jpeg90_2x640x480",
+      "request_bytes": 71250,
+      "response_bytes": 16459,
+      "transport_ms": 10.877883993089199,
+      "jpeg_encode_ms": 3.7477590376511216
+    },
+    {
+      "rep": 41,
+      "sample": 20479,
+      "kind": "ping_1KiB",
+      "request_bytes": 1024,
+      "response_bytes": 16457,
+      "transport_ms": 15.344255021773279,
+      "jpeg_encode_ms": 0
+    },
+    {
+      "rep": 41,
+      "sample": 20479,
+      "kind": "rgb_2x640x480",
+      "request_bytes": 1843200,
+      "response_bytes": 16461,
+      "transport_ms": 86.67914004763588,
+      "jpeg_encode_ms": 0
+    },
+    {
+      "rep": 42,
+      "sample": 24808,
+      "kind": "ping_1KiB",
+      "request_bytes": 1024,
+      "response_bytes": 16458,
+      "transport_ms": 8.995427982881665,
+      "jpeg_encode_ms": 0
+    },
+    {
+      "rep": 42,
+      "sample": 24808,
+      "kind": "rgb_2x640x480",
+      "request_bytes": 1843200,
+      "response_bytes": 16461,
+      "transport_ms": 104.28172297542915,
+      "jpeg_encode_ms": 0
+    },
+    {
+      "rep": 42,
+      "sample": 24808,
+      "kind": "jpeg90_2x640x480",
+      "request_bytes": 63385,
+      "response_bytes": 16458,
+      "transport_ms": 14.271450985688716,
+      "jpeg_encode_ms": 3.5368140088394284
+    },
+    {
+      "rep": 43,
+      "sample": 1083,
+      "kind": "rgb_2x640x480",
+      "request_bytes": 1843200,
+      "response_bytes": 16461,
+      "transport_ms": 85.07063699653372,
+      "jpeg_encode_ms": 0
+    },
+    {
+      "rep": 43,
+      "sample": 1083,
+      "kind": "jpeg90_2x640x480",
+      "request_bytes": 74287,
+      "response_bytes": 16459,
+      "transport_ms": 22.34004402998835,
+      "jpeg_encode_ms": 3.657519002445042
+    },
+    {
+      "rep": 43,
+      "sample": 1083,
+      "kind": "ping_1KiB",
+      "request_bytes": 1024,
+      "response_bytes": 16458,
+      "transport_ms": 9.518999024294317,
+      "jpeg_encode_ms": 0
+    },
+    {
+      "rep": 44,
+      "sample": 5391,
+      "kind": "jpeg90_2x640x480",
+      "request_bytes": 76471,
+      "response_bytes": 16459,
+      "transport_ms": 15.422350959852338,
+      "jpeg_encode_ms": 3.6286069662310183
+    },
+    {
+      "rep": 44,
+      "sample": 5391,
+      "kind": "ping_1KiB",
+      "request_bytes": 1024,
+      "response_bytes": 16458,
+      "transport_ms": 10.577242996077985,
+      "jpeg_encode_ms": 0
+    },
+    {
+      "rep": 44,
+      "sample": 5391,
+      "kind": "rgb_2x640x480",
+      "request_bytes": 1843200,
+      "response_bytes": 16461,
+      "transport_ms": 82.22206501523033,
+      "jpeg_encode_ms": 0
+    },
+    {
+      "rep": 45,
+      "sample": 9145,
+      "kind": "ping_1KiB",
+      "request_bytes": 1024,
+      "response_bytes": 16458,
+      "transport_ms": 11.174030019901693,
+      "jpeg_encode_ms": 0
+    },
+    {
+      "rep": 45,
+      "sample": 9145,
+      "kind": "rgb_2x640x480",
+      "request_bytes": 1843200,
+      "response_bytes": 16460,
+      "transport_ms": 126.24005402904004,
+      "jpeg_encode_ms": 0
+    },
+    {
+      "rep": 45,
+      "sample": 9145,
+      "kind": "jpeg90_2x640x480",
+      "request_bytes": 64098,
+      "response_bytes": 16458,
+      "transport_ms": 16.51126699289307,
+      "jpeg_encode_ms": 3.6882710410282016
+    },
+    {
+      "rep": 46,
+      "sample": 12216,
+      "kind": "rgb_2x640x480",
+      "request_bytes": 1843200,
+      "response_bytes": 16461,
+      "transport_ms": 199.84066003235057,
+      "jpeg_encode_ms": 0
+    },
+    {
+      "rep": 46,
+      "sample": 12216,
+      "kind": "jpeg90_2x640x480",
+      "request_bytes": 57089,
+      "response_bytes": 16458,
+      "transport_ms": 10.113864962477237,
+      "jpeg_encode_ms": 3.516094002407044
+    },
+    {
+      "rep": 46,
+      "sample": 12216,
+      "kind": "ping_1KiB",
+      "request_bytes": 1024,
+      "response_bytes": 16457,
+      "transport_ms": 13.636503019370139,
+      "jpeg_encode_ms": 0
+    },
+    {
+      "rep": 47,
+      "sample": 16156,
+      "kind": "jpeg90_2x640x480",
+      "request_bytes": 76562,
+      "response_bytes": 16459,
+      "transport_ms": 17.41730299545452,
+      "jpeg_encode_ms": 3.669758967589587
+    },
+    {
+      "rep": 47,
+      "sample": 16156,
+      "kind": "ping_1KiB",
+      "request_bytes": 1024,
+      "response_bytes": 16457,
+      "transport_ms": 12.031360995024443,
+      "jpeg_encode_ms": 0
+    },
+    {
+      "rep": 47,
+      "sample": 16156,
+      "kind": "rgb_2x640x480",
+      "request_bytes": 1843200,
+      "response_bytes": 16461,
+      "transport_ms": 84.97190097114071,
+      "jpeg_encode_ms": 0
+    },
+    {
+      "rep": 48,
+      "sample": 20197,
+      "kind": "ping_1KiB",
+      "request_bytes": 1024,
+      "response_bytes": 16458,
+      "transport_ms": 19.666687992867082,
+      "jpeg_encode_ms": 0
+    },
+    {
+      "rep": 48,
+      "sample": 20197,
+      "kind": "rgb_2x640x480",
+      "request_bytes": 1843200,
+      "response_bytes": 16461,
+      "transport_ms": 100.61785305151716,
+      "jpeg_encode_ms": 0
+    },
+    {
+      "rep": 48,
+      "sample": 20197,
+      "kind": "jpeg90_2x640x480",
+      "request_bytes": 65646,
+      "response_bytes": 16459,
+      "transport_ms": 11.087453982327133,
+      "jpeg_encode_ms": 3.556445997674018
+    },
+    {
+      "rep": 49,
+      "sample": 24331,
+      "kind": "rgb_2x640x480",
+      "request_bytes": 1843200,
+      "response_bytes": 16461,
+      "transport_ms": 132.38863897277042,
+      "jpeg_encode_ms": 0
+    },
+    {
+      "rep": 49,
+      "sample": 24331,
+      "kind": "jpeg90_2x640x480",
+      "request_bytes": 82799,
+      "response_bytes": 16459,
+      "transport_ms": 22.27786701405421,
+      "jpeg_encode_ms": 3.763615037314594
+    },
+    {
+      "rep": 49,
+      "sample": 24331,
+      "kind": "ping_1KiB",
+      "request_bytes": 1024,
+      "response_bytes": 16458,
+      "transport_ms": 17.057334014680237,
+      "jpeg_encode_ms": 0
+    }
+  ],
+  "summary": {
+    "ping_1KiB": {
+      "transport_ms": {
+        "p50": 10.878939996473491,
+        "p95": 20.309636325691823
+      },
+      "request_bytes": {
+        "p50": 1024.0,
+        "p95": 1024.0
+      },
+      "jpeg_encode_ms": {
+        "p50": 0.0,
+        "p95": 0.0
+      }
+    },
+    "rgb_2x640x480": {
+      "transport_ms": {
+        "p50": 109.87350597861223,
+        "p95": 204.78267070429862
+      },
+      "request_bytes": {
+        "p50": 1843200.0,
+        "p95": 1843200.0
+      },
+      "jpeg_encode_ms": {
+        "p50": 0.0,
+        "p95": 0.0
+      }
+    },
+    "jpeg90_2x640x480": {
+      "transport_ms": {
+        "p50": 15.583455475280061,
+        "p95": 27.809729118598604
+      },
+      "request_bytes": {
+        "p50": 69060.5,
+        "p95": 84158.05
+      },
+      "jpeg_encode_ms": {
+        "p50": 3.561886987881735,
+        "p95": 3.7564798374660313
+      }
+    }
+  }
+}

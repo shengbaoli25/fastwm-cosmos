@@ -1,0 +1,46 @@
+{
+  "date": "2026-10-23",
+  "base_commit": "90ce44bdffa566c5f9c6f888b54967af3e99195a",
+  "upstream_commit": "a2c298b0a3df3778b973fe65e9e58877b292d8a7",
+  "regression": {
+    "passed": 69,
+    "failed": 0,
+    "duration_seconds": 20.18,
+    "device": "NVIDIA GB10",
+    "torch": "2.9.1+cu130",
+    "command": "PYTHONPATH=src:deploy python -m pytest -q tests/cosmos/test_noaction.py tests/cosmos/test_noaction_inference.py tests/cosmos/test_multirate_inference.py tests/cosmos/test_expert_schedule_inference.py tests/cosmos/test_offline_metrics.py deploy/tests/test_model_adapter.py deploy/tests/test_joint8_steps.py",
+    "warnings": [
+      "oneDNN Intel GPU TF32 unavailable",
+      "GB10 capability 12.1 above advertised maximum 12.0 in this Torch build",
+      "Existing test converts requires_grad tensor to float"
+    ]
+  },
+  "measurement_source_hashes": {
+    "benchmark_joint8_experts.py": "44c1c015c7b5bb20d69a2fe470f90ed8c3be96f01d603eb927f522f0cdfec701",
+    "evaluate_joint8_experts.py": "6254bb6c795eaebd9929f85c3af7d75a2017439c5d0aa887cf8ffeadbb8ea9c9",
+    "expert_schedule_inference.py": "eedfebcee592fac075b277d9e920cbefcc2dda1f1558c6aae51285e917a5d38e",
+    "noaction_inference.py": "4dcc51b5786e75c7708d8c5d28ac1cb6dc14df2d4d31e7e2264604494d581354"
+  },
+  "measurement_source_hashes_match_publication": true,
+  "source_changes": {
+    "deploy/README.md": "ea5f6895ffc462700e5f186b5110b18a7560b1a4ca8b4ddf6078f80bb3133b34",
+    "deploy/realman_deploy/model_adapter.py": "ac61f804c40f9c2c7cfb0272ea417f4d20ee490d5130566de0d6084ae1dd846c",
+    "deploy/tests/test_model_adapter.py": "9d04d1f4b5a8e2ca6d26a9fd60e1eee0a0ee6b5804f132eccb5c19df67784707",
+    "deploy/tests/test_joint8_steps.py": "99e4a716a211d7ad2fdbf2297d04e0219f237d2d21f08cae28b2c038258a32cd",
+    "scripts/cosmos/benchmark_joint8_experts.py": "44c1c015c7b5bb20d69a2fe470f90ed8c3be96f01d603eb927f522f0cdfec701",
+    "scripts/cosmos/evaluate_joint8_experts.py": "6254bb6c795eaebd9929f85c3af7d75a2017439c5d0aa887cf8ffeadbb8ea9c9",
+    "scripts/cosmos/evaluate_joint8_multirate.py": "d811761682224ea85e5162cf1b3e271f725b30b21eae9d259552f7215dd2c97e",
+    "scripts/cosmos/evaluate_joint8_steps.py": "1fe72354ba2a16074ee23c86496a82c48aca5a74a3332c5d87139939e04bea9c",
+    "scripts/cosmos/evaluate_joint8_video_quality.py": "ad32b0b526a4927dc871a27d2b99ec6731791f1a9e02559f531998bc8a4339b4",
+    "scripts/cosmos/render_joint8_expert_demos.py": "fcde8665343a002e47c6c0bc5d82b6e056e5849b2c146b7cd990f4b70f81e4b8",
+    "src/fastwam/cosmos/expert_schedule_inference.py": "eedfebcee592fac075b277d9e920cbefcc2dda1f1558c6aae51285e917a5d38e",
+    "src/fastwam/cosmos/multirate_inference.py": "57922c62e77e545cafc0769fc994cb0a42d5a3f0c4ef6077f71ed317980d1c1a",
+    "src/fastwam/cosmos/noaction_inference.py": "4dcc51b5786e75c7708d8c5d28ac1cb6dc14df2d4d31e7e2264604494d581354",
+    "src/fastwam/cosmos/offline_metrics.py": "dd5fe4308fb5ce6a1f2467f335925e0fa17e8a47748067ec75af5b89580748f7",
+    "tests/cosmos/test_expert_schedule_inference.py": "c5032baf3adf516c0e6fbf9ca659cf1511543df30ad43e4c20948a3c5ab161af",
+    "tests/cosmos/test_multirate_inference.py": "e81237f28876ea1b6558e2da854a0822eb971c23eb4da5d0a629c8a10d8c1db8",
+    "tests/cosmos/test_noaction_inference.py": "0969baa97090e65b65d01bb6c67ef0a0e11f7b849b0eff1047e2b306cb48e106",
+    "tests/cosmos/test_offline_metrics.py": "7554da3526b7b9099c48432919e4c9a6b86d1d23c44b0f364ee405bda5f65a21"
+  },
+  "scope": "Original 2026-10-21 benchmark source copied byte-for-byte; 2026-10-23 validation reruns small-model regressions, not full hardware sweeps."
+}

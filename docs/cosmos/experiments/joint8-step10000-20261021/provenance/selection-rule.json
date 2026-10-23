@@ -1,0 +1,22 @@
+{
+  "recorded_at": "2026-10-21T09:17:12.930472+00:00",
+  "stage": "Before supplementary event-window results",
+  "rule": "Compare paired episode distributions, seed sensitivity and event timing; prefer lower measured latency among configurations with no meaningful worsening across control metrics. 10% relative MAE bands are descriptive screening bands, not robot acceptance limits.",
+  "screening_relative_band": 0.1,
+  "cautions": [
+    "All episodes were training data",
+    "Velocity and acceleration are errors versus recorded targets, not physical stability proof",
+    "Gripper range/force-change selected windows are not annotated successful grasps or contacts",
+    "One 30Hz frame is 33.33ms; event timing must be reported separately from average gripper MAE"
+  ],
+  "candidate_modes": [
+    "v16_f16_a16",
+    "v4_f4_a4",
+    "v4_f4_a8",
+    "v4_f8_a8",
+    "v4_f8_a16",
+    "v4_f16_a16",
+    "v8_f8_a8",
+    "v8_f8_a16"
+  ]
+}

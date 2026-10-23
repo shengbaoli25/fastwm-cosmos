@@ -1,0 +1,2 @@
+# Preserve the original csv.writer CRLF bytes and artifact SHA256 values.
+results/**/*.csv -text whitespace=cr-at-eol

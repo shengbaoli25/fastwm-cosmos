@@ -1,0 +1,17 @@
+{
+  "terms": [
+    "intercept",
+    "video_forward",
+    "force_forward",
+    "action_forward"
+  ],
+  "milliseconds": [
+    92.90728909269119,
+    95.50606276091806,
+    8.502078637695387,
+    11.007906276211024
+  ],
+  "r_squared": 0.9999399343595987,
+  "mean_absolute_residual_ms": 2.9619953006897966,
+  "scope": "Descriptive linear fit to measured medians; branch cost attribution is approximate, not a kernel profiler"
+}

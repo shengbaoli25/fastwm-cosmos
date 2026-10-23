@@ -1,0 +1,42 @@
+{
+  "summary": {
+    "4": {
+      "global_view": {
+        "mse": 0.00021427280402901898,
+        "psnr_db": 36.79815149614072,
+        "ssim": 0.9762722859792511
+      },
+      "wrist_view": {
+        "mse": 0.0005484033436699842,
+        "psnr_db": 33.58013914422604,
+        "ssim": 0.9506587108670586
+      }
+    },
+    "8": {
+      "global_view": {
+        "mse": 0.0002151875765114052,
+        "psnr_db": 36.789101374585606,
+        "ssim": 0.9762930431174535
+      },
+      "wrist_view": {
+        "mse": 0.0005584149336647785,
+        "psnr_db": 33.507033553400376,
+        "ssim": 0.9503731480186653
+      }
+    },
+    "16": {
+      "global_view": {
+        "mse": 0.00021645369979078234,
+        "psnr_db": 36.768009133051,
+        "ssim": 0.9761933037052344
+      },
+      "wrist_view": {
+        "mse": 0.0005663843061393947,
+        "psnr_db": 33.45612375892281,
+        "ssim": 0.9498563536835131
+      }
+    }
+  },
+  "records": 450,
+  "scope": "Only 8 future frames; two cameras scored separately; PSNR and 11x11 Gaussian population SSIM averaged per window. Offline raw RGB reference; includes VAE reconstruction error; latent archive FP16."
+}

@@ -1,0 +1,18 @@
+[
+  {
+    "sample": 5127,
+    "episode": 8,
+    "frame": 152,
+    "selection": "largest recorded gripper range, independent of predictions"
+  },
+  {
+    "sample": 8812,
+    "episode": 14,
+    "frame": 517,
+    "selection": "largest recorded force component range norm, independent of predictions"
+  },
+  {
+    "sample": 7573,
+    "selection": "worst event-window joint MAE for candidate V4/F8/A16, seed0"
+  }
+]

@@ -33,7 +33,7 @@ class CosmosJointPolicy:
         self.tokenizer = None
         self.runner = None
         self.inference_backend = str(config.get("inference_backend", "reference"))
-        if self.inference_backend not in {"reference", "video_isolated_reuse", "joint_static_cache"}:
+        if self.inference_backend not in {"reference", "video_isolated_reuse", "joint_static_cache", "joint_optimized"}:
             raise ValueError(f"Unknown inference_backend: {self.inference_backend}")
         self.text_index = 0
         self.inference_index = 0
@@ -73,9 +73,9 @@ class CosmosJointPolicy:
         payload = torch.load(self.checkpoint, map_location="cpu", weights_only=True, mmap=True)
         self.reference_mode = "none" if payload.get("schema") == SCHEMA else "rolling_ae"
         if self.reference_mode == "none" and self.inference_backend == "video_isolated_reuse":
-            raise ValueError("New joint diffusion uses reference or joint_static_cache backend")
-        if self.reference_mode != "none" and self.inference_backend == "joint_static_cache":
-            raise ValueError("joint_static_cache requires the no-reference diffusion checkpoint")
+            raise ValueError("New joint diffusion uses reference, joint_static_cache or joint_optimized backend")
+        if self.reference_mode != "none" and self.inference_backend in {"joint_static_cache", "joint_optimized"}:
+            raise ValueError("Joint backends require the no-reference diffusion checkpoint")
         kwargs = dict(self.config["model_kwargs"])
         if self.reference_mode == "none":
             from .preprocessing import file_sha256
@@ -118,6 +118,14 @@ class CosmosJointPolicy:
 
     def _configure_inference(self) -> None:
         if self.inference_backend in {"reference", "joint_static_cache"}:
+            return
+        if self.inference_backend == "joint_optimized":
+            from fastwam.cosmos.noaction_inference import NoActionInferenceRunner
+            options = self.config.get("inference_optimization", {})
+            self.runner = NoActionInferenceRunner(self.model,
+                compile_layers=bool(options.get("compile_layers", True)),
+                cuda_graph=bool(options.get("cuda_graph", True)),
+                compile_threads=int(options.get("compile_threads", 4)))
             return
         from fastwam.cosmos.inference import JointInferenceRunner
         options = self.config.get("inference_optimization", {})
@@ -199,12 +207,13 @@ class CosmosJointPolicy:
                 "cosmos_text_index": torch.tensor([self.text_index], device=self.device),
             }
             if getattr(self, "reference_mode", "rolling_ae") == "none":
-                result = self.model.infer_joint(sample,
+                inference = self.runner if self.runner is not None else self.model
+                result = inference.infer_joint(sample,
                     num_inference_steps=int(self.config.get("joint_steps", 16)),
                     seed=int(self.config.get("action_seed", 42)) + self.inference_index,
                     video_seed=int(self.config.get("video_seed", 44)),
                     force_seed=int(self.config.get("force_seed", 43)),
-                    use_cache=self.inference_backend == "joint_static_cache")
+                    use_cache=self.inference_backend in {"joint_static_cache", "joint_optimized"})
             else:
                 reference = torch.tensor(normalized_reference, device=self.device,
                                         dtype=torch.bfloat16).unsqueeze(0)

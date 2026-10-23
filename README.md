@@ -1,6 +1,19 @@
 # FastWAM · Cosmos28 · ForceWM28
 
 **Current branch: `codex/realman-cup-joint-30k` — no-reference joint diffusion.**
+
+**Joint8 step10000 inference evaluation (2026-10-21):** independent Video/Force/Action
+sampling, compiled inference and CUDA Graph runners, 27-configuration offline replay,
+and matched GB10 / RTX 4090 measurements are now included. Start with the
+[experiment guide](docs/cosmos/experiments/joint8-step10000-20261021/README.md),
+[Chinese report](docs/cosmos/experiments/joint8-step10000-20261021/评测报告.md), or
+[PDF](docs/cosmos/experiments/joint8-step10000-20261021/joint8-step10000_三专家采样与GB10-4090评测报告.pdf).
+V/F/A=4/4/16 is the first robot-validation candidate: RGB-to-output P50/P95 is
+763/779 ms on GB10 and 344/351 ms on RTX 4090. Quality measurements replay training
+episodes and do not establish closed-loop grasp success. Independent expert counts
+are currently exposed by the offline runners; the deployment adapter's
+`joint_optimized` backend retains its existing equal-step checkpoint contract.
+
 The RealMan training entry points now select `task=cosmos_noaction_joint_4gpu_30k`:
 official non-action-conditioned Cosmos Video2World, AE 768/3072, Force diffusion
 768/2048, 28 layers each, and a shared layer core for training and 16-step joint
