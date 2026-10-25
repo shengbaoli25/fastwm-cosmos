@@ -18,7 +18,7 @@ def assert_outputs(actual, expected):
         torch.testing.assert_close(actual[name], expected[name], atol=4e-6, rtol=4e-5, msg=name)
 
 
-def full_model_reference(m, sample, counts):
+def full_model_reference(m, sample, counts, *, seed=42, video_seed=44, force_seed=43):
     """Separate schedule implementation; no production sampler/cache helpers.
 
     At each fine tick all experts see the same pre-update snapshot. An expert
@@ -31,7 +31,7 @@ def full_model_reference(m, sample, counts):
         shapes = [(*first.shape[:2], 3, *first.shape[3:]), (len(first), 32, 6),
                   (len(first), 32, m.action_dim)]
         states = [torch.randn(shape, generator=torch.Generator().manual_seed(seed)).to(m.device, m.torch_dtype)
-                  for shape, seed in zip(shapes, (44, 43, 42))]
+                  for shape, seed in zip(shapes, (video_seed, force_seed, seed))]
         states[0][:, :, :1] = first
         schedulers = (m.v_scheduler, m.f_scheduler, m.a_scheduler)
         schedules = [s.build_inference_schedule(n, m.device, m.torch_dtype)
@@ -154,23 +154,25 @@ def test_compile_results_own_storage_even_when_compiler_reuses_output_buffers(mo
     assert runner.diagnostics['branch_modes']['force'] == 'compile'
 
 
-def test_cuda_graph_request_on_cpu_has_observable_eager_fallback():
+@pytest.mark.parametrize('mode', ['cuda_graph', 'compile_cuda_graph'])
+def test_cuda_graph_request_on_cpu_has_observable_eager_fallback(mode):
     m = model()
-    runner = MultirateRunner(m, mode='cuda_graph')
+    runner = MultirateRunner(m, mode=mode)
     with pytest.warns(RuntimeWarning, match='requires a CUDA device'):
         actual = runner.infer(sample(1))
     assert_outputs(actual, full_model_reference(m, sample(1), (4, 4, 16)))
-    assert runner.diagnostics['requested_mode'] == 'cuda_graph'
+    assert runner.diagnostics['requested_mode'] == mode
     assert runner.diagnostics['effective_mode'] == 'eager'
     assert 'device' in runner.diagnostics['fallback_reasons']
 
 
-@pytest.mark.parametrize('mode', ['compile', 'cuda_graph'])
+@pytest.mark.parametrize('mode', ['compile', 'compile_cuda_graph'])
 def test_unsupported_accelerator_falls_back_once_per_branch(monkeypatch, mode):
     def unsupported(*args, **kwargs):
         raise RuntimeError('capture/compile unsupported in this runtime')
     monkeypatch.setattr(torch, 'compile', unsupported)
     monkeypatch.setattr(multirate, '_CudaGraphCall', unsupported)
+    monkeypatch.setattr(torch.cuda, 'is_current_stream_capturing', lambda: False)
     monkeypatch.setitem(multirate._BRANCHES, 'action', lambda m, value: value + 1)
     # No actual CUDA calls; exercise a non-default device index through fallback.
     runner = MultirateRunner(SimpleNamespace(device=torch.device('cuda:2')), mode=mode)

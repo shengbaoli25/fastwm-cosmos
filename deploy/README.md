@@ -83,7 +83,43 @@ normalization using `scripts/cosmos/export_noaction_deployment.py`; see the
 The loader verifies normalization SHA256, model dimensions, text/data identities,
 checkpoint schema and sampling steps. It rejects the old `video_isolated_reuse`
 backend for the new model. The old CUDA Graph/compiled serial runner is not used
-by the new joint sampler; its full-model latency remains to be measured.
+by the new joint sampler.
+
+### Joint sampler compilation and CUDA Graphs
+
+For `joint_multirate`, `inference_optimization.mode` selects:
+
+| Mode | Compilation | Explicit CUDA Graph scope |
+|---|---|---|
+| `eager` | None | None |
+| `auto` / `compile` | Each Video/Force/Action expert, `reduce-overhead` | Compiler-managed expert calls; Python sampling loop remains |
+| `cuda_graph` | None | One complete request-local prefill + sampling loop |
+| `compile_cuda_graph` | Each expert, inner compiler CUDA graphs disabled | One complete request-local prefill + sampling loop |
+
+`cuda_graph` now captures the **whole sampler**, replacing the old per-expert
+capture. `compile_cuda_graph` compiles bounded expert functions during warmup,
+then captures the full multirate loop, Euler updates, and observed-frame restore.
+It does not unroll all sampling steps into one enormous compiler graph. Input
+validation, context preparation, seeded CPU noise, VAE and image preprocessing
+remain outside the explicit sampler graph. Each request copies its new conditions,
+noise and schedules once, replays once, then clones only the three final outputs.
+Static observation/history K/V is recalculated inside the graph for every request.
+
+Select the combined path with `"inference_optimization": {"mode":
+"compile_cuda_graph", "compile_threads": 2}` and reload the model while stopped.
+The default `auto` behavior remains unchanged. Unsupported optimizations report
+fallback reasons; out-of-memory and fatal device errors still fail explicitly.
+Check `diagnostics.optimization.graph_scope == "sampler"`, `effective_mode`,
+`branch_modes`, `sampler_steps` and increasing `sampler_replays` to confirm what
+actually ran. Capture is specialized by profile, shape, dtype and CUDA device;
+only one sampler graph is retained, and changing weights invalidates it.
+
+For offline timing, `deploy/benchmark.py --optimization compile_cuda_graph`
+accepts the same config/checkpoint/profile arguments as the other modes. Warmup
+and compilation are reported separately from timed calls. Compare identical
+weights, observations, seeds and step counts; reduced latency is not a task
+accuracy measurement. The backend executes no robot actions during warmup or
+offline benchmarking.
 
 ## Legacy rolling model input
 
@@ -226,8 +262,18 @@ non-container server listens on loopback.
 - **Pause / slow stop** invalidates actions and in-flight inference, clears the
   action horizon and asks the arm to stop. In the error state the same button
   reads **Reset error / remain stopped** and returns to a paused state.
-- **Emergency stop** invalidates all outputs and latches the session. Restarting
-  the app is required after checking/resetting the robot locally.
+- **Emergency stop** invalidates all outputs and latches the session. After
+  releasing the physical stop and checking the work area, tick the confirmation
+  and press **恢复急停 / Reset emergency stop**. Recovery checks fresh controller
+  and joint feedback, power, joint enable flags, and an empty trajectory before
+  clearing the software latch. Failures and timeouts keep it locked. It never
+  powers, enables, clears controller faults, or resumes the robot automatically.
+  Successful recovery returns to **paused** with old actions discarded; press
+  Start separately after all devices are ready. Gripper faults remain visible
+  and block Start, but may be handled by the existing paused gripper controls.
+  Recovery retains the loaded model. A maintenance restart can preserve the
+  software lock with `--start-estopped` (hardware/model must then be reconnected
+  and reloaded explicitly).
 - Sensor age, camera pair skew, force coordinates, workspace radius, TCP speed,
   IK solution, joint soft limits and joint step are checked before commands.
 - `max_joint_step_deg` in the hardware config limits the maximum difference
@@ -287,3 +333,14 @@ margin, so about 0.5 seconds per result is the practical target in that mode.
 The local `async_relaxed` schedule removes this expiration requirement for model
 results and waits between chunks as needed; strict-mode timing is still available
 by changing `execution_mode` back to `timestamped` and restarting the service.
+
+## Local client and remote H200 inference
+
+The existing dashboard now supports local NVIDIA inference or a remote Qizhi
+H200 policy server. For the client/server configuration, official port-forward
+channel, 4/4/16 synchronous/asynchronous controls, local action smoothing,
+freshness limits, and hardware-free end-to-end measurements, see the
+[remote inference migration guide](REMOTE_INFERENCE.md). Remote mode validates
+the server model identity and reports its GPU and optimization state without
+requiring a local GPU; the historical local timing and CUDA requirements above
+describe local inference.

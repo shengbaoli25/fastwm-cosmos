@@ -199,6 +199,15 @@ class _RobotFeedback:
             joint = state.joint_status
             if int(state.errCode) != 0 or any(int(x) != 0 for x in joint.joint_err_code):
                 raise ValueError("RM75 控制器或关节反馈报错")
+            # errCode is the SDK parser status, not the controller error list.
+            controller_errors = getattr(state, "err", None)
+            if controller_errors is not None:
+                count = int(controller_errors.err_len)
+                if not 0 <= count <= 24:
+                    raise ValueError("RM75 控制器反馈错误状态未知")
+                errors = [int(value) for value in controller_errors.err[:count]]
+                if len(errors) != count or any(errors):
+                    raise ValueError(f"RM75 控制器反馈报警: {errors}")
             if not all(bool(x) for x in joint.joint_en_flag):
                 raise ValueError("RM75 存在未使能关节")
             waypoint = state.waypoint
@@ -353,10 +362,17 @@ class RealManHardwareAdapter:
         self.workspace_center: tuple[float, ...] | None = None
         self.armed = False
         self.estop_latched = False
+        self._stop_generation = 0
+        self._stop_pending = 0
+        self._reset_busy = False
+        self._reset_future = None
+        self._reset_io_lock = threading.Lock()
+        self._arm_close_pending = False
         self.joint_min: tuple[float, ...] | None = None
         self.joint_max: tuple[float, ...] | None = None
         self.ik_params_type = None
         self._stop_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="realman-stop")
+        self._reset_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="realman-reset")
         self._connect()
 
     @staticmethod
@@ -388,6 +404,11 @@ class RealManHardwareAdapter:
         result.setdefault("gripper_deadband", 0.02)
         result.setdefault("gripper_required", True)
         result.setdefault("initial_gripper", 0.5); result.setdefault("model_arm_dof", 7)
+        result.setdefault("reset_timeout_s", 6.0)
+        timeout = result["reset_timeout_s"]
+        if isinstance(timeout, bool) or not math.isfinite(float(timeout)) or not 0 < float(timeout) <= 10:
+            raise ValueError("reset_timeout_s must be in (0, 10]")
+        result["reset_timeout_s"] = float(timeout)
         result.setdefault('action_space','eef_pose7')
         action_width(result['action_space'])
         if not 0 < float(result["camera_max_age_s"]) <= 0.5:
@@ -480,6 +501,8 @@ class RealManHardwareAdapter:
             "gripper_ready": bool(gripper.get("ready")) if gripper_required else True,
             "armed": self.armed,
             "estop_latched": self.estop_latched,
+            "stop_pending": self._stop_pending > 0,
+            "reset_busy": self._reset_busy or (self._reset_future is not None and not self._reset_future.done()),
             "joint_limits_ready": self.joint_min is not None and self.joint_max is not None,
             "max_joint_step_deg": self.config["max_joint_step_deg"],
             "workspace_radius_m": self.config["workspace_radius_m"],
@@ -495,16 +518,22 @@ class RealManHardwareAdapter:
         }
 
     def arm(self) -> None:
-        if self.estop_latched:
-            raise RuntimeError("硬件急停已锁存；检查机械臂并重启部署服务")
-        if self.closed or not self.connected:
-            raise RuntimeError("硬件适配器未连接")
+        with self.lock:
+            if self.estop_latched:
+                raise RuntimeError("硬件急停已锁存；检查机械臂后使用急停恢复")
+            if self.closed or not self.connected:
+                raise RuntimeError("硬件适配器未连接")
+            generation = self._stop_generation
         status = self.status()
         if not status.get("robot_ready") or not status.get("cameras_ready") or not status.get("force_ready"):
             raise RuntimeError("RM75、双相机或力反馈尚未就绪")
         if not status.get("gripper_ready"):
             raise RuntimeError("夹爪尚未就绪")
-        self.armed = True
+        with self.lock:
+            if (self.estop_latched or self.closed or not self.connected
+                    or self._stop_generation != generation or self._stop_pending):
+                raise RuntimeError("硬件停止状态已改变，拒绝 arm")
+            self.armed = True
 
     def observe(self) -> Observation | None:
         return self.observe_at(time.monotonic())
@@ -658,15 +687,25 @@ class RealManHardwareAdapter:
         self.gripper.command(action[-1])
 
     def _stop(self, emergency: bool) -> None:
-        if emergency:
-            self.estop_latched = True
+        with self.lock:
+            self._stop_generation += 1
+            if emergency:
+                self.estop_latched = True
             self.armed = False
-        else:
-            self.armed = False
-        if self.sdk is None or self.closed:
-            return
+            if self.sdk is None or self.closed:
+                return
+            self._stop_pending += 1
+        # A timed-out SDK stop must finish before recovery can clear the latch.
+        def finished(_future=None) -> None:
+            with self.lock:
+                self._stop_pending -= 1
+        hold_error = None
         if self.gripper is not None:
-            self.gripper.hold()
+            try:
+                self.gripper.hold()
+            except Exception as exc:
+                # An accessory failure must never prevent the arm stop.
+                hold_error = exc
         method_name = "rm_set_arm_stop" if emergency else "rm_set_arm_slow_stop"
         def call() -> Any:
             sdk = self.sdk
@@ -674,19 +713,166 @@ class RealManHardwareAdapter:
                 return 0
             sdk.rm_set_timeout(int(self.config.get("stop_timeout_ms", 1000)))
             return getattr(sdk, method_name)()
-        future = self._stop_pool.submit(call)
+        try:
+            future = self._stop_pool.submit(call)
+        except Exception:
+            finished()
+            raise
+        future.add_done_callback(finished)
         try:
             code = future.result(timeout=float(self.config.get("stop_timeout_s", 1.5)))
         except FutureTimeout as exc:
             raise RuntimeError(f"RM75 {'急停' if emergency else '缓停'}超时；请使用物理急停") from exc
         if isinstance(code, int) and code != 0:
             raise RuntimeError(f"RM75 {'急停' if emergency else '缓停'}失败: {code}")
+        if hold_error is not None:
+            raise RuntimeError(f"机械臂已停止，但夹爪待发指令取消失败: {hold_error}") from hold_error
 
     def slow_stop(self) -> None:
         self._stop(False)
 
     def emergency_stop(self) -> None:
         self._stop(True)
+
+    def _check_reset_generation(self, generation: int, sdk: Any) -> None:
+        with self.lock:
+            if (self.closed or not self.connected or self.sdk is not sdk
+                    or self._stop_generation != generation or self._stop_pending):
+                raise RuntimeError("恢复已取消：发生新的停止请求、连接关闭或停止尚未完成")
+            if not self.estop_latched or self.armed:
+                raise RuntimeError("恢复已取消：硬件急停状态已改变")
+
+    @staticmethod
+    def _reset_result(result: Any, name: str) -> Any:
+        if (not isinstance(result, tuple) or len(result) != 2
+                or type(result[0]) is not int or result[0] != 0):
+            raise RuntimeError(f"急停恢复检查失败：{name}读取失败或状态未知 ({result!r})")
+        return result[1]
+
+    @staticmethod
+    def _reset_arm_errors(state: Any) -> None:
+        errors = state.get("err") if isinstance(state, dict) else None
+        if (not isinstance(errors, dict) or type(errors.get("err_len")) is not int
+                or not isinstance(errors.get("err"), list)
+                or not 0 <= errors["err_len"] <= 24
+                or errors["err_len"] != len(errors["err"])):
+            raise RuntimeError("急停恢复检查失败：控制器错误状态缺失或格式未知")
+        try:
+            codes = [int(value, 16 if value.lower().startswith("0x") else 10)
+                     if isinstance(value, str) else value for value in errors["err"]]
+            if any(type(code) is not int for code in codes):
+                raise ValueError("non-integer error code")
+        except (ValueError, TypeError) as exc:
+            raise RuntimeError("急停恢复检查失败：控制器错误码无法识别") from exc
+        if any(codes):
+            raise RuntimeError(f"机械臂控制器仍有报警 {codes}；请先在现场解除物理急停并处理报警")
+        try:
+            _finite(state["joint"], 7, "joint feedback")
+            _finite(state["pose"], 6, "TCP pose")
+        except (KeyError, TypeError, ValueError) as exc:
+            raise RuntimeError("急停恢复检查失败：控制器位姿/关节状态无效") from exc
+
+    def _verify_reset_state(self, generation: int, sdk: Any, feedback: Any, started: float) -> None:
+        def query(name: str) -> Any:
+            self._check_reset_generation(generation, sdk)
+            method = getattr(sdk, name, None)
+            if not callable(method):
+                raise RuntimeError(f"SDK 不支持急停恢复所需检查：{name}")
+            # Separate from the state/stop locks: close must not delete the SDK
+            # handle inside a recovery read, while urgent stop remains free.
+            with self._reset_io_lock:
+                self._check_reset_generation(generation, sdk)
+                result = method()
+            self._check_reset_generation(generation, sdk)
+            return result
+
+        def controller_checks() -> None:
+            state = self._reset_result(query("rm_get_current_arm_state"), "控制器状态")
+            self._reset_arm_errors(state)
+            power = self._reset_result(query("rm_get_arm_power_state"), "机械臂电源")
+            if type(power) is not int or power != 1:
+                raise RuntimeError("机械臂未上电或电源状态未知；请在现场检查物理急停和供电")
+            enabled = self._reset_result(query("rm_get_joint_en_state"), "关节使能")
+            if (not isinstance(enabled, list) or len(enabled) != 7
+                    or any(type(value) not in (int, bool) or value != 1 for value in enabled)):
+                raise RuntimeError("机械臂关节未全部使能或状态未知；请在现场检查，恢复按钮不会自动使能")
+            joints = query("rm_get_joint_err_flag")
+            if (not isinstance(joints, dict) or type(joints.get("return_code")) is not int
+                    or joints["return_code"] != 0 or not isinstance(joints.get("err_flag"), list)
+                    or len(joints["err_flag"]) != 7
+                    or any(type(value) is not int for value in joints["err_flag"])):
+                raise RuntimeError("急停恢复检查失败：关节错误状态缺失或未知")
+            if any(joints["err_flag"]):
+                raise RuntimeError(f"机械臂关节仍有报警 {joints['err_flag']}；请先在现场处理报警")
+            trajectory = query("rm_get_arm_current_trajectory")
+            if (not isinstance(trajectory, dict) or type(trajectory.get("return_code")) is not int
+                    or trajectory["return_code"] != 0
+                    or type(trajectory.get("trajectory_type")) is not int
+                    or trajectory["trajectory_type"] != 0):
+                raise RuntimeError("机械臂仍有规划轨迹或状态未知；请先在现场停止并清除残留轨迹")
+
+        # rm_set_arm_stop makes the old trajectory non-resumable. The vendor
+        # documents delete-trajectory for PAUSED motion only, so do not call it
+        # here, and never call continue, power, enable, or hardware-estop reset.
+        controller_checks()
+        deadline = started + float(self.config.get("reset_timeout_s", 6.0))
+        while True:
+            self._check_reset_generation(generation, sdk)
+            try:
+                _, _, _, stamp = feedback.snapshot(float(self.config["feedback_max_age_s"]))
+                if not math.isfinite(stamp) or stamp <= started:
+                    raise RuntimeError("等待恢复检查之后的新鲜 RM75 反馈")
+                break
+            except RuntimeError as exc:
+                if time.monotonic() >= deadline:
+                    raise RuntimeError(f"急停恢复检查失败：{exc}") from exc
+                time.sleep(0.01)
+        controller_checks()
+        # The final TCP checks can themselves take time. Do not authorize a
+        # reset using the UDP packet that was fresh before those checks.
+        _, _, _, stamp = feedback.snapshot(float(self.config["feedback_max_age_s"]))
+        if not math.isfinite(stamp) or stamp <= started:
+            raise RuntimeError("急停恢复检查失败：最终 RM75 反馈不新鲜")
+
+    def reset_emergency_stop(self) -> dict[str, Any]:
+        """Release only the software latch after explicit, read-only checks.
+
+        No controller error is cleared and no device is enabled or moved. A
+        separate executor keeps a slow status request off the urgent stop path.
+        A late result after timeout or another stop cannot release this latch.
+        """
+        with self.lock:
+            if self.closed or not self.connected or self.sdk is None or self.feedback is None:
+                raise RuntimeError("硬件未连接，无法验证急停恢复条件")
+            if not self.estop_latched:
+                raise RuntimeError("硬件没有待恢复的软件急停锁存")
+            if self.armed or self._stop_pending:
+                raise RuntimeError("停止尚未完成或硬件仍为 armed，拒绝恢复")
+            if self._reset_busy or (self._reset_future is not None and not self._reset_future.done()):
+                raise RuntimeError("急停恢复检查仍在进行，请等待完成")
+            self._reset_busy = True
+            generation, sdk, feedback = self._stop_generation, self.sdk, self.feedback
+        try:
+            if self.gripper is not None:
+                self.gripper.hold()
+            started = time.monotonic()
+            future = self._reset_pool.submit(self._verify_reset_state, generation, sdk, feedback, started)
+            with self.lock:
+                self._reset_future = future
+            try:
+                future.result(timeout=float(self.config.get("reset_timeout_s", 6.0)))
+            except FutureTimeout as exc:
+                raise RuntimeError("急停恢复检查超时；软件急停仍保持锁定") from exc
+            with self.lock:
+                self._check_reset_generation(generation, sdk)
+                self.last_command = None
+                self.last_gripper = None
+                self.armed = False
+                self.estop_latched = False
+        finally:
+            with self.lock:
+                self._reset_busy = False
+        return self.status()
 
     def close(self) -> None:
         with self.lock:
@@ -700,29 +886,44 @@ class RealManHardwareAdapter:
             # subsequent close to confirm its exit without touching arm IO.
             if self.gripper:
                 self.gripper.close()
-            return
+            if not getattr(self, "_arm_close_pending", False):
+                return
+            cameras = []
         errors = []
         for camera in cameras:
             try:
                 camera.close()
             except Exception as exc:
                 errors.append(exc)
-        if self.gripper:
+        if self.gripper and not already_closed:
             try:
                 self.gripper.close()
             except Exception as exc:
                 errors.append(exc)
-        if feedback is not None and sdk is not None:
+        reset_io_lock = getattr(self, "_reset_io_lock", None)
+        can_release = reset_io_lock is None or reset_io_lock.acquire(timeout=2.0)
+        if not can_release:
+            self._arm_close_pending = True
+            errors.append(RuntimeError("急停恢复检查尚未退出，保留机械臂连接句柄；请稍后重试关闭"))
+        else:
             try:
-                feedback.restore()
-            except Exception:
-                pass
-        if sdk is not None:
-            try:
-                sdk.rm_delete_robot_arm()
-            except Exception:
-                pass
+                if feedback is not None and sdk is not None:
+                    try:
+                        feedback.restore()
+                    except Exception:
+                        pass
+                if sdk is not None:
+                    try:
+                        sdk.rm_delete_robot_arm()
+                    except Exception:
+                        pass
+                self._arm_close_pending = False
+            finally:
+                if reset_io_lock is not None:
+                    reset_io_lock.release()
         self._stop_pool.shutdown(wait=False, cancel_futures=True)
+        if getattr(self, "_reset_pool", None) is not None:
+            self._reset_pool.shutdown(wait=False, cancel_futures=True)
         if errors:
             raise RuntimeError('硬件关闭未完全确认: ' + '; '.join(str(exc) for exc in errors))
 

@@ -16,6 +16,7 @@ from realman_deploy.normalization import DatasetNormalizer
 from realman_deploy.runtime import DeploymentRuntime
 from realman_deploy.web import DeploymentWeb
 from realman_deploy.sampling import updated_config
+from realman_deploy.deployment_settings import deployment_settings
 
 
 def main() -> int:
@@ -25,6 +26,8 @@ def main() -> int:
     parser.add_argument("--catalog", default=str(ROOT / "deploy/checkpoint_catalog.json"))
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8765)
+    parser.add_argument("--start-estopped", action="store_true",
+                        help="Start with the software stop latched; no hardware is opened")
     args = parser.parse_args()
     config_path = Path(args.config).resolve()
     config = json.loads(config_path.read_text())
@@ -35,10 +38,16 @@ def main() -> int:
     if config.get("sampling_profile") is not None:
         # Reject invalid profile/mode combinations before creating the server.
         updated_config(config, config["sampling_profile"], config.get("execution_mode", "synchronous"))
+    choices = deployment_settings(config)
     runtime = DeploymentRuntime(normalizer,
         execution_mode=config.get("execution_mode", "synchronous"),
         cuda_device=config.get("device", "cuda"),
-        sampling_profile=config.get("sampling_profile"))
+        sampling_profile=config.get("sampling_profile"),
+        inference_device=choices["inference_device"],
+        max_result_age_s=choices["max_result_age_s"],
+        action_smoothing_alpha=choices["action_smoothing_alpha"])
+    if args.start_estopped:
+        runtime.emergency_stop()
     web = DeploymentWeb(runtime, catalog_path=args.catalog, config_path=config_path,
                         hardware_factory=config.get("hardware_factory"),
                         host=args.host, port=args.port)

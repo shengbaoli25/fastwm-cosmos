@@ -18,6 +18,20 @@ button:disabled { opacity: .42; cursor: not-allowed; }
 button:focus-visible, select:focus-visible, input:focus-visible, summary:focus-visible { outline: 3px solid #68b5a2; outline-offset: 3px; }
 select { width: 100%; min-width: 0; min-height: 44px; padding: 10px 12px; color: #263430; border: 1px solid #cfd9d6; border-radius: 6px; background: #fff; }
 select:disabled { background: #f3f5f4; color: var(--muted); }
+.remote-fields { margin-top: 14px; padding: 16px; background: #f1f5f3; border: 1px solid var(--line); border-radius: 6px; }
+.remote-fields input, .smoothing-field input { width: 100%; min-width: 0; min-height: 42px; padding: 9px 11px; border: 1px solid #cfd9d6; border-radius: 6px; color: #263430; background: #fff; }
+.remote-fields input:disabled, .smoothing-field input:disabled { color: var(--muted); background: #f3f5f4; }
+.remote-fields label:not(:first-child) { margin-top: 14px; }
+#remoteCheckpointSha { font: 12px ui-monospace, monospace; }
+.smoothing-field { display: grid; grid-template-columns: 1fr 90px; align-items: center; gap: 0 12px; margin-top: 14px; }
+.smoothing-field label { margin: 0; }
+.smoothing-field .control-help { grid-column: 1 / -1; }
+.remote-identity { display: grid; gap: 7px; margin: 14px 0; padding: 14px; background: #f1f5f3; border-radius: 6px; }
+.remote-identity span, .remote-identity small { font-size: 11px; color: var(--muted); line-height: 1.7; }
+.remote-identity strong { font-size: 13px; font-weight: 500; }
+.remote-identity code { font-size: 10px; color: #52665b; overflow-wrap: anywhere; }
+.remote-metrics { display: flex; flex-wrap: wrap; gap: 12px 28px; padding: 15px 18px; margin-top: 20px; background: #edf2ef; border-radius: 6px; font-size: 12px; color: var(--muted); }
+.remote-metrics b { margin-left: 8px; color: #263430; font-variant-numeric: tabular-nums; font-weight: 500; }
 label { display: block; margin-bottom: 8px; color: var(--muted); font-size: 12px; }
 header { position: sticky; top: 0; z-index: 10; min-height: 76px; padding: 14px max(24px, calc((100% - 1152px) / 2)); display: flex; align-items: center; justify-content: space-between; gap: 20px; background: #fff; border-bottom: 1px solid var(--line); }
 .brand { display: flex; align-items: center; gap: 12px; }
@@ -112,6 +126,12 @@ pre { color: #52665b; background: #edf2ef; padding: 16px; border-radius: 6px; fo
 .latch { padding: 16px; border-left: 4px solid var(--red); background: #fbe9eb; color: #97575c; margin-bottom: 18px; }
 .latch strong { display: block; color: var(--red); margin-bottom: 7px; }
 .latch span { font-size: 12px; }
+.latch p { font-size: 12px; line-height: 1.7; }
+.estop-recovery { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-top: 14px; }
+.estop-recovery label { display: flex; align-items: center; gap: 8px; margin: 0; color: #97575c; line-height: 1.6; }
+.estop-recovery input { width: 17px; height: 17px; margin: 0; accent-color: var(--green); flex-shrink: 0; }
+.estop-recovery button { border-color: #cfa3a7; font-weight: 600; }
+.recovery-feedback { color: var(--green); font-size: 12px; line-height: 1.7; margin-bottom: 18px; }
 footer { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; color: #85938c; font-size: 10px; line-height: 1.8; margin-top: 18px; }
 footer span:first-child { color: #9f5f65; }
 @media (max-width: 900px) {

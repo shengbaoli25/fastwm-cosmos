@@ -42,16 +42,17 @@ def test_export_uses_training_steps_and_model_identity(tmp_path):
     assert runtime['device'] == 'cuda'
 
 
-def test_export_selects_ui_consistent_4416_profile_and_visible_cuda_device(tmp_path):
+@pytest.mark.parametrize('optimization', ['cuda_graph', 'compile_cuda_graph'])
+def test_export_selects_ui_consistent_4416_profile_and_visible_cuda_device(tmp_path, optimization):
     from realman_deploy.sampling import settings
     config,manifest,paths=fixture(tmp_path)
     runtime=export.runtime_config(config,manifest,**paths,sampling_profile='4416',
-        execution_mode='async_relaxed',device='cuda:1',optimization='cuda_graph')
+        execution_mode='async_relaxed',device='cuda:1',optimization=optimization)
     ui=settings(runtime)
     assert runtime['sampling_profile']=='4416'
     assert runtime['inference_backend']=='joint_multirate'
     assert runtime['device']=='cuda:1'
-    assert runtime['inference_optimization']=={'mode':'cuda_graph'}
+    assert runtime['inference_optimization']=={'mode':optimization}
     assert ui['sampling_profile']=='4416' and ui['execution_mode']=='async_relaxed'
 
 

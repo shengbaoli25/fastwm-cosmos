@@ -1,0 +1,4 @@
+# Only on the machine physically connected to RM75 and RealSense cameras.
+# ARM64 hosts may need vendor-built bindings matching their Python ABI.
+pyrealsense2==2.56.5.9235
+Robotic-Arm==1.1.6

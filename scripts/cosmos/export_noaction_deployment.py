@@ -57,7 +57,7 @@ def runtime_config(config, manifest, *, checkpoint, normalization, tokenizer,
         backend = 'joint_multirate'
     if not (device == 'cuda' or (device.startswith('cuda:') and device[5:].isdigit())):
         raise ValueError('Device must be cuda or a logical cuda:N ordinal')
-    if optimization not in {'auto', 'eager', 'compile', 'cuda_graph'}:
+    if optimization not in {'auto', 'eager', 'compile', 'cuda_graph', 'compile_cuda_graph'}:
         raise ValueError('Unsupported optimization mode')
     result = dict(device=device, execution_mode=execution_mode,
         normalization_file=str(Path(normalization).resolve()),
@@ -83,7 +83,7 @@ def main():
                    help='Runtime sampling profile; legacy preserves the old single-step-count sampler')
     p.add_argument('--execution-mode', choices=['synchronous', 'async_relaxed', 'timestamped'], default='synchronous')
     p.add_argument('--device', default='cuda', help='CUDA logical device, e.g. cuda:1')
-    p.add_argument('--optimization', choices=['auto', 'eager', 'compile', 'cuda_graph'], default='auto')
+    p.add_argument('--optimization', choices=['auto', 'eager', 'compile', 'cuda_graph', 'compile_cuda_graph'], default='auto')
     for name in ('upstream', 'base-checkpoint', 'text-cache'):
         p.add_argument('--' + name, type=Path, help='Optional relocated asset path on the deployment host')
     args = p.parse_args()

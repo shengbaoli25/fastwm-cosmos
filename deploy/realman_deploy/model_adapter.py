@@ -21,6 +21,8 @@ logger = logging.getLogger(__name__)
 
 
 class CosmosJointPolicy:
+    requires_local_cuda = True
+
     def __init__(self, checkpoint: str | Path, config: dict, *, config_path: str | Path):
         self.checkpoint = Path(checkpoint).resolve()
         self.config = dict(config)
@@ -138,7 +140,7 @@ class CosmosJointPolicy:
             from fastwam.cosmos.multirate import MultirateRunner
             options = self.config.get("inference_optimization", {})
             mode = str(options.get("mode", "auto"))
-            if mode in {"auto", "compile"}:
+            if mode in {"auto", "compile", "compile_cuda_graph"}:
                 import torch._inductor.config as compiler_config
                 compiler_config.compile_threads = max(1, int(options.get("compile_threads", 2)))
             self.runner = MultirateRunner(self.model, mode=mode)

@@ -28,11 +28,28 @@ class DeploymentRuntime:
     def __init__(self, normalizer: DatasetNormalizer, *, reference=None,
                  clock: Callable[[], float] = time.monotonic, require_cuda: bool = True,
                  execution_mode: str = "timestamped", cuda_device: str = "cuda",
-                 sampling_profile: str | None = None):
+                 sampling_profile: str | None = None,
+                 inference_device: str = "local",
+                 max_result_age_s: float | None = None,
+                 action_smoothing_alpha: float = 1.0):
         if execution_mode not in {"timestamped", "async_relaxed", "synchronous"}:
             raise ValueError("execution_mode must be timestamped, async_relaxed or synchronous")
         self.execution_mode = execution_mode
         self.sampling_profile = sampling_profile
+        if inference_device not in {"local", "qizhi_h200"}:
+            raise ValueError("inference_device must be local or qizhi_h200")
+        if max_result_age_s is not None and (type(max_result_age_s) not in (int, float)
+                                            or not math.isfinite(max_result_age_s) or max_result_age_s <= 0):
+            raise ValueError("max_result_age_s must be positive or None")
+        if (type(action_smoothing_alpha) not in (int, float) or not math.isfinite(action_smoothing_alpha)
+                or not 0 < action_smoothing_alpha <= 1):
+            raise ValueError("action_smoothing_alpha must be in (0, 1]")
+        self.inference_device = inference_device
+        # Remote calls need an explicit bounded freshness window. Local keeps
+        # the historical behaviour unless a caller opts in to a deadline.
+        self.max_result_age_s = (0.6 if inference_device == "qizhi_h200" and max_result_age_s is None
+                                 else max_result_age_s)
+        self.action_smoothing_alpha = float(action_smoothing_alpha)
         self.cuda_probe = CudaStatusProbe(device=cuda_device)
         self.normalizer = normalizer
         self.require_cuda = require_cuda
@@ -59,11 +76,17 @@ class DeploymentRuntime:
         self._load_thread: threading.Thread | None = None
         self._infer_active = False
         self._estop_latched = False
+        self._estop_reset_busy = False
+        self._estop_inflight = 0
         self._relaxed_holding = False
         self._relaxed_end_at = 0.0
         self._pending_chunk: ActionChunk | None = None
+        self._unstarted_chunk: ActionChunk | None = None
+        self._smoothed_action: tuple[float, ...] | None = None
+        self._remote_latency_estimate_s: float | None = None
         self._synchronous_ready_at: float | None = None
         self.input_age_at_result_ms: float | None = None
+        self.input_age_at_first_action_ms: float | None = None
         self._debug_gripper = None
         self._gripper_debug_busy = False
         self._gripper_debug_operation = None
@@ -72,8 +95,10 @@ class DeploymentRuntime:
         self._hardware_connecting = False
 
     def _require_inactive(self) -> None:
+        if self._estop_reset_busy:
+            raise RuntimeError("急停恢复正在进行，请等待检查完成")
         if self._estop_latched:
-            raise RuntimeError("急停已锁存；检查机械臂并在本地复位后重启部署服务")
+            raise RuntimeError("急停已锁存；解除物理急停并检查现场后，点击恢复急停")
         if self._hardware_connecting or self.gripper_debug_status().get('busy'):
             raise RuntimeError("硬件连接或夹爪调试正在进行，请等待完成")
         if self.state in ("running", "loading", "stopping", "stopped") or self._infer_active:
@@ -212,6 +237,9 @@ class DeploymentRuntime:
         self._relaxed_holding = False
         self._relaxed_end_at = 0.0
         self._pending_chunk = None
+        self._unstarted_chunk = None
+        self._smoothed_action = None
+        self.input_age_at_first_action_ms = None
         self._synchronous_ready_at = None
         self.state, self.error = state, error
         return epoch
@@ -246,10 +274,25 @@ class DeploymentRuntime:
                 or normalizer.force_preprocessing != self.normalizer.force_preprocessing):
             raise ValueError('模型与运行时 normalization.json 不一致；请使用同一训练导出文件重启服务')
 
-    def configure_sampling(self, profile: str, mode: str, *, persist=None) -> None:
+    def configure_sampling(self, profile: str, mode: str, *, persist=None,
+                           inference_device: str | None = None,
+                           max_result_age_s: float | None = None,
+                           action_smoothing_alpha: float | None = None) -> None:
         """Change an inactive session atomically; new settings require model reload."""
         from .sampling import updated_config
         updated_config({}, profile, mode)
+        next_device = self.inference_device if inference_device is None else inference_device
+        next_age = self.max_result_age_s if max_result_age_s is None else max_result_age_s
+        if next_device != self.inference_device and max_result_age_s is None:
+            next_age = 0.6 if next_device == "qizhi_h200" else None
+        next_alpha = self.action_smoothing_alpha if action_smoothing_alpha is None else action_smoothing_alpha
+        if next_device not in {"local", "qizhi_h200"}:
+            raise ValueError("inference_device must be local or qizhi_h200")
+        if next_age is not None and (type(next_age) not in (int, float)
+                                     or not math.isfinite(next_age) or next_age <= 0):
+            raise ValueError("max_result_age_s must be positive or None")
+        if type(next_alpha) not in (int, float) or not math.isfinite(next_alpha) or not 0 < next_alpha <= 1:
+            raise ValueError("action_smoothing_alpha must be in (0, 1]")
         with self.lock:
             self._require_inactive()
             if self.normalizer.action_space != "joint8":
@@ -261,8 +304,14 @@ class DeploymentRuntime:
             old, self.policy = self.policy, None
             self._invalidate("idle")
             self.execution_mode, self.sampling_profile = mode, profile
-            self.timeline = ChunkActionQueue(self.CONTROL_HZ, max_actions=32)
+            self.inference_device = next_device
+            self.max_result_age_s = (0.6 if next_device == "qizhi_h200" and next_age is None
+                                     else next_age)
+            self.action_smoothing_alpha = float(next_alpha)
+            self.timeline = (ActionTimeline if mode == "timestamped" else ChunkActionQueue)(
+                self.CONTROL_HZ, max_actions=32)
             self.latency_ms = self.input_age_at_result_ms = None
+            self._remote_latency_estimate_s = None
         if old:
             old.close()
 
@@ -304,7 +353,8 @@ class DeploymentRuntime:
                 raise RuntimeError(f"cannot start while runtime is {self.state}")
             if self.policy is None or self.hardware is None:
                 raise RuntimeError("模型和硬件必须就绪")
-            if self.require_cuda and not self._cuda_status().get("available"):
+            requires_local_cuda = getattr(self.policy, "requires_local_cuda", True) is not False
+            if self.require_cuda and requires_local_cuda and not self._cuda_status().get("available"):
                 raise RuntimeError("CUDA 未就绪；禁止在无 GPU 环境下启动闭环控制")
             status = self.hardware.status()
             self._validate_hardware_space(status)
@@ -372,7 +422,8 @@ class DeploymentRuntime:
     def emergency_stop(self) -> None:
         with self.lock:
             self._estop_latched = True
-            epoch = self._invalidate("estop", "急停已锁存；检查机械臂并在本地复位后重启部署服务")
+            self._estop_inflight += 1
+            epoch = self._invalidate("estop", "急停已锁存；解除物理急停并检查现场后，点击恢复急停")
             hardware = self.hardware
             gripper = self._gripper_worker()
             if self._gripper_debug_cancel is not None:
@@ -389,6 +440,76 @@ class DeploymentRuntime:
                 if self.gate.accepts(epoch):
                     self.error += f"；硬件急停未确认: {exc}"
             raise
+        finally:
+            with self.lock:
+                self._estop_inflight -= 1
+
+    def reset_emergency_stop(self, *, confirmed: bool = False) -> dict:
+        """Release the software latch only; never arm or resume old actions."""
+        if confirmed is not True:
+            raise ValueError("请先确认已解除物理急停并检查现场安全")
+        with self.lock:
+            if self.state in ("stopping", "stopped") or self.stop_event.is_set():
+                raise RuntimeError("服务正在停止，不能恢复急停")
+            if (self._estop_reset_busy or self._estop_inflight or self._infer_active
+                    or self._hardware_connecting or self.gripper_debug_status().get("busy")
+                    or (self._load_thread and self._load_thread.is_alive())):
+                raise RuntimeError("停止、推理、加载或硬件操作仍在进行，请等待后重试恢复")
+            hardware = self.hardware
+            hs = hardware.status() if hardware is not None else {}
+            if hs.get("armed"):
+                raise RuntimeError("硬件仍处于控制使能状态，不能恢复急停")
+            # A successful reset response can be lost. A repeated confirmed
+            # request may acknowledge only an already paused, disarmed runtime.
+            if not self._estop_latched:
+                if self.state == "paused" and not hs.get("estop_latched"):
+                    return self.status()
+                raise RuntimeError("当前未处于软件急停锁定状态")
+            if self.state != "estop":
+                raise RuntimeError("当前状态不允许恢复急停")
+            reset = getattr(hardware, "reset_emergency_stop", None) if hardware is not None else None
+            if hardware is not None and not callable(reset):
+                raise RuntimeError("当前硬件适配器不支持安全恢复急停")
+            self._estop_reset_busy = True
+            epoch = self._invalidate("estop", "正在检查急停恢复；机械臂保持停止")
+            gripper = self._gripper_worker()
+        acquired = False
+        try:
+            # Emergency stop deliberately bypasses this lock. The epoch below
+            # prevents a late reset from overriding a newer stop request.
+            acquired = self._command_lock.acquire(blocking=False)
+            if not acquired:
+                raise RuntimeError("动作接口仍未退出，请等待后重试恢复")
+            if gripper is not None:
+                gripper.hold()
+            with self.lock:
+                if not self.gate.accepts(epoch):
+                    raise RuntimeError("恢复已被新的停止操作取消")
+            if reset is not None:
+                reset()
+                hs = hardware.status()
+                if hs.get("estop_latched") is not False or hs.get("armed") is not False:
+                    raise RuntimeError("硬件未确认解除软件锁存或仍处于控制使能状态")
+            with self.lock:
+                if not self.gate.accepts(epoch) or hardware is not self.hardware:
+                    raise RuntimeError("恢复已被新的停止操作取消")
+                self._estop_latched = False
+                self._invalidate("paused")
+                self._history = OnlineHistory(self.normalizer, 32)
+                self._running_since = None
+                self._run_inference_count = 0
+        except Exception as exc:
+            with self.lock:
+                if self.gate.accepts(epoch):
+                    self.state = "estop"
+                    self.error = f"急停恢复失败，保持锁定: {exc}"
+            raise
+        finally:
+            if acquired:
+                self._command_lock.release()
+            with self.lock:
+                self._estop_reset_busy = False
+        return self.status()
 
     def _sensor_loop(self) -> None:
         deadline = self.clock()
@@ -439,6 +560,11 @@ class DeploymentRuntime:
             if self.state != "running" or not self.gate.accepts(epoch):
                 self.discarded_results += 1
                 return False
+            self._check_result_age(chunk, finished, "返回")
+            if self.inference_device == "qizhi_h200":
+                elapsed = max(0.0, finished - started)
+                self._remote_latency_estimate_s = (elapsed if self._remote_latency_estimate_s is None
+                                                  else max(elapsed, self._remote_latency_estimate_s * 0.8))
             # Relaxed async mode computes exactly one next chunk while the
             # current chunk executes. Hold that result until the chunk boundary
             # so a fast model cannot repeatedly erase most of its own horizon.
@@ -456,6 +582,7 @@ class DeploymentRuntime:
                             observation.sequence, self.input_age_at_result_ms, self.latency_ms)
                 return True
             _, kept = self.timeline.replace(chunk, finished)
+            self._unstarted_chunk = chunk
             if kept < self.MIN_FRESH_ACTIONS:
                 self.timeline.clear()
                 self.discarded_results += 1
@@ -476,6 +603,27 @@ class DeploymentRuntime:
             self.inference_count += 1
             self._run_inference_count += 1
             return True
+
+    def _check_result_age(self, chunk: ActionChunk, now: float, phase: str) -> None:
+        """Bound observation age only at receipt and before a chunk's first command."""
+        if self.max_result_age_s is None:
+            return
+        age = now - chunk.source_stamp
+        if not 0 <= age <= self.max_result_age_s:
+            self.discarded_results += 1
+            raise RuntimeError(f"推理结果在{phase}时已过期：观测年龄 {age * 1000:.1f} ms，"
+                               f"上限 {self.max_result_age_s * 1000:.0f} ms；请暂停后检查远端时延")
+
+    def _remote_prefetch_lead_s(self) -> float:
+        estimate = self._remote_latency_estimate_s or 0.3
+        # Include a sensor/control scheduling margin; cap the waiting horizon so
+        # a very fast response cannot age out while the previous chunk executes.
+        lead = estimate * 1.15 + 2.0 / self.CONTROL_HZ
+        return min(lead, self.max_result_age_s * 0.8) if self.max_result_age_s else lead
+
+    def _remote_prefetch_ready(self, now: float) -> bool:
+        remaining = len(self.timeline) / self.CONTROL_HZ + max(0.0, self._relaxed_end_at - now)
+        return remaining <= self._remote_prefetch_lead_s()
 
     def _inference_loop(self) -> None:
         last_version = -1
@@ -501,6 +649,9 @@ class DeploymentRuntime:
                     # Keep one inference in flight per action chunk. The latest
                     # sensor frame is used when the next chunk starts computing.
                     continue
+                elif (self.execution_mode == "async_relaxed" and self.inference_device == "qizhi_h200"
+                      and not self._remote_prefetch_ready(self.clock())):
+                    continue
                 last_version = version
                 policy, epoch = self.policy, self.gate.current()
                 reference = (None if getattr(policy, "reference_mode", "rolling_ae") == "none"
@@ -524,6 +675,7 @@ class DeploymentRuntime:
         with self._command_lock:
             stop_between_chunks = False
             arm_for_chunk = False
+            first_chunk = None
             with self.lock:
                 if self.state != "running" or self.hardware is None:
                     return
@@ -540,9 +692,13 @@ class DeploymentRuntime:
                 if self.execution_mode != "timestamped":
                     action = self.timeline.take(now, epoch)
                     if (action is None and self.execution_mode == "async_relaxed"
-                            and self._relaxed_holding and self._pending_chunk is not None):
+                            and self._pending_chunk is not None
+                            and (self._relaxed_holding or (self.inference_device == "qizhi_h200"
+                                 and not len(self.timeline) and now >= self._relaxed_end_at))):
                         chunk, self._pending_chunk = self._pending_chunk, None
+                        self._check_result_age(chunk, now, "等待结束")
                         self.timeline.replace(chunk, now)
+                        self._unstarted_chunk = chunk
                         if getattr(self.policy, "reference_mode", "rolling_ae") != "none":
                             self.reference.update(chunk.actions, source_stamp=self.timeline.start_stamp)
                         action = self.timeline.take(now, epoch)
@@ -563,6 +719,9 @@ class DeploymentRuntime:
                         if len(self.timeline) or waiting_first:
                             return
                         raise RuntimeError("动作缓冲耗尽；停止动作")
+                if (action is not None and self._unstarted_chunk is not None
+                        and self._unstarted_chunk.source_sequence == action.source_sequence):
+                    first_chunk = self._unstarted_chunk
             if stop_between_chunks:
                 # Already serialized with commands. Do not hold the state lock
                 # over the SDK call: pause/estop can still invalidate this epoch.
@@ -583,11 +742,32 @@ class DeploymentRuntime:
                 logger.info("%s resumed action execution in epoch %s", self.execution_mode, epoch)
             if action is None:
                 return
-            hardware.command(action.action)
+            with self.lock:
+                if self.state != "running" or not self.gate.accepts(epoch):
+                    return
+                if first_chunk is not None:
+                    self._check_result_age(first_chunk, self.clock(), "首次执行")
+                    self.input_age_at_first_action_ms = round(
+                        (self.clock() - first_chunk.source_stamp) * 1000.0, 1)
+                    if self._unstarted_chunk is first_chunk:
+                        self._unstarted_chunk = None
+                command = self._smooth_command(action.action, observation)
+            hardware.command(command)
             if self.execution_mode != "timestamped":
                 with self.lock:
                     if self.state == "running" and self.gate.accepts(epoch):
                         self._relaxed_end_at = self.clock() + self.timeline.dt
+
+    def _smooth_command(self, action, observation) -> tuple[float, ...]:
+        """EMA of physical Joint8 joint targets; SDK limiters remain authoritative."""
+        command = tuple(action)
+        if self.normalizer.action_space != "joint8" or self.action_smoothing_alpha == 1.0:
+            return command
+        previous = self._smoothed_action or tuple(observation.state)
+        alpha = self.action_smoothing_alpha
+        command = tuple(old + alpha * (target - old) for old, target in zip(previous[:7], command[:7])) + (command[-1],)
+        self._smoothed_action = command
+        return command
 
     def _control_loop(self) -> None:
         deadline = self.clock()
@@ -640,12 +820,22 @@ class DeploymentRuntime:
                           inference_busy=self._infer_active, hardware=hardware,
                           execution_mode=self.execution_mode,
                           sampling_profile=self.sampling_profile,
+                          inference_device=self.inference_device,
+                          max_result_age_s=self.max_result_age_s,
+                          action_smoothing_alpha=self.action_smoothing_alpha,
+                          remote_prefetch_lead_ms=(round(self._remote_prefetch_lead_s() * 1000.0, 1)
+                                                   if self.inference_device == "qizhi_h200" else None),
                           execution_phase=phase,
                           input_age_at_result_ms=self.input_age_at_result_ms,
+                          input_age_at_first_action_ms=self.input_age_at_first_action_ms,
                           pending_chunk=self._pending_chunk is not None,
                           gripper_debug=self.gripper_debug_status(),
                           gripper_debug_busy=self.gripper_debug_status()['busy'],
                           hardware_connecting=self._hardware_connecting,
+                          estop_latched=self._estop_latched,
+                          estop_reset_busy=self._estop_reset_busy,
+                          estop_reset_supported=self.hardware is None or callable(
+                              getattr(self.hardware, "reset_emergency_stop", None)),
                           model_diagnostics=dict(getattr(self.policy, "diagnostics", {})))
         result["cuda"] = self._cuda_status()
         return result

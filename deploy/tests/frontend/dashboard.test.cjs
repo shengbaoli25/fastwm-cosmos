@@ -8,10 +8,11 @@ const {createDashboard} = require('../../realman_deploy/static/app.js');
 const html = fs.readFileSync(path.join(__dirname, '../../realman_deploy/static/index.html'), 'utf8');
 function fixture(overrides = {}) {
   const elements = new Map([...html.matchAll(/id="([^"]+)"([^>]*)/g)].map((match) => [match[1], {
-    textContent: '', value: match[2].match(/value="([^"]*)"/)?.[1] || '', disabled: false, hidden: false, className: '', children: [],
+    textContent: '', value: match[2].match(/value="([^"]*)"/)?.[1] || '', disabled: false, hidden: false, checked: false, className: '', children: [],
     replaceChildren() { this.children = []; this.value = ''; }, append(child) { this.children.push(child); },
   }]));
   const state = {status: {state: 'ready', epoch: 1, model_ready: true, robot_ready: true,
+    estop_latched: overrides.state === 'estop', estop_reset_busy: false, estop_reset_supported: true,
     cameras_ready: true, force_ready: true, gripper_ready: true, inference_busy: false,
     sampling_profile: '161616', execution_mode: 'synchronous', execution_phase: 'ready',
     gripper_debug: {supported: true, connected: true, ready: true, enabled: true, alarm: 0, alarm_hex: '0x0000', alarm_labels: [],
@@ -42,7 +43,8 @@ function fixture(overrides = {}) {
       }
       result = {...state.status.gripper_debug};
     }
-    else if (url === '/api/estop') { state.status.state = 'estop'; result = {state: 'estop'}; }
+    else if (url === '/api/estop') { Object.assign(state.status, {state: 'estop', estop_latched: true, epoch: state.status.epoch + 1}); result = {...state.status}; }
+    else if (url === '/api/estop/reset') { Object.assign(state.status, {state: 'paused', estop_latched: false, estop_reset_busy: false, epoch: state.status.epoch + 1}); result = {...state.status}; }
     else if (url === '/api/pause') { state.status.state = 'paused'; result = {state: 'paused'}; }
     else result = {};
     return {ok: true, status: 200, json: async () => result};
@@ -400,4 +402,338 @@ test('enable requires ready feedback even if its enabled bit is set', async () =
   await f.$('gripperEnable').onclick();
   assert.equal(f.$('gripperFeedback').textContent, '使能未确认。');
   assert.match(f.$('gripperError').textContent, /夹爪状态尚未就绪/);
+});
+
+test('estop recovery requires explicit confirmation and only returns to paused', async () => {
+  const f = fixture(); await f.dashboard.init();
+  assert.equal(f.$('estopReset').disabled, true);
+  await f.$('estopReset').onclick();
+  assert.equal(f.posts('/api/estop/reset').length, 0);
+  await f.$('estop').onclick();
+  assert.equal(f.$('estopResetConfirmed').disabled, false);
+  assert.equal(f.$('estopReset').disabled, true);
+  assert.match(f.$('estopResetHint').textContent, /先解除.*物理急停.*现场/);
+  f.$('estopResetConfirmed').checked = true; f.$('estopResetConfirmed').onchange();
+  assert.equal(f.$('estopReset').disabled, false);
+  await f.$('estopReset').onclick();
+  assert.deepEqual(JSON.parse(f.posts('/api/estop/reset')[0].body), {confirmed: true});
+  assert.equal(f.state.status.state, 'paused');
+  assert.equal(f.$('estopNotice').hidden, true);
+  assert.equal(f.$('estopResetConfirmed').checked, false);
+  assert.match(f.$('estopResetFeedback').textContent, /保持暂停.*手动开始/);
+  assert.equal(f.posts('/api/start').length, 0);
+  assert.equal(f.posts('/api/connect').length, 0);
+  assert.equal(f.posts('/api/gripper').length, 0);
+});
+
+test('legacy servers cannot falsely offer or confirm estop recovery', async () => {
+  for (const supported of [undefined, false]) {
+    const f = fixture({state: 'estop', estop_reset_supported: supported}); await f.dashboard.init();
+    assert.equal(f.$('estopResetConfirmed').disabled, true);
+    f.$('estopResetConfirmed').checked = true; f.$('estopResetConfirmed').onchange();
+    assert.equal(f.$('estopReset').disabled, true);
+    await f.$('estopReset').onclick();
+    assert.equal(f.posts('/api/estop/reset').length, 0);
+    assert.match(f.$('estopResetHint').textContent, /尚未提供.*恢复接口/);
+  }
+});
+
+test('failed estop recovery preserves the latch, error, and explicit retry', async () => {
+  const f = fixture({state: 'estop'}); await f.dashboard.init();
+  f.$('estopResetConfirmed').checked = true; f.$('estopResetConfirmed').onchange();
+  f.state.handlers['/api/estop/reset'] = async () => ({ok: false, status: 409, json: async () => ({error: '机械臂停止状态未确认'})});
+  await f.$('estopReset').onclick();
+  assert.equal(f.$('estopNotice').hidden, false);
+  assert.equal(f.$('start').disabled, true);
+  assert.equal(f.$('gripperOpen').disabled, true);
+  assert.equal(f.$('estopReset').disabled, false);
+  assert.match(f.$('error').textContent, /恢复急停未确认.*停止状态未确认/);
+  await f.dashboard.refreshStatus();
+  assert.match(f.$('error').textContent, /恢复急停未确认/);
+  delete f.state.handlers['/api/estop/reset'];
+  await f.$('estopReset').onclick();
+  assert.equal(f.$('estopNotice').hidden, true);
+  assert.equal(f.$('error').textContent, '');
+});
+
+test('recovery success requires explicit latch feedback and fresh paused status', async () => {
+  for (const feedback of [{state: 'paused'}, {state: 'paused', estop_latched: true, estop_reset_busy: false},
+    {state: 'paused', estop_latched: false, estop_reset_busy: true},
+    {state: 'paused', estop_latched: false, estop_reset_busy: false, epoch: 9}]) {
+    const f = fixture({state: 'estop'}); await f.dashboard.init();
+    f.$('estopResetConfirmed').checked = true; f.$('estopResetConfirmed').onchange();
+    f.state.handlers['/api/estop/reset'] = async () => ({ok: true, status: 200, json: async () => feedback});
+    await f.$('estopReset').onclick();
+    assert.equal(f.$('estopNotice').hidden, false);
+    assert.equal(f.$('start').disabled, true);
+    assert.match(f.$('error').textContent, /恢复急停未确认/);
+    assert.doesNotMatch(f.$('estopResetFeedback').textContent, /急停已恢复/);
+  }
+});
+
+test('new emergency stop interrupts recovery and its late response cannot clear the latch', async () => {
+  const f = fixture({state: 'estop'}); await f.dashboard.init();
+  f.$('estopResetConfirmed').checked = true; f.$('estopResetConfirmed').onchange();
+  const reset = pending(); f.state.handlers['/api/estop/reset'] = () => reset.promise;
+  const recovering = f.$('estopReset').onclick();
+  await f.$('estopReset').onclick();
+  assert.equal(f.posts('/api/estop/reset').length, 1);
+  assert.equal(f.$('estop').disabled, false);
+  for (const id of ['start', 'load', 'connect', 'download', 'applySettings', 'pause', 'gripperOpen', 'gripperRead', 'gripperEnable']) {
+    assert.equal(f.$(id).disabled, true, id);
+    await f.$(id).onclick();
+  }
+  assert.equal(f.posts('/api/pause').length, 0);
+  assert.equal(f.posts('/api/gripper').length, 0);
+  await f.$('estop').onclick();
+  assert.equal(f.posts('/api/estop').length, 1);
+  assert.equal(f.$('estopResetConfirmed').checked, false);
+  Object.assign(f.state.status, {state: 'paused', estop_latched: false});
+  reset.resolve({ok: true, status: 200, json: async () => ({...f.state.status})});
+  await recovering;
+  assert.equal(f.$('estopNotice').hidden, false);
+  assert.equal(f.$('start').disabled, true);
+  assert.match(f.$('estopResetFeedback').textContent, /被新的软件急停打断/);
+  assert.doesNotMatch(f.$('estopResetFeedback').textContent, /急停已恢复/);
+});
+
+test('server reset busy prevents ordinary actions while allowing another emergency stop', async () => {
+  const f = fixture({state: 'paused', estop_reset_busy: true}); await f.dashboard.init();
+  assert.equal(f.$('estopNotice').hidden, false);
+  assert.equal(f.$('estopReset').disabled, true);
+  for (const id of ['start', 'connect', 'load', 'gripperOpen', 'pause']) assert.equal(f.$(id).disabled, true, id);
+  assert.equal(f.$('estop').disabled, false);
+  await f.$('estop').onclick();
+  assert.equal(f.posts('/api/estop').length, 1);
+});
+
+test('lost successful reset response stays latched until an explicit idempotent retry', async () => {
+  const f = fixture({state: 'estop'}); await f.dashboard.init();
+  f.$('estopResetConfirmed').checked = true; f.$('estopResetConfirmed').onchange();
+  f.state.handlers['/api/estop/reset'] = async () => {
+    Object.assign(f.state.status, {state: 'paused', estop_latched: false, epoch: 3});
+    throw new Error('恢复响应连接中断');
+  };
+  await f.$('estopReset').onclick();
+  assert.equal(f.$('estopNotice').hidden, false);
+  assert.equal(f.$('start').disabled, true);
+  assert.equal(f.$('estopReset').disabled, false);
+  assert.match(f.$('estopResetHint').textContent, /尚未确认恢复/);
+  assert.match(f.$('error').textContent, /恢复响应连接中断/);
+  await f.dashboard.refreshStatus();
+  assert.equal(f.$('start').disabled, true, 'status alone cannot release an uncertain local latch');
+  f.state.handlers['/api/estop/reset'] = async () => ({ok: true, status: 200, json: async () => ({...f.state.status})});
+  await f.$('estopReset').onclick();
+  assert.equal(f.posts('/api/estop/reset').length, 2);
+  assert.equal(f.$('estopNotice').hidden, true);
+  assert.match(f.$('estopResetFeedback').textContent, /急停已恢复.*保持暂停/);
+  assert.equal(f.posts('/api/start').length, 0);
+});
+
+test('newer server epoch prevents a stale reset result from clearing local latch', async () => {
+  const f = fixture({state: 'estop'}); await f.dashboard.init();
+  f.$('estopResetConfirmed').checked = true; f.$('estopResetConfirmed').onchange();
+  f.state.handlers['/api/estop/reset'] = async () => {
+    Object.assign(f.state.status, {state: 'paused', estop_latched: false, epoch: 5});
+    return {ok: true, status: 200, json: async () => ({state: 'paused', estop_latched: false, estop_reset_busy: false, epoch: 3})};
+  };
+  await f.$('estopReset').onclick();
+  assert.equal(f.$('estopNotice').hidden, false);
+  assert.equal(f.$('start').disabled, true);
+  assert.match(f.$('error').textContent, /状态未确认或已发生变化/);
+});
+
+test('a later server estop replaces the old recovery success message', async () => {
+  const f = fixture({state: 'estop'}); await f.dashboard.init();
+  f.$('estopResetConfirmed').checked = true; f.$('estopResetConfirmed').onchange();
+  await f.$('estopReset').onclick();
+  assert.match(f.$('estopResetFeedback').textContent, /急停已恢复/);
+  Object.assign(f.state.status, {state: 'estop', estop_latched: true, epoch: 5});
+  await f.dashboard.refreshStatus();
+  assert.equal(f.$('estopNotice').hidden, false);
+  assert.equal(f.$('start').disabled, true);
+  assert.match(f.$('estopResetFeedback').textContent, /新的软件急停/);
+  assert.doesNotMatch(f.$('estopResetFeedback').textContent, /急停已恢复/);
+});
+
+
+const remoteSha = '9a560012cc277d5b4755cb8e461edb5b238850503a63fb57699567bc9dab823d';
+function useRemote(f, overrides = {}) {
+  Object.assign(f.state.settings, {inference_device: 'qizhi_h200', sampling_profile: '4416', execution_mode: 'synchronous',
+    action_smoothing_alpha: 0.5, max_result_age_s: 0.6, remote_inference: {
+      url: 'http://127.0.0.1:8787', checkpoint_sha256: remoteSha, token_env: 'WAM_AUTH_TOKEN',
+      timeout_s: 3, max_latency_s: 0.6, image_encoding: 'zlib_rgb', ...overrides,
+    }});
+  Object.assign(f.state.status, {inference_device: 'qizhi_h200', sampling_profile: '4416', execution_mode: 'synchronous'});
+}
+
+test('remote model connects with configured SHA without a local GPU or downloaded checkpoint', async () => {
+  const f = fixture({model_ready: false, cuda: {available: false, error: '本机 CUDA 驱动不匹配'}});
+  useRemote(f);
+  f.state.handlers['/api/checkpoints'] = async () => ({ok: true, status: 200, json: async () => ({directory: '/empty', checkpoints: []})});
+  await f.dashboard.init();
+  assert.equal(f.$('remoteFields').hidden, false);
+  assert.equal(f.$('load').disabled, false);
+  assert.equal(f.$('load').textContent, '连接远端模型');
+  assert.equal(f.$('download').hidden, true);
+  assert.equal(f.$('download').disabled, true);
+  assert.equal(f.$('start').disabled, true, 'remote handshake must still finish before control');
+  assert.doesNotMatch(f.$('error').textContent, /CUDA/);
+  assert.match(f.$('remoteTokenHint').textContent, /WAM_AUTH_TOKEN/);
+  await f.$('load').onclick();
+  assert.deepEqual(JSON.parse(f.posts('/api/select')[0].body), {id: ''});
+  assert.equal(f.posts('/api/connect').length, 0, 'connecting a model never connects hardware');
+});
+
+test('remote catalog SHA enables loading without downloading and still rejects missing identities', async () => {
+  const f = fixture({model_ready: false, cuda: {available: false}});
+  useRemote(f, {checkpoint_sha256: ''});
+  let sha = remoteSha;
+  f.state.handlers['/api/checkpoints'] = async () => ({ok: true, status: 200, json: async () => ({directory: '/empty',
+    checkpoints: [{id: 'step5000', label: 'Step 5000', installed: false, sha256: sha}]})});
+  await f.dashboard.init();
+  assert.equal(f.$('load').disabled, false);
+  await f.$('load').onclick();
+  assert.deepEqual(JSON.parse(f.posts('/api/select')[0].body), {id: 'step5000'});
+  sha = null; await f.dashboard.refreshCheckpoints();
+  assert.equal(f.$('load').disabled, true);
+  assert.match(f.$('modelHint').textContent, /完整校验值/);
+});
+
+test('remote telemetry displays measured GPU and decomposed latency while hardware and estop stay gated', async () => {
+  const f = fixture({cuda: {available: false, error: '本机 CUDA unavailable'}, latency_ms: 291,
+    model_diagnostics: {remote: {ready: true, gpu_name: 'NVIDIA H200', device: 'cuda:0', dtype: 'bfloat16',
+      inference_backend: 'joint_multirate', checkpoint_name: 'step_005000.pt', checkpoint_sha256: remoteSha,
+      sampling_profile: '4416', action_space: 'joint8', optimization: 'compile_cuda_graph'},
+    last_inference: {elapsed_ms: 289.6, encode_ms: 6.2, roundtrip_ms: 283.4, transport_overhead_ms: 76.1,
+      server_timing_ms: {inference: 213.5, decode: 2, processing: 215.5}}}});
+  useRemote(f); await f.dashboard.init();
+  assert.equal(f.$('start').disabled, false);
+  assert.equal(f.$('cuda').textContent, 'NVIDIA H200');
+  assert.equal(f.$('cudaBadge').textContent, '远端已就绪');
+  assert.equal(f.$('remoteIdentity').hidden, false);
+  assert.match(f.$('remoteModelHash').textContent, new RegExp(remoteSha));
+  assert.match(f.$('remoteModelConfig').textContent, /4 \/ 4 \/ 16.*compile_cuda_graph/);
+  assert.equal(f.$('latency').textContent, '289.6 ms');
+  assert.equal(f.$('serverLatency').textContent, '213.5 ms');
+  assert.equal(f.$('transportLatency').textContent, '76.1 ms');
+  assert.equal(f.$('encodeLatency').textContent, '6.2 ms');
+  assert.equal(f.$('remoteMetrics').hidden, false);
+  f.state.status.force_ready = false; await f.dashboard.refreshStatus();
+  assert.equal(f.$('start').disabled, true, 'remote GPU does not bypass force readiness');
+  f.state.status.force_ready = true;
+  f.state.status.error = '远端响应超时'; await f.dashboard.refreshStatus();
+  assert.match(f.$('error').textContent, /远端响应超时/);
+  await f.$('estop').onclick();
+  assert.equal(f.$('start').disabled, true);
+  assert.equal(f.$('load').disabled, true);
+  assert.equal(f.$('gripperOpen').disabled, true);
+});
+
+test('remote edits preserve transport policy and sync/async switch requires reconnecting the model', async () => {
+  const f = fixture(); useRemote(f, {token: 'must-never-be-posted'}); await f.dashboard.init();
+  f.choose('remoteUrl', 'http://127.0.0.1:9876');
+  f.choose('executionSelect', 'async_relaxed');
+  f.choose('smoothingAlpha', '0.35');
+  assert.equal(f.$('start').disabled, true);
+  await f.$('applySettings').onclick();
+  const payload = JSON.parse(f.posts('/api/settings')[0].body);
+  assert.equal(payload.inference_device, 'qizhi_h200');
+  assert.equal(payload.sampling_profile, '4416');
+  assert.equal(payload.execution_mode, 'async_relaxed');
+  assert.equal(payload.action_smoothing_alpha, 0.35);
+  assert.equal(payload.max_result_age_s, 0.6);
+  assert.deepEqual(payload.remote_inference, {url: 'http://127.0.0.1:9876', checkpoint_sha256: remoteSha,
+    token_env: 'WAM_AUTH_TOKEN', timeout_s: 3, max_latency_s: 0.6, image_encoding: 'zlib_rgb'});
+  assert.equal(f.$('start').disabled, true);
+  assert.equal(f.$('load').disabled, false);
+  assert.match(f.$('settingsFeedback').textContent, /重新连接远端模型/);
+});
+
+test('device drafts preserve the local smoothing value and cannot silently bypass CUDA', async () => {
+  const f = fixture({cuda: {available: false, error: '驱动不可用'}}); await f.dashboard.init();
+  assert.equal(f.$('smoothingAlpha').value, '1');
+  assert.equal(f.$('start').disabled, true);
+  f.choose('inferenceDevice', 'qizhi_h200');
+  assert.equal(f.$('smoothingAlpha').value, '0.5');
+  assert.equal(f.$('remoteFields').hidden, false);
+  assert.equal(f.$('start').disabled, true, 'unapplied remote draft cannot use the existing local model');
+  f.choose('smoothingAlpha', '0.3');
+  f.choose('inferenceDevice', 'local');
+  assert.equal(f.$('smoothingAlpha').value, '1');
+  assert.equal(f.$('remoteFields').hidden, true);
+  assert.equal(f.$('start').disabled, true);
+  assert.match(f.$('error').textContent, /驱动不可用/);
+  f.choose('inferenceDevice', 'qizhi_h200');
+  assert.equal(f.$('smoothingAlpha').value, '0.3');
+});
+
+test('remote address, SHA, and smoothing validation prevent malformed settings posts', async () => {
+  for (const [id, value, message] of [
+    ['remoteUrl', 'javascript:alert(1)', /HTTP/], ['remoteUrl', 'http://user:secret@localhost:8787', /认证令牌/],
+    ['remoteCheckpointSha', '1234', /64 位/], ['smoothingAlpha', '0', /大于 0/],
+    ['smoothingAlpha', '1.1', /不超过 1/], ['smoothingAlpha', '', /大于 0/],
+  ]) {
+    const f = fixture(); useRemote(f); await f.dashboard.init();
+    f.choose(id, value); await f.$('applySettings').onclick();
+    assert.equal(f.posts('/api/settings').length, 0, `${id}=${value}`);
+    assert.match(f.$('error').textContent, message);
+  }
+});
+
+test('remote controls lock during running inference and a lost local-service connection', async () => {
+  const f = fixture({state: 'running', inference_busy: true}); useRemote(f); await f.dashboard.init();
+  for (const id of ['inferenceDevice', 'remoteUrl', 'remoteCheckpointSha', 'smoothingAlpha', 'executionSelect']) {
+    assert.equal(f.$(id).disabled, true, id);
+  }
+  await f.$('pause').onclick();
+  assert.equal(f.$('inferenceDevice').disabled, true);
+  f.state.status.inference_busy = false; await f.dashboard.refreshStatus();
+  assert.equal(f.$('inferenceDevice').disabled, false);
+  f.state.handlers['/api/status'] = async () => { throw new Error('本机服务断开'); };
+  await f.dashboard.refreshStatus();
+  assert.equal(f.$('start').disabled, true);
+  assert.equal(f.$('load').disabled, true);
+  assert.equal(f.$('inferenceDevice').disabled, true);
+  assert.equal(f.$('estop').disabled, false);
+  assert.equal(f.$('cudaBadge').textContent, '连接中断');
+});
+
+test('status polling preserves in-progress remote input and an inference error cannot appear ready', async () => {
+  const f = fixture({model_diagnostics: {remote: {ready: true, gpu_name: 'NVIDIA H200'}}});
+  useRemote(f); await f.dashboard.init();
+  f.$('remoteUrl').value = 'http://127.0.0.1:9'; f.$('remoteUrl').oninput();
+  f.$('smoothingAlpha').value = '0.25'; f.$('smoothingAlpha').oninput();
+  await f.dashboard.refreshStatus();
+  assert.equal(f.$('remoteUrl').value, 'http://127.0.0.1:9');
+  assert.equal(f.$('smoothingAlpha').value, '0.25');
+  assert.equal(f.$('start').disabled, true);
+  Object.assign(f.state.status, {state: 'error', error: '远端请求已超时'});
+  await f.dashboard.refreshStatus();
+  assert.equal(f.$('cudaBadge').textContent, '远端需检查');
+  assert.match(f.$('error').textContent, /远端请求已超时/);
+});
+
+test('local settings keep a null result-age limit and device switching supplies the remote bound', async () => {
+  const f = fixture();
+  Object.assign(f.state.settings, {inference_device: 'local', action_smoothing_alpha: 1, max_result_age_s: null,
+    remote_inference: {url: 'http://127.0.0.1:8787', checkpoint_sha256: remoteSha, token_env: 'REALMAN_REMOTE_TOKEN',
+      timeout_s: 5, max_latency_s: 1}});
+  await f.dashboard.init();
+  assert.equal(f.$('applySettings').disabled, true, 'null does not become an unapplied zero');
+  f.choose('samplingProfile', '4416'); await f.$('applySettings').onclick();
+  assert.equal(JSON.parse(f.posts('/api/settings')[0].body).max_result_age_s, null);
+  f.choose('inferenceDevice', 'qizhi_h200'); await f.$('applySettings').onclick();
+  assert.equal(JSON.parse(f.posts('/api/settings')[1].body).max_result_age_s, 0.6);
+  f.choose('inferenceDevice', 'local'); await f.$('applySettings').onclick();
+  assert.equal(JSON.parse(f.posts('/api/settings')[2].body).max_result_age_s, null);
+  assert.equal(f.$('smoothingAlpha').value, '1');
+});
+
+test('remote optimization display prefers the effective mode and includes the captured scope', async () => {
+  const f = fixture({model_diagnostics: {remote: {ready: true, sampling_profile: '4416',
+    optimization: {requested_mode: 'compile_cuda_graph', effective_mode: 'eager', graph_scope: 'sampler'}}}});
+  useRemote(f); await f.dashboard.init();
+  assert.match(f.$('remoteModelConfig').textContent, /eager.*图捕获 sampler/);
+  assert.doesNotMatch(f.$('remoteModelConfig').textContent, /compile_cuda_graph/);
 });

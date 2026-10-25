@@ -128,7 +128,12 @@ def _force_pass(model, force, tf, tv, context, hvalid, static, video_layers):
 def _action_pass(model, action, ta, tv, tf, context, cmask, hvalid, static,
                  video_layers, force_layers):
     expert = model.dit["action"]
-    tokens, _, modulation, _, text_mask, freq = expert.prepare(action, ta, context, cmask)
+    # Context projections already live in request-local static text K/V.
+    tokens = expert.action_encoder(action)
+    time = expert.time_embedding(sinusoidal_embedding_1d(expert.freq_dim, ta))
+    modulation = expert.time_projection(time).unflatten(1, (6, expert.hidden_dim))
+    text_mask = cmask.unsqueeze(1).expand(-1, action.shape[1], -1)
+    freq = expert.get_freqs(action.shape[1])
     source_time = torch.cat((sinusoidal_embedding_1d(256, tv),
                              sinusoidal_embedding_1d(256, tf)), -1)
     modulation = modulation + model.dit["action_source_time"](source_time).unflatten(
@@ -159,7 +164,7 @@ _BRANCHES = {"video": _video_pass, "force": _force_pass, "action": _action_pass}
 
 
 class _CudaGraphCall:
-    """One shape-specialized branch graph; all request inputs are copied anew."""
+    """One shape-specialized sampler graph; request inputs are copied once."""
 
     def __init__(self, function, args, device):
         self.device = torch.device(device)
@@ -180,19 +185,26 @@ class _CudaGraphCall:
                 output = function(*tree_unflatten(self.inputs, self.spec))
             self.outputs, self.output_spec = tree_flatten(output)
             torch.cuda.current_stream(self.device).wait_stream(stream)
+            self.last_use = torch.cuda.Event()
+            self.last_use.record(torch.cuda.current_stream(self.device))
 
     def __call__(self, *args):
         leaves, spec = tree_flatten(args)
         if spec != self.spec:
             raise ValueError("CUDA graph input structure changed")
         with torch.cuda.device(self.device):
+            stream = torch.cuda.current_stream(self.device)
+            # The CPU lock serializes submission, not asynchronous GPU work.
+            # Order copies after the prior replay/output clones even when the
+            # caller changes its current stream between inference requests.
+            stream.wait_event(self.last_use)
             for target, source in zip(self.inputs, leaves):
                 if isinstance(target, torch.Tensor):
                     target.copy_(source)
             self.graph.replay()
-            # Callers hold some integration velocities until a later interval.
-            # Clones prevent subsequent replay from mutating those values.
+            # Only final results leave the graph. Preserve them across replays.
             outputs = [value.clone() if isinstance(value, torch.Tensor) else value for value in self.outputs]
+            self.last_use.record(stream)
         return tree_unflatten(outputs, self.output_spec)
 
 
@@ -212,17 +224,19 @@ def _owned_output(output):
 class MultirateRunner:
     """Reusable optional executor; default eager is portable and needs no GPU.
 
-    ``compile`` uses torch.compile; ``cuda_graph`` captures each complete expert
-    pass on the model's actual CUDA index. ``auto`` selects compile on CUDA and
-    eager elsewhere. Unsupported compilation/capture falls back to eager with a
-    warning and ``fallback_reason``. First-call setup is not steady-state latency.
+    ``compile`` compiles individual experts. ``cuda_graph`` captures request-local
+    prefill and the entire sampling loop. ``compile_cuda_graph`` first compiles
+    experts with compiler CUDA graphs disabled, then captures the same full loop.
+    ``auto`` retains compile on CUDA and eager elsewhere. Unsupported operations
+    fall back with a warning and ``fallback_reason``. First-call setup is not
+    steady-state latency.
     A runner serializes its own requests. Do not train or mutate the model during
     inference. Device/dtype/parameter updates invalidate its execution caches.
     """
 
     def __init__(self, model, mode="eager"):
-        if mode not in {"eager", "compile", "cuda_graph", "auto"}:
-            raise ValueError("mode must be eager, compile, cuda_graph, or auto")
+        if mode not in {"eager", "compile", "cuda_graph", "compile_cuda_graph", "auto"}:
+            raise ValueError("mode must be eager, compile, cuda_graph, compile_cuda_graph, or auto")
         self.model, self.mode = model, mode
         self.fallback_reason = None
         self._functions, self._graphs = {}, {}
@@ -230,12 +244,13 @@ class MultirateRunner:
         self._lock = threading.RLock()
         self._disabled = set()
         self._fallback_reasons = {}
+        self._sampler_replays = self._sampler_captures = 0
 
     @property
     def active_mode(self):
         if self.mode == "auto":
             return "compile" if self.model.device.type == "cuda" else "eager"
-        if self.mode == "cuda_graph" and self.model.device.type != "cuda":
+        if self.mode in {"cuda_graph", "compile_cuda_graph"} and self.model.device.type != "cuda":
             return "eager"
         return self.mode
 
@@ -243,20 +258,30 @@ class MultirateRunner:
     def diagnostics(self):
         """JSON-safe execution status; requested acceleration is not a guarantee.
 
-        A branch is only reported as compiled/captured after its first successful
-        call. This exposes partial fallback without declaring the whole sampler
-        accelerated when one or more branches still use eager execution.
+        Compiler status and explicit graph scope are separate: a graph may
+        contain eager, compiled, or mixed expert kernels. Counters are since
+        the last clear/model invalidation, not process lifetime.
         """
         with self._lock:
+            captured = "sampler" in self._graphs
             branches = {name: ("eager" if name in self._disabled or self.active_mode == "eager"
                                else "compile" if name in self._functions
-                               else "cuda_graph" if name in self._graphs else "pending")
+                               else "eager" if self.active_mode == "cuda_graph"
+                               else "pending")
                         for name in _BRANCHES}
             modes = set(branches.values())
+            effective = next(iter(modes)) if len(modes) == 1 else "mixed"
+            if captured:
+                effective = ("compile_cuda_graph" if modes == {"compile"}
+                             else "mixed_cuda_graph" if "compile" in modes else "cuda_graph")
             return {"requested_mode": self.mode,
                     "active_mode": self.active_mode,
-                    "effective_mode": next(iter(modes)) if len(modes) == 1 else "mixed",
+                    "effective_mode": effective,
                     "branch_modes": branches,
+                    "graph_scope": "sampler" if captured else "none",
+                    "sampler_replays": self._sampler_replays,
+                    "sampler_captures": self._sampler_captures,
+                    "sampler_steps": list(self._graphs["sampler"][0][0]) if captured else None,
                     "fallback_reason": self.fallback_reason,
                     "fallback_reasons": dict(self._fallback_reasons)}
 
@@ -268,6 +293,7 @@ class MultirateRunner:
             self._fallback_reasons.clear()
             self._signature = None
             self.fallback_reason = None
+            self._sampler_replays = self._sampler_captures = 0
 
     def close(self):
         """Release this runner's compiled callables and captured GPU buffers."""
@@ -280,7 +306,7 @@ class MultirateRunner:
         if signature != self._signature:
             self.clear()
             self._signature = signature
-        if self.mode == "cuda_graph" and self.model.device.type != "cuda" and not self.fallback_reason:
+        if self.mode in {"cuda_graph", "compile_cuda_graph"} and self.model.device.type != "cuda" and not self.fallback_reason:
             self.fallback_reason = "CUDA Graph requires a CUDA device; using eager"
             self._fallback_reasons["device"] = self.fallback_reason
             warnings.warn(self.fallback_reason, RuntimeWarning, stacklevel=3)
@@ -292,40 +318,99 @@ class MultirateRunner:
     def _call(self, branch, *args):
         function = lambda *values: _BRANCHES[branch](self.model, *values)
         mode = self.active_mode
-        if mode == "eager" or branch in self._disabled:
+        if mode in {"eager", "cuda_graph"} or branch in self._disabled:
             return function(*args)
         try:
-            if mode == "compile":
+            if mode in {"compile", "compile_cuda_graph"}:
                 if branch not in self._functions:
-                    self._functions[branch] = torch.compile(function, mode="reduce-overhead", fullgraph=True)
+                    options = (dict(mode="reduce-overhead") if mode == "compile"
+                               else dict(options={"triton.cudagraphs": False}))
+                    self._functions[branch] = torch.compile(function, fullgraph=True, **options)
                 # reduce-overhead may capture a CUDA Graph whose next invocation
                 # reuses output storage. Euler velocities and K/V must survive
                 # later calls (e.g. Force feature refresh midway through a held
                 # Force interval), including calls to another compiled branch.
-                return _owned_output(self._functions[branch](*args))
-            signature = _input_signature(args)
-            if branch not in self._graphs or self._graphs[branch][0] != signature:
-                # Keep at most one shape per branch, avoiding unbounded VRAM use.
-                self._graphs[branch] = (signature, _CudaGraphCall(function, args, self.model.device))
-            return self._graphs[branch][1](*args)
+                output = self._functions[branch](*args)
+                return _owned_output(output) if mode == "compile" else output
         except (RuntimeError, NotImplementedError, AttributeError) as exc:
-            # A broken device or exhausted GPU is not an optimization fallback.
-            # Let the deployment layer report failure instead of declaring ready.
-            fatal = ("out of memory", "device-side assert", "illegal memory access",
-                     "unspecified launch failure", "driver shutting down", "device lost",
-                     "no kernel image", "driver version is insufficient")
-            if isinstance(exc, torch.OutOfMemoryError) or any(value in str(exc).lower() for value in fatal):
+            # An invalidated outer capture must unwind before any eager fallback.
+            if mode == "compile_cuda_graph" and torch.cuda.is_current_stream_capturing():
                 raise
-            self._disabled.add(branch)
-            self._functions.pop(branch, None)
-            self._graphs.pop(branch, None)
-            self.fallback_reason = f"{mode} {branch} failed ({type(exc).__name__}: {exc}); using eager"
-            self._fallback_reasons[branch] = self.fallback_reason
-            warnings.warn(self.fallback_reason, RuntimeWarning, stacklevel=3)
+            self._fallback(branch, exc)
+            return function(*args)
+
+    def _fallback(self, scope, exc):
+        fatal = ("out of memory", "device-side assert", "illegal memory access",
+                 "unspecified launch failure", "driver shutting down", "device lost",
+                 "invalid device ordinal", "fallen off the bus",
+                 "no kernel image", "driver version is insufficient")
+        if isinstance(exc, torch.OutOfMemoryError) or any(value in str(exc).lower() for value in fatal):
+            raise exc
+        self._disabled.add(scope)
+        self._functions.pop(scope, None)
+        self._graphs.pop(scope, None)
+        fallback = "using uncaptured sampling" if scope == "sampler" else "using eager"
+        self.fallback_reason = f"{self.active_mode} {scope} failed ({type(exc).__name__}: {exc}); {fallback}"
+        self._fallback_reasons[scope] = self.fallback_reason
+        warnings.warn(self.fallback_reason, RuntimeWarning, stacklevel=3)
+
+    def _sample(self, first, conditions, values, schedules, steps):
+        def function(*args):
+            return _sample_core(self.model, self._call, steps, *args)
+        args = first, conditions, values, schedules
+        if self.active_mode not in {"cuda_graph", "compile_cuda_graph"} or "sampler" in self._disabled:
+            return function(*args)
+        signature = steps.counts, _input_signature(args)
+        try:
+            if "sampler" not in self._graphs or self._graphs["sampler"][0] != signature:
+                # Evict before capture: only one profile/shape graph is retained.
+                self._graphs.pop("sampler", None)
+                graph = _CudaGraphCall(function, args, self.model.device)
+                self._graphs["sampler"] = (signature, graph)
+                self._sampler_captures += 1
+            output = self._graphs["sampler"][1](*args)
+            self._sampler_replays += 1
+            return output
+        except (RuntimeError, NotImplementedError, AttributeError) as exc:
+            self._fallback("sampler", exc)
             return function(*args)
 
     def infer(self, sample, **kwargs):
         return infer_multirate(self.model, sample, runner=self, **kwargs)
+
+
+def _sample_core(model, call, steps, first, conditions, values, schedules):
+    """Tensor-only request-local prefill and all Euler ticks; no RNG or validation."""
+    schedulers = (model.v_scheduler, model.f_scheduler, model.a_scheduler)
+    raw, context, cmask, _, hvalid = conditions
+    static = model.prefill_static(first, conditions)
+    video, force, action = values
+    sv, sf, sa = steps.strides
+    held = [None, None, None]
+    video_layers = force_layers = None
+    for tick in range(steps.total):
+        indices = (tick // sv, tick // sf, tick // sa)
+        tv, tf, ta = (schedule[0][index].expand(len(first))
+                      for schedule, index in zip(schedules, indices))
+        video_dirty, force_dirty, action_start = tick % sv == 0, tick % sf == 0, tick % sa == 0
+        if video_dirty:
+            held[0], video_layers = call("video", video, tv, raw, static)
+        if video_dirty or force_dirty:
+            velocity, force_layers = call("force", force, tf, tv,
+                context, hvalid, static, video_layers)
+            if force_dirty:
+                held[1] = velocity
+        if action_start:
+            held[2] = call("action", action, ta, tv, tf, context,
+                cmask, hvalid, static, video_layers, force_layers)
+        if (tick + 1) % sv == 0:
+            video = schedulers[0].step(held[0], schedules[0][1][indices[0]], video)
+            video[:, :, :1] = first
+        if (tick + 1) % sf == 0:
+            force = schedulers[1].step(held[1], schedules[1][1][indices[1]], force)
+        if (tick + 1) % sa == 0:
+            action = schedulers[2].step(held[2], schedules[2][1][indices[2]], action)
+    return {"action": action, "force": force, "video_latents": video}
 
 
 def infer_multirate(model, sample, *, video_steps=4, force_steps=4, action_steps=16,
@@ -347,35 +432,7 @@ def infer_multirate(model, sample, *, video_steps=4, force_steps=4, action_steps
         runner._begin()
         first, conditions, values, schedulers, schedules = _initialize(
             model, sample, steps, seed, video_seed, force_seed)
-        raw, context, cmask, _, hvalid = conditions
-        static = model.prefill_static(first, conditions)
-        video, force, action = values
-        sv, sf, sa = steps.strides
-        held = [None, None, None]
-        video_layers = force_layers = None
-        for tick in range(steps.total):
-            indices = (tick // sv, tick // sf, tick // sa)
-            tv, tf, ta = (schedule[0][index].expand(len(first))
-                          for schedule, index in zip(schedules, indices))
-            video_dirty, force_dirty, action_start = tick % sv == 0, tick % sf == 0, tick % sa == 0
-            if video_dirty:
-                held[0], video_layers = runner._call("video", video, tv, raw, static)
-            if video_dirty or force_dirty:
-                velocity, force_layers = runner._call("force", force, tf, tv,
-                    context, hvalid, static, video_layers)
-                if force_dirty:
-                    held[1] = velocity
-            if action_start:
-                held[2] = runner._call("action", action, ta, tv, tf, context,
-                    cmask, hvalid, static, video_layers, force_layers)
-            if (tick + 1) % sv == 0:
-                video = schedulers[0].step(held[0], schedules[0][1][indices[0]], video)
-                video[:, :, :1] = first
-            if (tick + 1) % sf == 0:
-                force = schedulers[1].step(held[1], schedules[1][1][indices[1]], force)
-            if (tick + 1) % sa == 0:
-                action = schedulers[2].step(held[2], schedules[2][1][indices[2]], action)
-        return {"action": action, "force": force, "video_latents": video}
+        return runner._sample(first, conditions, values, schedules, steps)
 
 
 def infer_multirate_reference(model, sample, *, video_steps=4, force_steps=4,

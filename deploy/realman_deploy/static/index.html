@@ -17,12 +17,17 @@
   </header>
   <main>
     <div id="error" class="alert" role="alert" hidden></div>
-    <div id="estopNotice" class="latch" hidden><strong>软件急停已锁定</strong><span>确认现场状态后重启部署服务。网络停止未确认时，请使用控制柜物理急停。</span></div>
+    <div id="estopNotice" class="latch" hidden>
+      <strong>软件急停已锁定</strong>
+      <p id="estopResetHint">先解除控制柜物理急停并检查现场，再手动恢复。恢复后保持暂停，不会自动使能或开始推理。</p>
+      <div class="estop-recovery"><label for="estopResetConfirmed"><input id="estopResetConfirmed" type="checkbox" disabled>已解除物理急停，并确认现场可恢复</label><button id="estopReset" disabled>恢复急停</button></div>
+    </div>
+    <p id="estopResetFeedback" class="recovery-feedback" role="status" aria-live="polite" hidden></p>
 
     <section class="devices" aria-label="设备连接">
       <article class="device"><div class="device-heading"><h2>RealMan 机械臂</h2><span id="robot" class="badge">检查中</span></div><p>以太网控制 · 30 Hz 动作接口</p><div class="device-detail"><span>六轴力 <b id="force">—</b></span><span>夹爪 <b id="gripper">—</b></span></div></article>
       <article class="device"><div class="device-heading"><h2>双视角相机</h2><span id="cameras" class="badge">检查中</span></div><p>全局视角 · 腕部视角</p><small>按配置中的设备序列号连接</small></article>
-      <article class="device"><div class="device-heading"><h2>CUDA 推理设备</h2><span id="cudaBadge" class="badge">检查中</span></div><p id="cuda">正在读取设备信息</p><small id="cudaDetail">精度与计算后端在加载时确定</small></article>
+      <article class="device"><div class="device-heading"><h2 id="deviceHeading">推理设备</h2><span id="cudaBadge" class="badge">检查中</span></div><p id="cuda">正在读取设备信息</p><small id="cudaDetail">精度与计算后端在加载时确定</small></article>
     </section>
 
     <section class="control-band" aria-label="闭环控制">
@@ -33,21 +38,32 @@
 
     <div class="workspace">
       <section class="panel" aria-labelledby="modelHeading">
-        <div class="section-heading"><div><h2 id="modelHeading">模型 checkpoint</h2><p>选择权重并加载到当前 CUDA 设备</p></div><span id="modelBadge" class="badge">未加载</span></div>
+        <div class="section-heading"><div><h2 id="modelHeading">模型 checkpoint</h2><p id="modelDescription">选择权重并加载到当前 CUDA 设备</p></div><span id="modelBadge" class="badge">未加载</span></div>
         <label for="checkpoint">模型文件</label>
         <div class="input-row"><select id="checkpoint" disabled><option value="">正在读取列表…</option></select><button id="refresh">刷新</button></div>
         <p id="modelHint" class="control-help">正在读取 checkpoint 目录</p>
         <div class="button-row"><button id="download" disabled>下载 checkpoint</button><button id="load" class="primary" disabled>加载模型</button></div>
         <p id="downloadProgress" class="control-help" role="status"></p>
+        <div id="remoteIdentity" class="remote-identity" hidden><span>远端模型 · 已校验</span><strong id="remoteModelName">—</strong><small id="remoteModelConfig">—</small><code id="remoteModelHash">—</code></div>
         <div class="panel-foot"><span>硬件连接</span><button id="connect" disabled>连接硬件</button><button id="reload">刷新状态</button></div>
       </section>
 
       <section class="panel" aria-labelledby="samplingHeading">
         <div class="section-heading"><div><h2 id="samplingHeading">推理设置</h2><p>采样步数顺序：Video / Force / Action</p></div><span id="settingsState" class="badge">读取中</span></div>
+        <label for="inferenceDevice">推理设备</label>
+        <select id="inferenceDevice" disabled><option value="local">本机 NVIDIA 显卡</option><option value="qizhi_h200">启智 H200 · 远端服务</option></select>
+        <div id="remoteFields" class="remote-fields" hidden>
+          <label for="remoteUrl">服务地址 / 本机转发地址</label><input id="remoteUrl" type="url" placeholder="http://127.0.0.1:8787" spellcheck="false" autocomplete="off" disabled>
+          <label for="remoteCheckpointSha">期望权重 SHA256（可选）</label><input id="remoteCheckpointSha" type="text" maxlength="64" placeholder="留空时使用所选模型的校验值" spellcheck="false" autocomplete="off" disabled>
+          <p id="remoteTokenHint" class="control-help">认证由本机服务启动环境提供。</p>
+        </div>
+        <div class="field">
         <label for="samplingProfile">采样方案</label>
         <select id="samplingProfile" disabled><option value="161616">16 / 16 / 16 · 基准</option><option value="4416">4 / 4 / 16 · 平衡</option></select>
+        </div>
         <div id="executionField" class="field" hidden><label for="executionSelect">执行方式</label><select id="executionSelect" disabled><option value="synchronous">同步推理</option><option value="async_relaxed">异步推理</option></select></div>
         <p id="profileHint" class="control-help">保留完整联合采样，用于基准对照。</p>
+        <div class="smoothing-field"><label for="smoothingAlpha">动作平滑系数 α</label><input id="smoothingAlpha" type="number" min="0.01" max="1" step="0.05" value="1" inputmode="decimal" disabled><p class="control-help">1 关闭平滑；越小越平缓，也会增加跟随延迟。</p></div>
         <p id="settingsHint" class="control-help">停止或暂停后可修改；应用新设置后需要重新加载模型。</p>
         <div class="button-row"><button id="applySettings" disabled>应用设置</button><span id="settingsFeedback" role="status"></span></div>
       </section>
@@ -81,11 +97,12 @@
     <section class="telemetry" aria-labelledby="metricsHeading">
       <div class="section-heading"><h2 id="metricsHeading">运行指标</h2><span id="inferencePhase">模型空闲</span></div>
       <div class="metrics">
-        <div class="metric"><small>模型延迟</small><strong id="latency">—</strong></div>
+        <div class="metric"><small id="latencyLabel">模型延迟</small><strong id="latency">—</strong></div>
         <div class="metric"><small>输入观测至结果返回</small><strong id="inputAge">—</strong></div>
         <div class="metric"><small>动作缓冲</small><strong id="queue">0</strong></div>
         <div class="metric"><small>丢弃结果</small><strong id="discarded">0</strong></div>
       </div>
+      <div id="remoteMetrics" class="remote-metrics" hidden><span>服务端模型 <b id="serverLatency">—</b></span><span>传输与额外开销 <b id="transportLatency">—</b></span><span>客户端编码 <b id="encodeLatency">—</b></span></div>
       <p id="modeHint" class="control-help">正在读取执行方式…</p>
     </section>
 

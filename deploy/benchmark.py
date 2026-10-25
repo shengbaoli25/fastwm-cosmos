@@ -111,7 +111,7 @@ def main(argv=None):
     parser.add_argument("--checkpoint", type=Path, required=True)
     parser.add_argument("--profiles", nargs="+", choices=["161616", "4416"], default=["161616", "4416"])
     parser.add_argument("--runs", type=int, default=10)
-    parser.add_argument("--optimization", choices=["auto", "eager", "compile", "cuda_graph"])
+    parser.add_argument("--optimization", choices=["auto", "eager", "compile", "cuda_graph", "compile_cuda_graph"])
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args(argv)
     if args.runs < 1:

@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import tempfile
 import threading
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
@@ -117,6 +118,54 @@ class CheckpointStore:
                 raise
         return self.root / f"{name}.pt"
 
+    @staticmethod
+    def _local_preprocessing_receipt(spec: CheckpointSpec, target: Path) -> bytes | None:
+        """Preserve an exported binding when a local checkpoint is renamed.
+
+        This is not a new binding: normalization/force identity are still checked
+        by the policy loader against the runtime's actual normalization file.
+        """
+        parsed = urlparse(spec.source)
+        if parsed.scheme not in ("", "file"):
+            return None
+        source = Path(parsed.path if parsed.scheme == "file" else spec.source).expanduser().resolve()
+        source_receipt = Path(str(source) + ".force.json")
+        if not source_receipt.is_file():
+            return None
+        receipt_bytes = source_receipt.read_bytes()
+        receipt = json.loads(receipt_bytes)
+        if (not isinstance(receipt, dict)
+                or receipt.get("schema") != "realman_checkpoint_preprocessing_v1"
+                or receipt.get("checkpoint_sha256") != spec.sha256):
+            raise ValueError("checkpoint preprocessing binding differs from catalog SHA256")
+        for key in ("normalization_sha256", "force_preprocessing_id"):
+            value = receipt.get(key)
+            if (not isinstance(value, str) or len(value) != 64
+                    or any(c not in "0123456789abcdef" for c in value)):
+                raise ValueError("invalid checkpoint preprocessing binding: " + key)
+        target_receipt = Path(str(target) + ".force.json")
+        if target_receipt.exists() and json.loads(target_receipt.read_bytes()) != receipt:
+            raise ValueError("existing checkpoint preprocessing binding differs; refusing to overwrite")
+        return receipt_bytes
+
+    @staticmethod
+    def _install_preprocessing_receipt(target: Path, receipt: bytes | None) -> None:
+        if receipt is None:
+            return
+        destination = Path(str(target) + ".force.json")
+        if destination.exists():
+            return
+        temporary = None
+        try:
+            with tempfile.NamedTemporaryFile(mode="wb", dir=target.parent,
+                    prefix="." + target.name + ".force-", delete=False) as stream:
+                temporary = Path(stream.name)
+                stream.write(receipt)
+            temporary.replace(destination)
+        finally:
+            if temporary is not None:
+                temporary.unlink(missing_ok=True)
+
     def download(self, ident: str, progress=None) -> Path:
         spec = self.catalog.get(ident)
         if spec.sha256 is None:
@@ -127,7 +176,9 @@ class CheckpointStore:
             self._active = ident
         try:
             target = self.path_for(ident)
+            receipt = self._local_preprocessing_receipt(spec, target)
             if target.is_file() and (spec.sha256 is None or sha256_file(target) == spec.sha256):
+                self._install_preprocessing_receipt(target, receipt)
                 return target
             temporary = self.root / f".{ident}.download-{os.getpid()}"
             if temporary.exists():
@@ -159,6 +210,7 @@ class CheckpointStore:
             if spec.sha256 is not None and digest != spec.sha256:
                 raise ValueError("downloaded checkpoint SHA256 differs from catalog")
             temporary.replace(target)
+            self._install_preprocessing_receipt(target, receipt)
             return target
         finally:
             temporary = self.root / f".{ident}.download-{os.getpid()}"

@@ -129,11 +129,11 @@ class NoActionJointModel(CosmosForceWM):
     def _split(self, tensor):
         return tensor.unflatten(-1, (self.video.num_heads, self.video.attn_head_dim)).transpose(1, 2)
 
-    def _static_layer(self, i, observed, history, prepared, hvalid):
+    def _static_layer(self, i, observed, history, prepared, hvalid, text_kv=None):
         oq, ok, ov, os = self.video.block_qkv(i, observed, prepared)
         block = self.dit['force'].blocks[i]
         hq, hk, hv, hs = block.qkv(history)
-        observed = self.video.block_finish(i, attend(oq, ok, ov), os, prepared)
+        observed = self.video.block_finish(i, attend(oq, ok, ov), os, prepared, text_kv)
         valid = torch.cat((torch.ones(len(history), ok.shape[2], device=history.device, dtype=torch.bool), hvalid), 1)
         history = block(attend(hq, torch.cat((ok, hk), 2), torch.cat((ov, hv), 2), valid), hs)
         history = torch.where(hvalid[..., None], history, 0)
@@ -173,10 +173,6 @@ class NoActionJointModel(CosmosForceWM):
         raw, context, cmask, history, hvalid = conditions
         zero = torch.zeros(len(first), device=first.device, dtype=first.dtype)
         prepared = self._video_prepare(first, zero, raw)
-        observed = prepared['tokens']; caches = []
-        for i in range(self.depth):
-            observed, history, kv = self._static_layer(i, observed, history, prepared, hvalid)
-            caches.append(kv)
         texts = []
         action_text = self.dit['action'].text_embedding(context)
         for vb, ab in zip(self.video.blocks, self.dit['action'].blocks):
@@ -185,6 +181,11 @@ class NoActionJointModel(CosmosForceWM):
             vkv = (va.k_norm(split(va.k_proj(raw))), va.v_norm(split(va.v_proj(raw))))
             akv = (self._split(aa.norm_k(aa.k(action_text))), self._split(aa.v(action_text)))
             texts.append((vkv, akv))
+        observed = prepared['tokens']; caches = []
+        for i in range(self.depth):
+            observed, history, kv = self._static_layer(
+                i, observed, history, prepared, hvalid, texts[i][0])
+            caches.append(kv)
         return dict(layers=tuple(caches), text=tuple(texts))
 
     def joint_denoise_core(self, video, force, action, tv, tf, ta, conditions, static_cache=None):
