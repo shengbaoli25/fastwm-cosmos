@@ -4,6 +4,45 @@ import os
 from pathlib import Path
 
 
+class ExpertGradientProbe:
+    """Observe backward gradients before DeepSpeed consumes and clears them."""
+
+    def __init__(self, model):
+        self.squares = {name: [] for name in ('video', 'force', 'action')}
+        self.handles = []
+        try:
+            for name in self.squares:
+                for parameter in model.dit[name].parameters():
+                    if parameter.requires_grad:
+                        self.handles.append(parameter.register_hook(self._hook(name)))
+        except BaseException:
+            self.close()
+            raise
+
+    def _hook(self, name):
+        def record(gradient):
+            self.squares[name].append(gradient.detach().float().square().sum())
+            return gradient
+        return record
+
+    def norms(self):
+        import torch
+        result = {}
+        for name, squares in self.squares.items():
+            if not squares:
+                raise RuntimeError(f'{name} expert received no gradients')
+            norm = torch.stack(squares).sum().sqrt()
+            if not bool(torch.isfinite(norm) & (norm > 0)):
+                raise RuntimeError(f'{name} expert gradient is zero or nonfinite')
+            result[name] = float(norm)
+        return result
+
+    def close(self):
+        for handle in self.handles:
+            handle.remove()
+        self.handles.clear()
+
+
 def load_run(config_path, run_root, dataset, source_sha, cache_root, teacher,
              teacher_source, weights, weight_sha):
     import torch

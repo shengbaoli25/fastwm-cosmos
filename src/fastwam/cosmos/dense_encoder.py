@@ -174,7 +174,10 @@ class DenseTeacher:
         std = views.new_tensor(IMAGENET_STD)[None, :, None, None]
         views = ((views - mean) / std).to(dtype=torch.bfloat16)
         if self.name == 'vjepa21':
-            features = self.encoder(views.unsqueeze(2))
+            # Upstream RoPE promotes Q/K to FP32; its normal BF16 autocast
+            # context aligns SDPA inputs while preserving the pretrained math.
+            with torch.autocast(device_type=device.type, dtype=torch.bfloat16):
+                features = self.encoder(views.unsqueeze(2))
         else:
             features = self.encoder.forward_features(views)
             if isinstance(features, dict):
