@@ -57,6 +57,10 @@ class ForceDiffusionExpert(nn.Module):
         if force.shape[1:] != (self.horizon, 6):
             raise ValueError('Noisy Force32x6 required')
         x = self.force_encoder(force) + self.position[self.history_steps:] + self.text_encoder(context.mean(1))[:, None]
-        time = torch.cat((sinusoidal_embedding_1d(256, tf), sinusoidal_embedding_1d(256, tv)), -1)
+        time = torch.cat((sinusoidal_embedding_1d(256, tf.float()),
+                          sinusoidal_embedding_1d(256, tv.float())), -1)
+        time = time.to(
+            device=self.time_embedding[0].weight.device,
+            dtype=self.time_embedding[0].weight.dtype)
         mod = self.time_projection(self.time_embedding(time)).unflatten(-1, (6, self.hidden_dim))
         return x, mod
