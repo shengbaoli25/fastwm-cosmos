@@ -1,0 +1,10 @@
+train:
+  _target_: fastwam.cosmos.dense_cache.DenseFeatureCachedDataset
+  dataset_root: ??
+  source_sha256: ??
+  feature_root: ??
+  expected_cache_identity: ??
+  expected_teacher: vjepa21
+  expected_weight_sha256: ??
+  cache_capacity: 4
+val: null

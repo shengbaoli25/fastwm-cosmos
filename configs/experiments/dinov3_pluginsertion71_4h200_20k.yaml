@@ -1,0 +1,54 @@
+model:
+  _target_: fastwam.cosmos.dense_features.create_dense_feature_joint
+  manifest: {}
+  feature_dim: 768
+  hidden_dim: 768
+  depth: 12
+  heads: 12
+  view_grid: 14
+  action_hidden: 768
+  action_ffn: 3072
+  force_hidden: 768
+  force_ffn: 2048
+  force_shift: 1.0
+  action_seed: 42
+  force_seed: 43
+  proprio_seed: 44
+  gradient_checkpointing: true
+  num_inference_steps: 16
+data:
+  train:
+    _target_: fastwam.cosmos.dense_cache.DenseFeatureCachedDataset
+    dataset_root: ??
+    source_sha256: ??
+    feature_root: ??
+    expected_cache_identity: ??
+    expected_teacher: dinov3
+    expected_weight_sha256: ??
+    cache_capacity: 4
+  val: null
+teacher: dinov3
+batch_size: 64
+num_workers: 8
+gradient_accumulation_steps: 1
+learning_rate: 1.0e-4
+lr_scheduler_type: cosine
+weight_decay: 1.0e-2
+num_epochs: 100
+max_steps: 20000
+mixed_precision: bf16
+seed: 42
+max_grad_norm: 1.0
+log_every: 10
+save_every: 5000
+eval_every: 0
+eval_num_inference_steps: 16
+resume: null
+output_dir: runs/dinov3-pluginsertion71-20k
+wandb:
+  enabled: false
+  workspace: null
+  project: fast-wam
+  name: dinov3-pluginsertion71-20k
+  group: dense-teacher-backbone
+  mode: offline
