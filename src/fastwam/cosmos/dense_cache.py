@@ -133,7 +133,7 @@ def write_rank_cache(*, dataset, source_sha, teacher_name, teacher_repo, weights
         receipt['completed_episodes'] = len([x for x in assignment
             if any(e['episode'] == x for e in receipt['shards'])])
         _atomic(rank_receipt, receipt)
-        print(json.dumps(dict(rank=rank, episode=episode, frames=len(frames)), flush=True))
+        print(json.dumps(dict(rank=rank, episode=episode, frames=len(frames)), ensure_ascii=True), flush=True)
         source._frames = None
         source._video_episode = None
         del frames

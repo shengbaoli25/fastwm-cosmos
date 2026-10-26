@@ -141,7 +141,15 @@ def load_dense_teacher(name, source, weights, expected_sha256, device='cuda'):
             raise ValueError('V-JEPA 2.1 EMA encoder key mismatch')
         input_size, source_grid, output_grid = 384, 24, 14
     else:
-        encoder = torch.hub.load(str(source), 'dinov3_vitb16', source='local', pretrained=False)
+        # Import the single local backbone factory directly.  ``torch.hub.load``
+        # executes the vendored hubconf module, whose eager imports pull in all
+        # DINOv3 evaluation heads (including optional ``torchmetrics``).  The
+        # dense teacher only needs the ViT-B backbone and must remain usable in
+        # the minimal training environment; the direct official factory keeps
+        # the exact same architecture while avoiding those unrelated imports
+        # and any hub/network lookup.
+        from dinov3.hub.backbones import dinov3_vitb16
+        encoder = dinov3_vitb16(pretrained=False)
         _load_dinov3_safetensors(encoder, weights)
         input_size, source_grid, output_grid = 224, 14, 14
     encoder.eval().to(device=device, dtype=torch.bfloat16)

@@ -8,13 +8,11 @@ from pathlib import Path
 import shutil
 import subprocess
 import sys
-import tempfile
 
 ROOT = Path(__file__).resolve().parents[2]
 SOURCE_SHA = '9846d4ac5fff6c3c0d96c306eeb5d5d8dc4aea0b176327c0f6bebc1baef980f2'
 DATASET_DEFAULT = Path('/inspire/ssd/project/long-range-embodied-collaborative-intelligence/ky26340/realman-joint8-pluginsertion71-20261023/data/2026_10_23_lerobot_plug_insertion_100s')
 RUNS_DEFAULT = Path('/inspire/ssd/project/long-range-embodied-collaborative-intelligence/ky26340/realman-joint8-densefeature-20261026')
-WEIGHTS_DEFAULT = Path('/inspire/hdd/project/long-range-embodied-collaborative-intelligence/ky26340/realman-model-assets')
 TEACHERS = {
     'dinov3': dict(model='facebook/dinov3-vitb16-pretrain-lvd1689m',
         revision='23d0280ae6ee4ced592a3459674ad027d3c18906',
@@ -43,37 +41,35 @@ def write_json(path, payload):
     temporary.replace(path)
 
 
-def resolve_teacher_weights(teacher):
-    pinned = TEACHERS[teacher]
-    asset_root = (WEIGHTS_DEFAULT / 'modelscope-cache' /
-                  f"{teacher}-{pinned['revision']}").resolve()
-    asset_root.mkdir(parents=True, exist_ok=True)
-    target = asset_root / pinned['filename']
-    if target.is_file():
-        if sha256(target) != pinned['sha256']:
-            raise ValueError('Cached ModelScope teacher weight SHA256 differs from the pinned artifact')
-        return target
+def resolve_teacher_weights(teacher, explicit_path):
+    """Resolve a pre-staged local teacher checkpoint without network fallback.
 
-    cli = Path(sys.executable).with_name('modelscope')
-    if not cli.is_file():
-        raise FileNotFoundError('The training environment must provide the ModelScope CLI in its active Python environment')
-    print(json.dumps(dict(stage='model_download', model=pinned['model'],
-        revision=pinned['revision'], filename=pinned['filename'],
-        expected_sha256=pinned['sha256'], destination=str(target))), flush=True)
-    with tempfile.TemporaryDirectory(prefix=f'.{teacher}-{os.environ["TRAIN_JOB_ID"]}-',
-                                     dir=asset_root) as temporary:
-        subprocess.run([str(cli), 'download', '--model', pinned['model'],
-            '--revision', pinned['revision'], pinned['filename'], '--local_dir', temporary],
-            check=True, cwd=ROOT)
-        matches = list(Path(temporary).rglob(pinned['filename']))
-        if len(matches) != 1 or sha256(matches[0]) != pinned['sha256']:
-            raise ValueError('Downloaded ModelScope teacher weight is missing, ambiguous, or has wrong SHA256')
-        try:
-            os.link(matches[0], target)
-        except FileExistsError:
-            if sha256(target) != pinned['sha256']:
-                raise ValueError('Concurrent ModelScope download produced a different cached checkpoint')
+    The distributed job must never attempt a model download: a partially
+    downloaded teacher can otherwise leave the cache looking usable while
+    producing a late, non-reproducible failure during feature encoding.
+    """
+    if explicit_path is None:
+        raise ValueError(
+            f'Pass --weights with the pre-staged local {teacher} checkpoint; '
+            'network downloads are disabled for distributed training')
+    target = Path(explicit_path).expanduser().resolve()
+    if not target.is_file():
+        raise FileNotFoundError(f'Pre-staged teacher checkpoint is missing: {target}')
+    pinned = TEACHERS[teacher]
+    if target.name != pinned['filename']:
+        raise ValueError(
+            f'{teacher} requires a local file named {pinned["filename"]}; got {target.name}')
+    if sha256(target) != pinned['sha256']:
+        raise ValueError('Pre-staged teacher checkpoint SHA256 differs from the pinned artifact')
     return target
+
+
+def stage_environment():
+    """Use only pre-staged assets in every encoding and training subprocess."""
+    return dict(os.environ, CUDA_VISIBLE_DEVICES='0,1,2,3', OMP_NUM_THREADS='4',
+        TOKENIZERS_PARALLELISM='false', HF_HUB_OFFLINE='1',
+        TRANSFORMERS_OFFLINE='1', HF_DATASETS_OFFLINE='1', WANDB_MODE='offline',
+        PYTHONPATH=f"{ROOT / 'src'}:{ROOT}:{os.environ.get('PYTHONPATH','')}")
 
 
 def source_revision():
@@ -105,9 +101,7 @@ def main():
         ('dinov3' if args.teacher == 'dinov3' else 'vjepa21')).resolve()
     if not args.teacher_source.is_dir() or not (args.teacher_source / 'REVISION').is_file():
         raise FileNotFoundError('Pinned teacher source and revision must be present in this branch')
-    args.weights = (args.weights or resolve_teacher_weights(args.teacher)).resolve()
-    if sha256(args.weights) != TEACHERS[args.teacher]['sha256']:
-        raise ValueError('Teacher checkpoint SHA256 differs from the pinned ModelScope artifact')
+    args.weights = resolve_teacher_weights(args.teacher, args.weights)
 
     import torch
     if (not torch.cuda.is_available() or torch.cuda.device_count() != 4
@@ -163,8 +157,7 @@ def main():
         ('restore', accelerate + [str(ROOT / 'scripts/dense/restore.py'), *training_args]),
         ('formal', accelerate + [str(ROOT / 'scripts/dense/train.py'), *training_args]),
     ]
-    env = dict(os.environ, CUDA_VISIBLE_DEVICES='0,1,2,3', OMP_NUM_THREADS='4',
-               TOKENIZERS_PARALLELISM='false', PYTHONPATH=f"{ROOT / 'src'}:{ROOT}:{os.environ.get('PYTHONPATH','')}")
+    env = stage_environment()
     for name, command in stages:
         if name == 'formal':
             claim['formal_training_started'] = True

@@ -8,7 +8,7 @@ import time
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(ROOT / 'src'), str(ROOT), str(Path(__file__).parent)]
-from runtime import fingerprint, load_run, write_json
+from runtime import ExpertGradientProbe, fingerprint, load_run, write_json
 
 
 def main():
@@ -59,20 +59,16 @@ def main():
                 loss, components = trainer.model.training_loss(sample)
             if not bool(torch.isfinite(loss.detach()).all()):
                 raise FloatingPointError('Nonfinite dense Joint8 loss')
-            trainer.accelerator.backward(loss)
             base_model = trainer.accelerator.unwrap_model(trainer.model)
-            expert_grad_norms = {}
-            for expert_name in ('video', 'force', 'action'):
-                gradients = [parameter.grad.detach().float()
-                    for parameter in base_model.dit[expert_name].parameters()
-                    if parameter.grad is not None]
-                if not gradients:
-                    raise RuntimeError(f'{expert_name} expert received no gradients')
-                squared_norm = torch.stack([gradient.square().sum() for gradient in gradients]).sum()
-                norm = squared_norm.sqrt()
-                if not bool(torch.isfinite(norm) & (norm > 0)):
-                    raise RuntimeError(f'{expert_name} expert gradient is zero or nonfinite')
-                expert_grad_norms[expert_name] = float(norm)
+            # Accelerate calls DeepSpeed engine.step inside backward at an
+            # accumulation boundary.  Hooks capture gradients before ZeRO
+            # reduces/clears them, without changing the stock update sequence.
+            gradient_probe = ExpertGradientProbe(base_model)
+            try:
+                trainer.accelerator.backward(loss)
+                expert_grad_norms = gradient_probe.norms()
+            finally:
+                gradient_probe.close()
             if not trainer.accelerator.sync_gradients:
                 raise RuntimeError('Accumulation must be one')
             grad_norm = trainer.accelerator.clip_grad_norm_(trainer.model.parameters(), trainer.max_grad_norm)
@@ -82,6 +78,10 @@ def main():
                 trainer.scheduler.step()
             trainer.optimizer.zero_grad(set_to_none=True)
             trainer.global_step += 1
+            engine_steps = int(engine.global_steps)
+            if engine_steps != trainer.global_step:
+                raise RuntimeError(
+                    f'DeepSpeed engine/global trainer steps diverged: {engine_steps} != {trainer.global_step}')
         torch.cuda.synchronize()
         updates.append(dict(step=trainer.global_step, loss=float(loss.detach().float()),
             components=components, grad_norm=float(grad_norm),
@@ -112,7 +112,8 @@ def main():
             status='two_update_checkpoint_verified' if passed else 'failed', ranks=ranks,
             formal_training_started=False, cache_identity=ranks[0]['feature_cache_identity']))
         print(json.dumps({'status': 'two_update_checkpoint_verified' if passed else 'failed',
-                          'seconds_per_update': max(x['updates'][-1]['seconds'] for x in ranks)}, flush=True))
+                          'seconds_per_update': max(x['updates'][-1]['seconds'] for x in ranks)},
+                         ensure_ascii=True), flush=True)
     accelerator.wait_for_everyone()
     torch.distributed.destroy_process_group()
 
