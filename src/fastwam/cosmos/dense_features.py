@@ -98,7 +98,10 @@ class DenseFeatureVideoExpert(nn.Module):
             raise ValueError('Future features must be [B,2,2*grid^2,D] with a batch clock')
         x = self.input(future.flatten(1, 2))
         position = self._position(b, 3, x.device, x.dtype)[:, 1:].flatten(1, 2)
-        time = self.time(sinusoidal_embedding_1d(256, clock.float() / 1000.))
+        time_embedding = sinusoidal_embedding_1d(256, clock.float() / 1000.)
+        time_embedding = time_embedding.to(
+            device=self.time[0].weight.device, dtype=self.time[0].weight.dtype)
+        time = self.time(time_embedding)
         time = time[:, None, None, :].expand(-1, 2, self.tokens_per_frame, -1).flatten(1, 2)
         return x + position + time
 
@@ -207,8 +210,11 @@ class DenseFeatureJointModel(nn.Module):
         future = self.dit['video'].future_tokens(video_noise, tv)
         force, fm = self.dit['force'].prepare_future(force_noise, tf, tv, context)
         action, _, am, text, text_mask, freq = self.dit['action'].prepare(action_noise, ta, context, cmask)
-        source_time = torch.cat((sinusoidal_embedding_1d(256, tv),
-                                 sinusoidal_embedding_1d(256, tf)), -1)
+        source_time = torch.cat((sinusoidal_embedding_1d(256, tv.float()),
+                                 sinusoidal_embedding_1d(256, tf.float())), -1)
+        source_time = source_time.to(
+            device=self.dit['action_source_time'][0].weight.device,
+            dtype=self.dit['action_source_time'][0].weight.dtype)
         am = am + self.dit['action_source_time'](source_time).unflatten(-1,
             (6, self.dit['action'].hidden_dim))
 

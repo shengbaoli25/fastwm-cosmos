@@ -285,7 +285,10 @@ class ActionDiT(nn.Module):
                 f"Action token length {seq_len} exceeds RoPE cache {self.freqs.shape[0]}."
             )
 
-        t = self.time_embedding(sinusoidal_embedding_1d(self.freq_dim, timestep))
+        time_embedding = sinusoidal_embedding_1d(self.freq_dim, timestep.float()).to(
+            device=self.time_embedding[0].weight.device,
+            dtype=self.time_embedding[0].weight.dtype)
+        t = self.time_embedding(time_embedding)
         t_mod = self.time_projection(t).unflatten(1, (6, self.hidden_dim))
 
         tokens = self.action_encoder(action_tokens)
@@ -318,7 +321,10 @@ class ActionDiT(nn.Module):
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         """Prepare tensor inputs for the compile-friendly DiT/MoT core."""
         seq_len = action_tokens.shape[1]
-        t = self.time_embedding(sinusoidal_embedding_1d(self.freq_dim, timestep))
+        time_embedding = sinusoidal_embedding_1d(self.freq_dim, timestep.float()).to(
+            device=self.time_embedding[0].weight.device,
+            dtype=self.time_embedding[0].weight.dtype)
+        t = self.time_embedding(time_embedding)
         t_mod = self.time_projection(t).unflatten(1, (6, self.hidden_dim))
         tokens = self.action_encoder(action_tokens)
         context_emb = self.text_embedding(context)
