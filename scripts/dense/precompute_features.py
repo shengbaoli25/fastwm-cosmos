@@ -15,17 +15,17 @@ def main():
         parser.add_argument('--' + name, required=True)
     parser.add_argument('--rank', type=int, default=int(os.environ.get('LOCAL_RANK', '-1')))
     parser.add_argument('--assemble', action='store_true')
-    parser.add_argument('--frame-batch', type=int, default=16)
+    parser.add_argument('--frame-batch', type=int, default=4)
     args = parser.parse_args()
     import torch
-    from fastwam.cosmos.dense_cache import write_rank_cache, assemble_cache
+    from fastwam.cosmos.jepa_video_cache import write_rank_cache, assemble_cache
     torch.set_num_threads(4)
     if args.assemble:
         result = assemble_cache(dataset=args.dataset, source_sha=args.source_sha,
             teacher_name=args.teacher, teacher_repo=args.teacher_source, weights=args.weights,
             weight_sha256=args.weight_sha, root=args.output)
         print(json.dumps({'status': result['status'], 'identity_sha256': result['identity_sha256'],
-                          'frames': result['completed_frames'], 'shards': len(result['shards'])}), flush=True)
+                          'windows': result['completed_windows'], 'shards': len(result['shards'])}), flush=True)
         return
     if args.rank not in range(4) or not torch.cuda.is_available() or torch.cuda.device_count() != 4:
         raise RuntimeError('Feature encoding requires exactly four visible allocated GPUs')

@@ -19,7 +19,7 @@ def main():
     args = parser.parse_args()
     import torch
     from accelerate import Accelerator
-    from fastwam.trainer import Wan22Trainer
+    from fastwam.cosmos.jepa_trainer import JepaVideoTrainer as Wan22Trainer
     from fastwam.utils import misc
     from fastwam.utils.logging_config import setup_logging
     from fastwam.utils.pytorch_utils import set_global_seed

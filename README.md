@@ -1,3 +1,18 @@
+# JEPA video policy · Cosmos Joint8 Action/Force
+
+**This branch runs the control experiment: V-JEPA 2.1 ViT-g video context plus
+the original 28-layer Cosmos Action/Force experts, with future L1 weight zero.**
+Launch this arm with `scripts/dense/run_experiment.py --teacher vjepa21_vitg
+--experiment control` and the verified local asset paths described below.
+The branch name retains `dinov3` for experiment-history continuity; its former
+single-frame DINOv3 training configuration has been replaced. Both original
+experiment branches now contain identical JEPA source code and both main/control
+configurations. The main arm changes only `lambda_future` from 0 to 1.
+See the [current architecture, training and offline launch guide](docs/cosmos/jepa-video-policy-joint8.md).
+
+The sections below document the historical Cosmos baselines and deployment tools;
+the new experiment starts with `scripts/dense/run_experiment.py`.
+
 # FastWAM · Cosmos28 · ForceWM28
 
 **Current branch: `codex/realman-cup-joint-30k` — no-reference joint diffusion.**
