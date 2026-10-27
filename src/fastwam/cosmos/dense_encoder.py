@@ -111,24 +111,30 @@ def load_dense_teacher(name, source, weights, expected_sha256, device='cuda'):
     source, weights = Path(source).resolve(), Path(weights).resolve()
     if not source.is_dir() or not weights.is_file() or sha256_file(weights) != expected_sha256:
         raise ValueError('Teacher source/checkpoint missing or checkpoint SHA256 differs')
-    expected_commit = VJEPA_SOURCE_COMMIT if name == 'vjepa21' else DINOV3_SOURCE_COMMIT
+    expected_commit = VJEPA_SOURCE_COMMIT if name in ('vjepa21', 'vjepa21_vitg') else DINOV3_SOURCE_COMMIT
     if _git_commit(source) != expected_commit:
         raise ValueError('Teacher upstream source commit differs from the pinned revision')
     if name == 'dinov3' and os.environ.get('DINOV3_LICENSE_ACCEPTED') != '1':
         raise PermissionError('Set DINOV3_LICENSE_ACCEPTED=1 only after accepting Meta DINOv3 terms')
-    if name not in ('vjepa21', 'dinov3'):
+    if name not in ('vjepa21', 'vjepa21_vitg', 'dinov3'):
         raise ValueError('Unsupported dense teacher')
     sys.path.insert(0, str(source))
-    if name == 'vjepa21':
-        from app.vjepa_2_1.models.vision_transformer import vit_base
-        encoder = vit_base(patch_size=16, img_size=(384, 384), num_frames=64,
+    if name in ('vjepa21', 'vjepa21_vitg'):
+        from app.vjepa_2_1.models.vision_transformer import vit_base, vit_giant_xformers
+        factory = vit_base if name == 'vjepa21' else vit_giant_xformers
+        checkpoint_key = 'ema_encoder' if name == 'vjepa21' else 'target_encoder'
+        expected_filename = ('vjepa2_1_vitb_dist_vitG_384.pt' if name == 'vjepa21'
+                             else 'vjepa2_1_vitg_384.pt')
+        if weights.name != expected_filename:
+            raise ValueError('V-JEPA checkpoint filename differs from pinned variant')
+        encoder = factory(patch_size=16, img_size=(384, 384), num_frames=64,
             tubelet_size=2, use_sdpa=True, use_silu=False, wide_silu=True,
-            uniform_power=True, use_rope=True, img_temporal_dim_size=1,
+            uniform_power=name == 'vjepa21', use_rope=True, img_temporal_dim_size=1,
             interpolate_rope=True)
-        checkpoint = torch.load(weights, map_location='cpu', weights_only=True)
-        if not isinstance(checkpoint, dict) or not isinstance(checkpoint.get('ema_encoder'), dict):
-            raise ValueError('V-JEPA 2.1 official ema_encoder checkpoint entry is missing')
-        state = checkpoint['ema_encoder'].copy()
+        checkpoint = torch.load(weights, map_location='cpu', weights_only=True, mmap=True)
+        if not isinstance(checkpoint, dict) or not isinstance(checkpoint.get(checkpoint_key), dict):
+            raise ValueError(f'V-JEPA 2.1 official {checkpoint_key} checkpoint entry is missing')
+        state = checkpoint[checkpoint_key].copy()
         for key in list(state):
             clean = key.replace('module.', '').replace('backbone.', '')
             if clean != key:
@@ -139,6 +145,7 @@ def load_dense_teacher(name, source, weights, expected_sha256, device='cuda'):
         if (set(result.missing_keys) - {'pos_embed'}
                 or set(result.unexpected_keys) - {'pos_embed'}):
             raise ValueError('V-JEPA 2.1 EMA encoder key mismatch')
+        del checkpoint, state
         input_size, source_grid, output_grid = 384, 24, 14
     else:
         encoder = torch.hub.load(str(source), 'dinov3_vitb16', source='local', pretrained=False)
@@ -157,7 +164,7 @@ class DenseTeacher:
         self.source_grid = int(source_grid)
         self.output_grid = int(output_grid)
         self.weight_sha256 = weight_sha256
-        self.feature_dim = 768
+        self.feature_dim = 1408 if name == 'vjepa21_vitg' else 768
         self.feature_tokens = 2 * self.output_grid * self.output_grid
 
     @torch.inference_mode()
@@ -193,10 +200,38 @@ class DenseTeacher:
         return features.reshape(len(paired_views), 2, self.output_grid ** 2,
                                 self.feature_dim).flatten(1, 2).contiguous()
 
+    @torch.inference_mode()
+    def encode_video(self, paired_video, *, context_only=False):
+        """Encode two cameras independently with temporal masking before all blocks."""
+        expected_frames = 2 if context_only else 10
+        if (self.name not in ('vjepa21', 'vjepa21_vitg') or paired_video.ndim != 5
+                or paired_video.shape[1:] != (3, expected_frames, 224, 448)
+                or not bool(torch.isfinite(paired_video).all())):
+            raise ValueError('V-JEPA video must be [B,3,2|10,224,448]')
+        device = next(self.encoder.parameters()).device
+        views = torch.stack((paired_video[..., :224], paired_video[..., 224:]), 1)
+        views = views.flatten(0, 1).to(device=device, dtype=torch.float32).add_(1).mul_(0.5)
+        b2, channels, times, height, width = views.shape
+        views = F.interpolate(views.transpose(1, 2).reshape(b2*times, channels, height, width),
+                              size=(224, 224), mode='bicubic', align_corners=False,
+                              antialias=True).reshape(b2, times, channels, 224, 224).transpose(1, 2)
+        mean = views.new_tensor(IMAGENET_MEAN)[None, :, None, None, None]
+        std = views.new_tensor(IMAGENET_STD)[None, :, None, None, None]
+        views = ((views - mean) / std).to(torch.bfloat16)
+        with torch.autocast(device_type=device.type, dtype=torch.bfloat16):
+            features = self.encoder(views)
+        tubelets = expected_frames // 2
+        grid = self.output_grid ** 2
+        if (features.ndim != 3 or features.shape[1:] != (tubelets * grid, self.feature_dim)):
+            raise ValueError('V-JEPA video output tubelet geometry differs')
+        return (features.reshape(len(paired_video), 2, tubelets, grid, self.feature_dim)
+                .permute(0, 2, 1, 3, 4).flatten(2, 3).contiguous())
+
     def manifest(self):
-        return dict(name=self.name, upstream_commit=VJEPA_SOURCE_COMMIT if self.name == 'vjepa21'
+        return dict(name=self.name, upstream_commit=VJEPA_SOURCE_COMMIT if self.name.startswith('vjepa21')
             else DINOV3_SOURCE_COMMIT, weight_sha256=self.weight_sha256,
-            checkpoint_format='official_vjepa2_1_ema_encoder' if self.name == 'vjepa21'
+            checkpoint_format=('official_vjepa2_1_target_encoder' if self.name == 'vjepa21_vitg'
+                               else 'official_vjepa2_1_ema_encoder') if self.name.startswith('vjepa21')
             else 'modelscope_huggingface_safetensors_mapped_to_official_dinov3',
             preprocessing='two-view square resize bicubic antialias; ImageNet mean/std',
             input_size=self.input_size, source_grid=self.source_grid,

@@ -10,14 +10,20 @@ import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / 'src'))
 SOURCE_SHA = '9846d4ac5fff6c3c0d96c306eeb5d5d8dc4aea0b176327c0f6bebc1baef980f2'
 DATASET_DEFAULT = Path('/inspire/ssd/project/long-range-embodied-collaborative-intelligence/ky26340/realman-joint8-pluginsertion71-20261023/data/2026_10_23_lerobot_plug_insertion_100s')
-RUNS_DEFAULT = Path('/inspire/ssd/project/long-range-embodied-collaborative-intelligence/ky26340/realman-joint8-densefeature-20261026')
+RUNS_DEFAULT = Path('/inspire/ssd/project/long-range-embodied-collaborative-intelligence/ky26340/realman-joint8-jepa-video-20261027')
 TEACHERS = {
     'dinov3': dict(model='facebook/dinov3-vitb16-pretrain-lvd1689m',
         revision='23d0280ae6ee4ced592a3459674ad027d3c18906',
         filename='model.safetensors',
         sha256='9a21ac3df0c63839d62612dda6f454d816c25611cc7a52966ed5a5a94921dc8b'),
+    'vjepa21_vitg': dict(model='ChongZheng/V-JEPA-2.1-384',
+        revision='535c01899c771d5b5e492936243c8a3ea973ef4a',
+        filename='vjepa2_1_vitg_384.pt',
+        size_bytes=16878318788,
+        sha256='b417628f1618c8bd52c0f419800b802f65794288c6ef2ff85c1341a1ae587cba'),
     'vjepa21': dict(model='ChongZheng/V-JEPA-2.1-384',
         revision='b35cd7c431265ce6cad8f2af85863e201bc07115',
         filename='vjepa2_1_vitb_dist_vitG_384.pt',
@@ -59,6 +65,8 @@ def resolve_teacher_weights(teacher, explicit_path):
     if target.name != pinned['filename']:
         raise ValueError(
             f'{teacher} requires a local file named {pinned["filename"]}; got {target.name}')
+    if 'size_bytes' in pinned and target.stat().st_size != pinned['size_bytes']:
+        raise ValueError('Pre-staged teacher checkpoint byte count differs from pinned artifact')
     if sha256(target) != pinned['sha256']:
         raise ValueError('Pre-staged teacher checkpoint SHA256 differs from the pinned artifact')
     return target
@@ -72,6 +80,28 @@ def stage_environment():
         PYTHONPATH=f"{ROOT / 'src'}:{ROOT}:{os.environ.get('PYTHONPATH','')}")
 
 
+def verify_reused_cache(root, teacher, source_sha, weight_sha):
+    """Perform expensive content verification once, before any rank starts."""
+    from fastwam.cache.latent import cache_identity_sha256
+    root = Path(root).resolve()
+    manifest = json.loads((root / 'manifest.json').read_text())
+    spec = manifest.get('identity', {})
+    if (manifest.get('status') != 'complete'
+            or manifest.get('identity_sha256') != cache_identity_sha256(spec)
+            or spec.get('schema') != 'fastwam-jepa-video-window-v1'
+            or spec.get('source_sha256') != source_sha
+            or spec.get('teacher', {}).get('name') != teacher
+            or spec.get('teacher', {}).get('weight_sha256') != weight_sha):
+        raise ValueError('Reused video cache identity differs')
+    for entry in manifest['shards']:
+        path = (root / entry['path']).resolve()
+        if (not path.is_relative_to(root) or path.stat().st_size != entry['size_bytes']
+                or path.stat().st_mtime_ns != entry['mtime_ns']
+                or sha256(path) != entry['sha256']):
+            raise ValueError('Reused video cache shard was changed')
+    return manifest['identity_sha256']
+
+
 def source_revision():
     revision = subprocess.check_output(['git', '-C', str(ROOT), 'rev-parse', 'HEAD'], text=True).strip()
     expected = os.environ.get('EXPECTED_CODE_REVISION')
@@ -82,7 +112,9 @@ def source_revision():
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--teacher', choices=('vjepa21', 'dinov3'), required=True)
+    parser.add_argument('--teacher', choices=('vjepa21_vitg',), required=True)
+    parser.add_argument('--experiment', choices=('main', 'control'), default='main')
+    parser.add_argument('--cache-root', type=Path, help='Reuse completed video cache; never overwrite')
     parser.add_argument('--dataset', type=Path, default=DATASET_DEFAULT)
     parser.add_argument('--source-sha', default=SOURCE_SHA)
     parser.add_argument('--teacher-source', type=Path)
@@ -111,15 +143,15 @@ def main():
         raise RuntimeError('Each allocated H200 must expose at least 130 GiB')
 
     job_id = os.environ['TRAIN_JOB_ID']
-    run_root = (args.run_root or RUNS_DEFAULT / args.teacher / job_id).resolve()
+    run_root = (args.run_root or RUNS_DEFAULT / ('jepa-video-' + args.experiment) / job_id).resolve()
     if run_root.exists():
         raise FileExistsError('Run path already exists; use a new platform job and output root')
     run_root.parent.mkdir(parents=True, exist_ok=True)
-    if shutil.disk_usage(run_root.parent).free < 250 * 2**30:
-        raise RuntimeError('At least 250 GiB free on the output filesystem is required')
+    if shutil.disk_usage(run_root.parent).free < (450 if args.cache_root is None else 150) * 2**30:
+        raise RuntimeError('At least 450 GiB (new cache) or 150 GiB (reused cache) free on the output filesystem is required')
     run_root.mkdir(parents=True, exist_ok=False)
     (run_root / 'logs').mkdir()
-    claim = dict(status='claimed', job_id=job_id, teacher=args.teacher,
+    claim = dict(status='claimed', job_id=job_id, teacher=args.teacher, experiment=args.experiment,
         code_revision=code_revision, modelscope_model=TEACHERS[args.teacher]['model'],
         modelscope_revision=TEACHERS[args.teacher]['revision'],
         checkpoint_filename=TEACHERS[args.teacher]['filename'],
@@ -128,12 +160,17 @@ def main():
         source_sha256=args.source_sha, dataset=str(args.dataset.resolve()),
         teacher_source=str(args.teacher_source.resolve()), weights=str(args.weights.resolve()),
         weight_sha256=sha256(args.weights), ranks=4, gpu='H200', batch_per_rank=64,
-        global_batch=256, max_steps=20000, save_every=5000, learning_rate=1e-4,
+        global_batch=256, max_steps=20000, save_every=1000, learning_rate=1e-4,
         precision='bf16', accumulation=1, fresh_model=True, fresh_optimizer=True,
         started_at_utc=datetime.now(timezone.utc).isoformat(), formal_training_started=False)
     with (run_root / 'claim.json').open('x') as stream:
         json.dump(claim, stream, indent=2)
-    cache_root = run_root / 'features'
+    cache_root = args.cache_root.resolve() if args.cache_root else run_root / 'features'
+    if args.cache_root and not (cache_root / 'manifest.json').is_file():
+        raise ValueError('Reused video cache must already have a complete manifest')
+    if args.cache_root:
+        claim['reused_cache_identity'] = verify_reused_cache(cache_root, args.teacher,
+            args.source_sha, claim['weight_sha256'])
     common = ['--dataset', str(args.dataset.resolve()), '--source-sha', args.source_sha,
         '--teacher', args.teacher, '--teacher-source', str(args.teacher_source.resolve()),
         '--weights', str(args.weights.resolve()), '--weight-sha', claim['weight_sha256']]
@@ -142,7 +179,9 @@ def main():
         *common, '--output', str(cache_root)]
     assembler = [sys.executable, '-u', str(ROOT / 'scripts/dense/precompute_features.py'),
         *common, '--output', str(cache_root), '--assemble']
-    task_config = ROOT / 'configs/experiments' / f'{args.teacher}_pluginsertion71_4h200_20k.yaml'
+    config_name = ('vjepa21_pluginsertion71_4h200_20k.yaml' if args.experiment == 'main'
+                   else 'vjepa21_pluginsertion71_no_future_4h200_20k.yaml')
+    task_config = ROOT / 'configs/experiments' / config_name
     training_args = ['--config', str(task_config), '--run-root', str(run_root),
         '--dataset', str(args.dataset.resolve()), '--source-sha', args.source_sha,
         '--cache-root', str(cache_root), '--teacher', args.teacher,
@@ -150,9 +189,7 @@ def main():
         '--weight-sha', claim['weight_sha256']]
     accelerate = [sys.executable, '-u', '-m', 'accelerate.commands.launch', '--config_file',
         str(ROOT / 'scripts/accelerate_configs/accelerate_zero1_ds_4gpu.yaml'), '--num_processes', '4']
-    stages = [
-        ('encode', encoder),
-        ('assemble', assembler),
+    stages = ([] if args.cache_root else [('encode', encoder), ('assemble', assembler)]) + [
         ('preflight', accelerate + [str(ROOT / 'scripts/dense/preflight.py'), *training_args]),
         ('restore', accelerate + [str(ROOT / 'scripts/dense/restore.py'), *training_args]),
         ('formal', accelerate + [str(ROOT / 'scripts/dense/train.py'), *training_args]),

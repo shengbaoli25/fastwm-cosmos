@@ -1,15 +1,19 @@
 model:
   _target_: fastwam.cosmos.dense_features.create_dense_feature_joint
   manifest: {}
-  feature_dim: 768
+  feature_dim: 1408
   hidden_dim: 768
-  depth: 12
+  depth: 28
   heads: 12
   view_grid: 14
   action_hidden: 768
   action_ffn: 3072
   force_hidden: 768
   force_ffn: 2048
+  joint_heads: 16
+  joint_head_dim: 128
+  context_dim: 1024
+  lambda_future: 1.0
   force_shift: 1.0
   action_seed: 42
   force_seed: 43
@@ -18,16 +22,17 @@ model:
   num_inference_steps: 16
 data:
   train:
-    _target_: fastwam.cosmos.dense_cache.DenseFeatureCachedDataset
+    _target_: fastwam.cosmos.jepa_video_cache.JepaVideoCachedDataset
     dataset_root: ??
     source_sha256: ??
     feature_root: ??
     expected_cache_identity: ??
-    expected_teacher: vjepa21
+    expected_teacher: vjepa21_vitg
     expected_weight_sha256: ??
-    cache_capacity: 4
+    split: train
+    cache_capacity: 2
   val: null
-teacher: vjepa21
+teacher: vjepa21_vitg
 batch_size: 64
 num_workers: 8
 gradient_accumulation_steps: 1
@@ -40,15 +45,16 @@ mixed_precision: bf16
 seed: 42
 max_grad_norm: 1.0
 log_every: 10
-save_every: 5000
-eval_every: 0
+save_every: 1000
+eval_every: 0  # Generic trainer RGB evaluation is replaced by JepaVideoTrainer.
+validation_every: 1000
 eval_num_inference_steps: 16
 resume: null
-output_dir: runs/vjepa21-pluginsertion71-20k
+output_dir: runs/jepa-video-main-20k
 wandb:
   enabled: false
   workspace: null
   project: fast-wam
-  name: vjepa21-pluginsertion71-20k
-  group: dense-teacher-backbone
+  name: jepa-video-main-20k
+  group: jepa-video-cosmos-joint8
   mode: offline

@@ -1,3 +1,13 @@
+# JEPA video policy · Cosmos Joint8 Action/Force
+
+**Current experiment: V-JEPA 2.1 ViT-g video prediction plus the original
+28-layer Cosmos Action/Force experts.** The paired control sets only the future
+L1 weight to zero. This supersedes the former single-frame feature-flow branch.
+See the [current architecture, training and offline launch guide](docs/cosmos/jepa-video-policy-joint8.md).
+
+The sections below document the historical Cosmos baselines and deployment tools;
+the new experiment starts with `scripts/dense/run_experiment.py`.
+
 # FastWAM · Cosmos28 · ForceWM28
 
 **Current branch: `codex/realman-cup-joint-30k` — no-reference joint diffusion.**

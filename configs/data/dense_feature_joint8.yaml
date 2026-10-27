@@ -1,10 +1,11 @@
 train:
-  _target_: fastwam.cosmos.dense_cache.DenseFeatureCachedDataset
+  _target_: fastwam.cosmos.jepa_video_cache.JepaVideoCachedDataset
   dataset_root: ??
   source_sha256: ??
   feature_root: ??
   expected_cache_identity: ??
-  expected_teacher: vjepa21
+  expected_teacher: vjepa21_vitg
   expected_weight_sha256: ??
-  cache_capacity: 4
+  split: train
+  cache_capacity: 2
 val: null
