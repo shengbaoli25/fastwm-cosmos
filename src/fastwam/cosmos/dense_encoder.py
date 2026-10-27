@@ -148,7 +148,9 @@ def load_dense_teacher(name, source, weights, expected_sha256, device='cuda'):
         del checkpoint, state
         input_size, source_grid, output_grid = 384, 24, 14
     else:
-        encoder = torch.hub.load(str(source), 'dinov3_vitb16', source='local', pretrained=False)
+        # The local backbone factory avoids hubconf's optional evaluation imports.
+        from dinov3.hub.backbones import dinov3_vitb16
+        encoder = dinov3_vitb16(pretrained=False)
         _load_dinov3_safetensors(encoder, weights)
         input_size, source_grid, output_grid = 224, 14, 14
     encoder.eval().to(device=device, dtype=torch.bfloat16)

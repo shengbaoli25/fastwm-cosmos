@@ -69,4 +69,3 @@ class JepaValidationMixin:
         finally:
             model.train(was_training)
         self.accelerator.wait_for_everyone()
-
