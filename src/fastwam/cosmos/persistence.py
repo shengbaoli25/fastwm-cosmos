@@ -25,6 +25,15 @@ def resource_identity():
 
 
 def state_digest(value):
+    """Hash checkpoint values, including DeepSpeed's pickled state objects.
+
+    ZeRO optimizer state stores LossScaler/DynamicLossScaler as an object,
+    rather than a JSON dictionary. Hash its type and complete attribute state
+    so a freshly unpickled scaler compares equal while a changed scale or
+    overflow counter still fails the restore gate. ZeRO's parameter-slice
+    mappings likewise contain fragment_address objects. Never use repr/str here: a
+    default object repr contains a process-specific address.
+    """
     digest = hashlib.sha256()
     def add(x):
         if isinstance(x, torch.Tensor):
@@ -38,6 +47,14 @@ def state_digest(value):
         elif isinstance(x, (list, tuple)):
             digest.update(str(len(x)).encode())
             for y in x: add(y)
+        elif (type(x).__module__, type(x).__name__) in {
+                ('deepspeed.runtime.fp16.loss_scaler', 'LossScaler'),
+                ('deepspeed.runtime.fp16.loss_scaler', 'DynamicLossScaler'),
+                ('deepspeed.utils.tensor_fragment', 'fragment_address')}:
+            add({'checkpoint_object_type': f'{type(x).__module__}.{type(x).__qualname__}',
+                 'checkpoint_object_state': vars(x)})
+        elif isinstance(x, torch.dtype):
+            add({'torch_dtype': str(x)})
         else:
             digest.update(json.dumps(x, sort_keys=True, allow_nan=False).encode())
     add(value)
