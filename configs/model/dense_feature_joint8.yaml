@@ -1,6 +1,6 @@
 _target_: fastwam.cosmos.dense_features.create_dense_feature_joint
 manifest: {}
-feature_dim: 1408
+feature_dim: 1280
 hidden_dim: 768
 depth: 28
 heads: 12

@@ -1,4 +1,4 @@
-"""Leak-free two-camera V-JEPA video targets for PlugInsertion71."""
+"""Two-camera DINOv3/V-JEPA temporal features for PlugInsertion71."""
 from bisect import bisect_right
 from collections import OrderedDict
 import json
@@ -15,7 +15,7 @@ from .realman_joint import open_realman_source
 from fastwam.datasets.lerobot.utils.normalizer import SingleFieldLinearNormalizer
 
 
-SCHEMA = 'fastwam-jepa-video-window-v1'
+SCHEMA = 'fastwam-temporal-feature-window-v2'
 OFFSETS = (-4, 0, 4, 8, 12, 16, 20, 24, 28, 32)
 GRID = 14
 TOKENS = 2 * GRID * GRID
@@ -42,6 +42,9 @@ def identity(source, teacher_manifest):
         source_identity_sha256=source.identity_sha256,
         episode_lengths=source.lengths, teacher=teacher_manifest,
         observation_offsets=list(OFFSETS[:2]), target_offsets=list(OFFSETS[2:]),
+        temporal_slots=[list(OFFSETS[index:index+2]) for index in range(0, len(OFFSETS), 2)],
+        temporal_pooling=('adjacent_frame_mean_v1' if teacher_manifest['name'] == 'dinov3_vith16plus'
+                          else 'official_video_tubelet2'),
         video_tubelet=2, cameras=['cam_main', 'cam_wrist'],
         feature_dtype='bfloat16', feature_shape=[5, TOKENS, teacher_manifest['feature_dim']],
         split_seed=42, splits=episode_splits(), window_rule='strict_contiguous_-4_to_+32')
@@ -65,12 +68,14 @@ def episode_partition(lengths, world_size=4):
 
 def write_rank_cache(*, dataset, source_sha, teacher_name, teacher_repo, weights,
                      weight_sha256, root, rank, world_size=4, frame_batch=4):
-    if teacher_name not in ('vjepa21', 'vjepa21_vitg') or rank not in range(world_size) or frame_batch < 1:
-        raise ValueError('Valid V-JEPA video teacher, rank and window batch required')
+    if (teacher_name not in ('vjepa21', 'vjepa21_vitg', 'dinov3_vith16plus')
+            or rank not in range(world_size) or frame_batch < 1):
+        raise ValueError('Valid temporal teacher, rank and window batch required')
     source = open_realman_source(dataset, source_sha)
     if source.identity.get('action_space') != 'joint8' or len(source.episodes) != 71:
         raise ValueError('PlugInsertion71 Joint8 source required')
     teacher = load_dense_teacher(teacher_name, teacher_repo, weights, weight_sha256)
+    device = next(teacher.encoder.parameters()).device
     teacher_manifest = dict(teacher.manifest(), video_input_size=224,
                             video_tubelet=2, video_grid=GRID)
     spec = identity(source, teacher_manifest)
@@ -98,11 +103,17 @@ def write_rank_cache(*, dataset, source_sha, teacher_name, teacher_repo, weights
                 batch = chunk[start:start + frame_batch]
                 indexes = torch.tensor([[frame + offset for offset in OFFSETS]
                                         for _, _, frame in batch], dtype=torch.long)
-                clips = frames[indexes].permute(0, 2, 1, 3, 4).contiguous().to('cuda')
-                observed = teacher.encode_video(clips[:, :, :2], context_only=True)
-                future = teacher.encode_video(clips, context_only=False)[:, 1:]
-                pieces.append(torch.cat((observed, future), 1).cpu().to(torch.bfloat16))
-                del clips, observed, future
+                clips = frames[indexes].permute(0, 2, 1, 3, 4).contiguous().to(device)
+                if teacher_name == 'dinov3_vith16plus':
+                    features = teacher.encode_video(clips)
+                else:
+                    observed = teacher.encode_video(clips[:, :, :2], context_only=True)
+                    future = teacher.encode_video(clips, context_only=False)[:, 1:]
+                    features = torch.cat((observed, future), 1).to(torch.bfloat16)
+                pieces.append(features.cpu())
+                del clips, features
+                if teacher_name != 'dinov3_vith16plus':
+                    del observed, future
             tensor = torch.cat(pieces, 0).contiguous()
             relative = f'shards/episode_{episode:06d}/{first:06d}-{first+len(chunk):06d}.safetensors'
             path = root / relative
@@ -182,6 +193,11 @@ class JepaVideoCachedDataset(torch.utils.data.Dataset):
                 or identity_.get('observation_offsets') != list(OFFSETS[:2])
                 or identity_.get('target_offsets') != list(OFFSETS[2:])
                 or identity_.get('video_tubelet') != 2
+                or identity_.get('temporal_slots') != [list(OFFSETS[index:index+2])
+                                                        for index in range(0, len(OFFSETS), 2)]
+                or identity_.get('temporal_pooling') != (
+                    'adjacent_frame_mean_v1' if expected_teacher == 'dinov3_vith16plus'
+                    else 'official_video_tubelet2')
                 or identity_.get('teacher', {}).get('video_input_size') != 224
                 or identity_.get('teacher', {}).get('video_grid') != GRID
                 or identity_.get('teacher', {}).get('name') != expected_teacher
@@ -244,7 +260,7 @@ class JepaVideoCachedDataset(torch.utils.data.Dataset):
                 or path.stat().st_mtime_ns != item['mtime_ns']):
             raise ValueError('Immutable video cache shard metadata differs')
         sample = self.source[source_index]
-        # mmap only this window, not the entire 353 MB shard for every random sample.
+        # mmap only this window; shards contain many training windows.
         with safe_open(str(path), framework='pt', device='cpu') as handle:
             offset = local-item['start']
             sample['visual_features'] = handle.get_slice('features')[offset:offset+1][0]

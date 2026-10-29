@@ -2,6 +2,7 @@
 import ast
 import hashlib
 import importlib.util
+import json
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -104,3 +105,58 @@ def test_gradient_probe_rejects_missing_expert_gradients():
             probe.norms()
     finally:
         probe.close()
+
+
+def test_hplus_configs_change_only_future_weight_and_output_names():
+    from omegaconf import OmegaConf
+    main = OmegaConf.load(ROOT / 'configs/experiments/dinov3_vith16plus_pluginsertion71_4h200_20k.yaml')
+    control = OmegaConf.load(ROOT / 'configs/experiments/dinov3_vith16plus_pluginsertion71_no_future_4h200_20k.yaml')
+    assert main.model.feature_dim == 1280
+    assert main.teacher == main.data.train.expected_teacher == 'dinov3_vith16plus'
+    assert main.model.lambda_future == 1 and control.model.lambda_future == 0
+    control.model.lambda_future = main.model.lambda_future
+    control.output_dir, control.wandb.name = main.output_dir, main.wandb.name
+    assert OmegaConf.to_container(main) == OmegaConf.to_container(control)
+    data = OmegaConf.load(ROOT / 'configs/data/dense_feature_joint8.yaml')
+    model = OmegaConf.load(ROOT / 'configs/model/dense_feature_joint8.yaml')
+    assert data.train.expected_teacher == main.teacher and model.feature_dim == 1280
+
+
+def test_hplus_cache_reuse_and_runtime_bind_temporal_representation(tmp_path, monkeypatch):
+    import hydra.utils
+    from fastwam.cache.latent import cache_identity_sha256
+    from fastwam.cosmos.jepa_video_cache import identity
+    from fastwam.cosmos.dense_encoder import DINOV3_SOURCE_COMMIT
+
+    launcher, runtime = load_launcher(), load_runtime()
+    teacher = 'dinov3_vith16plus'
+    pinned = launcher.TEACHERS[teacher]
+    spec = identity(SimpleNamespace(source_sha='source', identity_sha256='numeric', lengths=[40] * 71),
+        dict(name=teacher, weight_sha256=pinned['sha256'], upstream_commit=DINOV3_SOURCE_COMMIT,
+             feature_dim=1280, video_input_size=224, video_grid=14))
+    manifest = dict(status='complete', identity=spec, identity_sha256=cache_identity_sha256(spec), shards=[])
+    path = tmp_path / 'manifest.json'
+    path.write_text(json.dumps(manifest))
+    assert launcher.verify_reused_cache(tmp_path, teacher, 'source', pinned['sha256']) == manifest['identity_sha256']
+    monkeypatch.setenv('DINOV3_LICENSE_ACCEPTED', '1')
+    instantiated = []
+
+    def instantiate(config, **kwargs):
+        instantiated.append(config._target_)
+        return SimpleNamespace(normalization={})
+
+    monkeypatch.setattr(hydra.utils, 'instantiate', instantiate)
+    config = ROOT / 'configs/experiments/dinov3_vith16plus_pluginsertion71_4h200_20k.yaml'
+    args = (config, tmp_path / 'run', tmp_path, 'source', tmp_path, teacher, tmp_path, tmp_path, pinned['sha256'])
+    cfg, _, _, _ = runtime.load_run(*args)
+    assert cfg.model.manifest.temporal_pooling == 'adjacent_frame_mean_v1'
+    assert cfg.model.manifest.temporal_slots[0] == [-4, 0]
+    assert len(instantiated) == 2
+    spec['temporal_pooling'] = 'official_video_tubelet2'
+    manifest['identity_sha256'] = cache_identity_sha256(spec)
+    path.write_text(json.dumps(manifest))
+    with pytest.raises(ValueError, match='cache identity'):
+        launcher.verify_reused_cache(tmp_path, teacher, 'source', pinned['sha256'])
+    with pytest.raises(ValueError, match='cache identity'):
+        runtime.load_run(*args)
+    assert len(instantiated) == 2

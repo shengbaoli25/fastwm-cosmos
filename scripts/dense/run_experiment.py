@@ -13,12 +13,16 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'src'))
 SOURCE_SHA = '9846d4ac5fff6c3c0d96c306eeb5d5d8dc4aea0b176327c0f6bebc1baef980f2'
 DATASET_DEFAULT = Path('/inspire/ssd/project/long-range-embodied-collaborative-intelligence/ky26340/realman-joint8-pluginsertion71-20261023/data/2026_10_23_lerobot_plug_insertion_100s')
-RUNS_DEFAULT = Path('/inspire/ssd/project/long-range-embodied-collaborative-intelligence/ky26340/realman-joint8-jepa-video-20261027')
+RUNS_DEFAULT = Path('/inspire/ssd/project/long-range-embodied-collaborative-intelligence/ky26340/realman-joint8-dinov3-hplus-20261029')
 TEACHERS = {
     'dinov3': dict(model='facebook/dinov3-vitb16-pretrain-lvd1689m',
         revision='23d0280ae6ee4ced592a3459674ad027d3c18906',
         filename='model.safetensors',
         sha256='9a21ac3df0c63839d62612dda6f454d816c25611cc7a52966ed5a5a94921dc8b'),
+    'dinov3_vith16plus': dict(model='facebook/dinov3-vith16plus-pretrain-lvd1689m',
+        revision='98b7096b2938406ade58801a0bf75eca3198b5bd',
+        filename='model.safetensors', size_bytes=3362432800,
+        sha256='3e1d4d18b9bfa9f28fad8e9de6a783f1313532d3460efa4cd0b12521d81d1a4d'),
     'vjepa21_vitg': dict(model='ChongZheng/V-JEPA-2.1-384',
         revision='535c01899c771d5b5e492936243c8a3ea973ef4a',
         filename='vjepa2_1_vitg_384.pt',
@@ -83,15 +87,25 @@ def stage_environment():
 def verify_reused_cache(root, teacher, source_sha, weight_sha):
     """Perform expensive content verification once, before any rank starts."""
     from fastwam.cache.latent import cache_identity_sha256
+    from fastwam.cosmos.jepa_video_cache import SCHEMA, OFFSETS, episode_splits
     root = Path(root).resolve()
     manifest = json.loads((root / 'manifest.json').read_text())
     spec = manifest.get('identity', {})
     if (manifest.get('status') != 'complete'
             or manifest.get('identity_sha256') != cache_identity_sha256(spec)
-            or spec.get('schema') != 'fastwam-jepa-video-window-v1'
+            or spec.get('schema') != SCHEMA
             or spec.get('source_sha256') != source_sha
             or spec.get('teacher', {}).get('name') != teacher
-            or spec.get('teacher', {}).get('weight_sha256') != weight_sha):
+            or spec.get('teacher', {}).get('weight_sha256') != weight_sha
+            or spec.get('observation_offsets') != list(OFFSETS[:2])
+            or spec.get('target_offsets') != list(OFFSETS[2:])
+            or spec.get('temporal_slots') != [list(OFFSETS[i:i+2]) for i in range(0, 10, 2)]
+            or spec.get('splits') != episode_splits()
+            or spec.get('feature_shape') != [5, 392,
+                1280 if teacher == 'dinov3_vith16plus' else 1408]
+            or spec.get('temporal_pooling') != (
+                'adjacent_frame_mean_v1' if teacher == 'dinov3_vith16plus'
+                else 'official_video_tubelet2')):
         raise ValueError('Reused video cache identity differs')
     for entry in manifest['shards']:
         path = (root / entry['path']).resolve()
@@ -112,7 +126,7 @@ def source_revision():
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--teacher', choices=('vjepa21_vitg',), required=True)
+    parser.add_argument('--teacher', choices=('vjepa21_vitg', 'dinov3_vith16plus'), required=True)
     parser.add_argument('--experiment', choices=('main', 'control'), default='main')
     parser.add_argument('--cache-root', type=Path, help='Reuse completed video cache; never overwrite')
     parser.add_argument('--dataset', type=Path, default=DATASET_DEFAULT)
@@ -127,10 +141,10 @@ def main():
     code_revision = source_revision()
     if args.source_sha != SOURCE_SHA or not args.dataset.is_dir():
         raise ValueError('The audited PlugInsertion71 source is required')
-    if args.teacher == 'dinov3' and os.environ.get('DINOV3_LICENSE_ACCEPTED') != '1':
+    if args.teacher.startswith('dinov3') and os.environ.get('DINOV3_LICENSE_ACCEPTED') != '1':
         raise PermissionError('Meta DINOv3 terms must be accepted before this job uses the materials')
     args.teacher_source = (args.teacher_source or ROOT / 'third_party' /
-        ('dinov3' if args.teacher == 'dinov3' else 'vjepa21')).resolve()
+        ('dinov3' if args.teacher.startswith('dinov3') else 'vjepa21')).resolve()
     if not args.teacher_source.is_dir() or not (args.teacher_source / 'REVISION').is_file():
         raise FileNotFoundError('Pinned teacher source and revision must be present in this branch')
     args.weights = resolve_teacher_weights(args.teacher, args.weights)
@@ -143,7 +157,8 @@ def main():
         raise RuntimeError('Each allocated H200 must expose at least 130 GiB')
 
     job_id = os.environ['TRAIN_JOB_ID']
-    run_root = (args.run_root or RUNS_DEFAULT / ('jepa-video-' + args.experiment) / job_id).resolve()
+    run_name = ('dinov3-hplus-' if args.teacher == 'dinov3_vith16plus' else 'jepa-video-') + args.experiment
+    run_root = (args.run_root or RUNS_DEFAULT / run_name / job_id).resolve()
     if run_root.exists():
         raise FileExistsError('Run path already exists; use a new platform job and output root')
     run_root.parent.mkdir(parents=True, exist_ok=True)
@@ -156,7 +171,7 @@ def main():
         modelscope_revision=TEACHERS[args.teacher]['revision'],
         checkpoint_filename=TEACHERS[args.teacher]['filename'],
         teacher_source_revision=('6876159a11b4df116f30f667f8c9888617df0751'
-            if args.teacher == 'dinov3' else '204698b45b3712590f06245fbfba32d3be539812'),
+            if args.teacher.startswith('dinov3') else '204698b45b3712590f06245fbfba32d3be539812'),
         source_sha256=args.source_sha, dataset=str(args.dataset.resolve()),
         teacher_source=str(args.teacher_source.resolve()), weights=str(args.weights.resolve()),
         weight_sha256=sha256(args.weights), ranks=4, gpu='H200', batch_per_rank=64,
@@ -179,8 +194,9 @@ def main():
         *common, '--output', str(cache_root)]
     assembler = [sys.executable, '-u', str(ROOT / 'scripts/dense/precompute_features.py'),
         *common, '--output', str(cache_root), '--assemble']
-    config_name = ('vjepa21_pluginsertion71_4h200_20k.yaml' if args.experiment == 'main'
-                   else 'vjepa21_pluginsertion71_no_future_4h200_20k.yaml')
+    config_prefix = 'dinov3_vith16plus' if args.teacher == 'dinov3_vith16plus' else 'vjepa21'
+    config_name = (f'{config_prefix}_pluginsertion71_4h200_20k.yaml' if args.experiment == 'main'
+                   else f'{config_prefix}_pluginsertion71_no_future_4h200_20k.yaml')
     task_config = ROOT / 'configs/experiments' / config_name
     training_args = ['--config', str(task_config), '--run-root', str(run_root),
         '--dataset', str(args.dataset.resolve()), '--source-sha', args.source_sha,

@@ -58,21 +58,35 @@ def load_run(config_path, run_root, dataset, source_sha, cache_root, teacher,
     cache = json.loads(manifest_path.read_text())
     identity = cache.get('identity', {})
     from fastwam.cache.latent import cache_identity_sha256
+    from fastwam.cosmos.jepa_video_cache import SCHEMA, OFFSETS, episode_splits
     digest = cache_identity_sha256(identity)
     expected_revision = ('204698b45b3712590f06245fbfba32d3be539812'
                          if teacher in ('vjepa21', 'vjepa21_vitg') else
                          '6876159a11b4df116f30f667f8c9888617df0751')
+    expected_width = (1408 if teacher == 'vjepa21_vitg' else
+                      1280 if teacher == 'dinov3_vith16plus' else 768)
     if (cache.get('status') != 'complete' or digest != cache.get('identity_sha256')
+            or identity.get('schema') != SCHEMA
             or identity.get('source_sha256') != source_sha
             or identity.get('teacher', {}).get('name') != teacher
             or identity.get('teacher', {}).get('upstream_commit') != expected_revision
             or identity.get('teacher', {}).get('weight_sha256') != weight_sha
+            or identity.get('teacher', {}).get('feature_dim') != expected_width
+            or identity.get('observation_offsets') != list(OFFSETS[:2])
+            or identity.get('target_offsets') != list(OFFSETS[2:])
+            or identity.get('temporal_slots') != [list(OFFSETS[i:i+2]) for i in range(0, 10, 2)]
+            or identity.get('temporal_pooling') != (
+                'adjacent_frame_mean_v1' if teacher == 'dinov3_vith16plus'
+                else 'official_video_tubelet2')
+            or identity.get('splits') != episode_splits()
             or len(identity.get('episode_lengths', [])) != 71
-            or identity.get('feature_shape') != [5, 392, 1408 if teacher == 'vjepa21_vitg' else 768]):
+            or identity.get('feature_shape') != [5, 392, expected_width]):
         raise ValueError('Completed feature cache identity is not bound to this dataset and teacher')
-    if teacher == 'dinov3' and os.environ.get('DINOV3_LICENSE_ACCEPTED') != '1':
+    if teacher.startswith('dinov3') and os.environ.get('DINOV3_LICENSE_ACCEPTED') != '1':
         raise PermissionError('DINOv3 terms must be accepted before the materials are used')
     cfg = OmegaConf.load(config_path)
+    if cfg.teacher != teacher or cfg.data.train.expected_teacher != teacher:
+        raise ValueError('Config teacher differs from requested teacher')
     cfg.output_dir = str(run_root / 'training')
     cfg.data.train.dataset_root = str(Path(dataset).resolve())
     cfg.data.train.source_sha256 = source_sha
@@ -83,6 +97,7 @@ def load_run(config_path, run_root, dataset, source_sha, cache_root, teacher,
     cfg.model.manifest = dict(dataset_source_sha256=source_sha,
         cache_identity_sha256=digest, teacher=identity['teacher'],
         observation_offsets=[-4, 0], future_offsets=[4,8,12,16,20,24,28,32], stride=4,
+        temporal_slots=identity['temporal_slots'], temporal_pooling=identity['temporal_pooling'],
         splits=identity['splits'], normalization='training episodes only',
         source_revision=identity.get('schema'))
     cfg.teacher = teacher

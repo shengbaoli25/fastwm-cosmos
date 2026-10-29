@@ -4,7 +4,7 @@ import pytest
 import torch
 from torch import nn
 
-from fastwam.cosmos.dense_encoder import DenseTeacher
+from fastwam.cosmos.dense_encoder import DenseTeacher, IMAGENET_MEAN, IMAGENET_STD
 
 
 class GloballyAttendingVideoEncoder(nn.Module):
@@ -100,3 +100,56 @@ def test_video_path_rejects_incomplete_or_future_contaminated_context(teacher):
         teacher.encode_video(video[:, :, :2])
     with pytest.raises(ValueError, match='2\\|10'):
         teacher.encode_video(video[:, :, :9])
+
+
+class PerImageEncoder(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.anchor = nn.Parameter(torch.ones(()))
+        self.inputs = []
+
+    def forward_features(self, images):
+        self.inputs.append(images.detach().clone())
+        patches = torch.nn.functional.avg_pool2d(images.float(), 16).mean(1).flatten(1)
+        return {'x_norm_patchtokens': patches[..., None].expand(-1, -1, 1280).to(torch.bfloat16)}
+
+
+def test_dinov3_image_batch_preserves_camera_order_and_imagenet_preprocessing():
+    encoder = PerImageEncoder().eval().requires_grad_(False)
+    teacher = DenseTeacher('dinov3_vith16plus', encoder, 224, 14, 14, 'test')
+    images = torch.zeros(2, 3, 224, 448)
+    images[0, :, :, :224], images[0, :, :, 224:] = -0.8, -0.4
+    images[1, :, :, :224], images[1, :, :, 224:] = 0.0, 0.4
+    features = teacher.encode(images)
+    assert features.shape == (2, 392, 1280)
+    assert not features.requires_grad
+    rgb = torch.tensor([0.1, 0.3, 0.5, 0.7])[:, None]
+    expected = ((rgb - torch.tensor(IMAGENET_MEAN)) / torch.tensor(IMAGENET_STD)).bfloat16()
+    torch.testing.assert_close(encoder.inputs[0][:, :, 0, 0], expected, atol=0.008, rtol=0)
+    assert features[0, 0, 0] < features[0, 196, 0] < features[1, 0, 0] < features[1, 196, 0]
+
+
+def test_dinov3_context_matches_full_cache_and_ignores_future_frames():
+    encoder = PerImageEncoder().eval().requires_grad_(False)
+    teacher = DenseTeacher('dinov3_vith16plus', encoder, 224, 14, 14, 'test')
+    video = clip()
+    full = teacher.encode_video(video)
+    observed = teacher.encode_video(video[:, :, :2], context_only=True)
+    assert full.shape == (1, 5, 392, 1280)
+    assert observed.shape == (1, 1, 392, 1280)
+    assert full.dtype == torch.bfloat16 and not full.requires_grad
+    torch.testing.assert_close(full[:, :1], observed, rtol=0, atol=0)
+    assert encoder.inputs[0].shape == (20, 3, 224, 224)
+    assert encoder.inputs[1].shape == (4, 3, 224, 224)
+    changed = video.clone()
+    changed[:, :, 2:] = 0.95
+    later = teacher.encode_video(changed)
+    torch.testing.assert_close(later[:, :1], observed, rtol=0, atol=0)
+    assert not torch.equal(later[:, 1:], full[:, 1:])
+    swapped = video.clone()
+    swapped[:, :, [0, 1]] = video[:, :, [1, 0]]
+    torch.testing.assert_close(teacher.encode_video(swapped), full, rtol=0, atol=0)
+    for index in (0, 1):
+        changed = video.clone()
+        changed[:, :, index] = 0.9
+        assert not torch.equal(teacher.encode_video(changed)[:, :1], observed)

@@ -188,7 +188,9 @@ class DenseFeatureJointModel(nn.Module):
                 force_hidden=force_hidden, action_ffn=action_ffn, force_ffn=force_ffn,
                 joint_heads=joint_heads, joint_head_dim=joint_head_dim, context_dim=context_dim),
             lambda_future=float(lambda_future), action_space='joint8',
-            visual_input='[-4,0] two-frame context; full10-frame future targets only in loss',
+            visual_input=('[-4,0] mean of independent DINO frame features; future pair means only in loss'
+                if manifest.get('teacher', {}).get('name') == 'dinov3_vith16plus' else
+                '[-4,0] two-frame context; full10-frame future targets only in loss'),
             visual_interface='post-layer observed-position K/V only; learned 768-to-2048 bridge',
             visual_clock='deterministic clean zero', action_force='original Cosmos28 modules',
             initialization='fresh predictor and experts; frozen official teacher cached separately',

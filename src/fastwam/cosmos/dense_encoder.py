@@ -14,6 +14,15 @@ VJEPA_SOURCE_COMMIT = '204698b45b3712590f06245fbfba32d3be539812'
 DINOV3_SOURCE_COMMIT = '6876159a11b4df116f30f667f8c9888617df0751'
 
 
+def pool_adjacent_frame_features(features):
+    """Mean matching camera/patch features in each adjacent sampled frame pair."""
+    if (features.ndim != 4 or features.shape[1] not in (2, 10)
+            or features.shape[2] != 392 or not bool(torch.isfinite(features).all())):
+        raise ValueError('DINO frame features must be finite [B,2|10,392,D]')
+    return (features.reshape(len(features), features.shape[1] // 2, 2, 392, features.shape[-1])
+            .float().mean(2).to(torch.bfloat16).contiguous())
+
+
 def sha256_file(path):
     digest = hashlib.sha256()
     with Path(path).open('rb') as handle:
@@ -36,14 +45,16 @@ def _load_dinov3_safetensors(encoder, weights):
     if weights.name != 'model.safetensors':
         raise ValueError('DINOv3 expects the pinned Hugging Face model.safetensors artifact')
     source = load_file(str(weights), device='cpu')
+    depth = len(encoder.blocks)
+    swiglu = hasattr(encoder.blocks[0].mlp, 'w1')
     expected_source = {
         'embeddings.cls_token', 'embeddings.mask_token',
         'embeddings.register_tokens', 'embeddings.patch_embeddings.weight',
         'embeddings.patch_embeddings.bias', 'norm.weight', 'norm.bias',
     }
-    for layer in range(12):
+    for layer in range(depth):
         prefix = f'layer.{layer}.'
-        expected_source.update({
+        layer_keys = {
             prefix + 'norm1.weight', prefix + 'norm1.bias',
             prefix + 'norm2.weight', prefix + 'norm2.bias',
             prefix + 'layer_scale1.lambda1', prefix + 'layer_scale2.lambda1',
@@ -51,9 +62,19 @@ def _load_dinov3_safetensors(encoder, weights):
             prefix + 'attention.k_proj.weight',
             prefix + 'attention.v_proj.weight', prefix + 'attention.v_proj.bias',
             prefix + 'attention.o_proj.weight', prefix + 'attention.o_proj.bias',
-            prefix + 'mlp.up_proj.weight', prefix + 'mlp.up_proj.bias',
-            prefix + 'mlp.down_proj.weight', prefix + 'mlp.down_proj.bias',
-        })
+        }
+        if swiglu:
+            layer_keys.update({
+                prefix + 'mlp.gate_proj.weight', prefix + 'mlp.gate_proj.bias',
+                prefix + 'mlp.up_proj.weight', prefix + 'mlp.up_proj.bias',
+                prefix + 'mlp.down_proj.weight', prefix + 'mlp.down_proj.bias',
+            })
+        else:
+            layer_keys.update({
+                prefix + 'mlp.up_proj.weight', prefix + 'mlp.up_proj.bias',
+                prefix + 'mlp.down_proj.weight', prefix + 'mlp.down_proj.bias',
+            })
+        expected_source.update(layer_keys)
     if set(source) != expected_source:
         missing, unexpected = sorted(expected_source - set(source)), sorted(set(source) - expected_source)
         raise ValueError(f'DINOv3 safetensors key set differs; missing={missing}, unexpected={unexpected}')
@@ -68,7 +89,7 @@ def _load_dinov3_safetensors(encoder, weights):
         'norm.weight': source['norm.weight'],
         'norm.bias': source['norm.bias'],
     }
-    for layer in range(12):
+    for layer in range(depth):
         src = f'layer.{layer}.'
         dst = f'blocks.{layer}.'
         for name in ('norm1.weight', 'norm1.bias', 'norm2.weight', 'norm2.bias'):
@@ -85,15 +106,23 @@ def _load_dinov3_safetensors(encoder, weights):
             source[src + 'attention.v_proj.bias']), dim=0)
         converted[dst + 'attn.proj.weight'] = source[src + 'attention.o_proj.weight']
         converted[dst + 'attn.proj.bias'] = source[src + 'attention.o_proj.bias']
-        converted[dst + 'mlp.fc1.weight'] = source[src + 'mlp.up_proj.weight']
-        converted[dst + 'mlp.fc1.bias'] = source[src + 'mlp.up_proj.bias']
-        converted[dst + 'mlp.fc2.weight'] = source[src + 'mlp.down_proj.weight']
-        converted[dst + 'mlp.fc2.bias'] = source[src + 'mlp.down_proj.bias']
+        if swiglu:
+            converted[dst + 'mlp.w1.weight'] = source[src + 'mlp.gate_proj.weight']
+            converted[dst + 'mlp.w1.bias'] = source[src + 'mlp.gate_proj.bias']
+            converted[dst + 'mlp.w2.weight'] = source[src + 'mlp.up_proj.weight']
+            converted[dst + 'mlp.w2.bias'] = source[src + 'mlp.up_proj.bias']
+            converted[dst + 'mlp.w3.weight'] = source[src + 'mlp.down_proj.weight']
+            converted[dst + 'mlp.w3.bias'] = source[src + 'mlp.down_proj.bias']
+        else:
+            converted[dst + 'mlp.fc1.weight'] = source[src + 'mlp.up_proj.weight']
+            converted[dst + 'mlp.fc1.bias'] = source[src + 'mlp.up_proj.bias']
+            converted[dst + 'mlp.fc2.weight'] = source[src + 'mlp.down_proj.weight']
+            converted[dst + 'mlp.fc2.bias'] = source[src + 'mlp.down_proj.bias']
 
     derived = {key: value for key, value in target.items()
                if key == 'rope_embed.periods' or key.endswith('.attn.qkv.bias_mask')}
     expected_derived = {'rope_embed.periods'} | {
-        f'blocks.{layer}.attn.qkv.bias_mask' for layer in range(12)}
+        f'blocks.{layer}.attn.qkv.bias_mask' for layer in range(depth)}
     if set(derived) != expected_derived:
         raise ValueError(f'Pinned DINOv3 source has unexpected derived buffers: {sorted(derived)}')
     converted.update(derived)
@@ -114,9 +143,10 @@ def load_dense_teacher(name, source, weights, expected_sha256, device='cuda'):
     expected_commit = VJEPA_SOURCE_COMMIT if name in ('vjepa21', 'vjepa21_vitg') else DINOV3_SOURCE_COMMIT
     if _git_commit(source) != expected_commit:
         raise ValueError('Teacher upstream source commit differs from the pinned revision')
-    if name == 'dinov3' and os.environ.get('DINOV3_LICENSE_ACCEPTED') != '1':
+    is_dinov3 = name in ('dinov3', 'dinov3_vith16plus')
+    if is_dinov3 and os.environ.get('DINOV3_LICENSE_ACCEPTED') != '1':
         raise PermissionError('Set DINOV3_LICENSE_ACCEPTED=1 only after accepting Meta DINOv3 terms')
-    if name not in ('vjepa21', 'vjepa21_vitg', 'dinov3'):
+    if name not in ('vjepa21', 'vjepa21_vitg', 'dinov3', 'dinov3_vith16plus'):
         raise ValueError('Unsupported dense teacher')
     sys.path.insert(0, str(source))
     if name in ('vjepa21', 'vjepa21_vitg'):
@@ -149,8 +179,12 @@ def load_dense_teacher(name, source, weights, expected_sha256, device='cuda'):
         input_size, source_grid, output_grid = 384, 24, 14
     else:
         # The local backbone factory avoids hubconf's optional evaluation imports.
-        from dinov3.hub.backbones import dinov3_vitb16
-        encoder = dinov3_vitb16(pretrained=False)
+        if name == 'dinov3_vith16plus':
+            from dinov3.hub.backbones import dinov3_vith16plus
+            encoder = dinov3_vith16plus(pretrained=False)
+        else:
+            from dinov3.hub.backbones import dinov3_vitb16
+            encoder = dinov3_vitb16(pretrained=False)
         _load_dinov3_safetensors(encoder, weights)
         input_size, source_grid, output_grid = 224, 14, 14
     encoder.eval().to(device=device, dtype=torch.bfloat16)
@@ -166,7 +200,8 @@ class DenseTeacher:
         self.source_grid = int(source_grid)
         self.output_grid = int(output_grid)
         self.weight_sha256 = weight_sha256
-        self.feature_dim = 1408 if name == 'vjepa21_vitg' else 768
+        self.feature_dim = (1408 if name == 'vjepa21_vitg' else
+                            1280 if name == 'dinov3_vith16plus' else 768)
         self.feature_tokens = 2 * self.output_grid * self.output_grid
 
     @torch.inference_mode()
@@ -204,12 +239,17 @@ class DenseTeacher:
 
     @torch.inference_mode()
     def encode_video(self, paired_video, *, context_only=False):
-        """Encode two cameras independently with temporal masking before all blocks."""
+        """Encode observed frames separately from targets; DINO pools image features."""
         expected_frames = 2 if context_only else 10
-        if (self.name not in ('vjepa21', 'vjepa21_vitg') or paired_video.ndim != 5
+        if (self.name not in ('vjepa21', 'vjepa21_vitg', 'dinov3_vith16plus') or paired_video.ndim != 5
                 or paired_video.shape[1:] != (3, expected_frames, 224, 448)
                 or not bool(torch.isfinite(paired_video).all())):
-            raise ValueError('V-JEPA video must be [B,3,2|10,224,448]')
+            raise ValueError('Teacher video must be [B,3,2|10,224,448]')
+        if self.name == 'dinov3_vith16plus':
+            frames = paired_video.permute(0, 2, 1, 3, 4).flatten(0, 1)
+            features = self.encode(frames).reshape(
+                len(paired_video), expected_frames, self.feature_tokens, self.feature_dim)
+            return pool_adjacent_frame_features(features)
         device = next(self.encoder.parameters()).device
         views = torch.stack((paired_video[..., :224], paired_video[..., 224:]), 1)
         views = views.flatten(0, 1).to(device=device, dtype=torch.float32).add_(1).mul_(0.5)
@@ -235,6 +275,8 @@ class DenseTeacher:
             checkpoint_format=('official_vjepa2_1_target_encoder' if self.name == 'vjepa21_vitg'
                                else 'official_vjepa2_1_ema_encoder') if self.name.startswith('vjepa21')
             else 'modelscope_huggingface_safetensors_mapped_to_official_dinov3',
+            **(dict(model_id='facebook/dinov3-vith16plus-pretrain-lvd1689m')
+               if self.name == 'dinov3_vith16plus' else {}),
             preprocessing='two-view square resize bicubic antialias; ImageNet mean/std',
             input_size=self.input_size, source_grid=self.source_grid,
             output_grid=self.output_grid, feature_dim=self.feature_dim,

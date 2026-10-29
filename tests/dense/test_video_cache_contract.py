@@ -10,6 +10,7 @@ from safetensors.torch import save_file
 
 from fastwam.cache.latent import cache_identity_sha256, file_sha256
 from fastwam.cosmos import jepa_video_cache as cache
+from fastwam.cosmos.dense_encoder import DenseTeacher, pool_adjacent_frame_features
 
 
 class FakeJointSource:
@@ -35,17 +36,18 @@ class FakeJointSource:
                 'normalized_state': self.normalized['state'][start + frame].clone()}
 
 
-def make_cache(tmp_path, monkeypatch):
+def make_cache(tmp_path, monkeypatch, teacher_name='vjepa21_vitg'):
     source = FakeJointSource()
-    teacher = {'name': 'vjepa21_vitg', 'weight_sha256': 'teacher-test',
-               'feature_dim': 8, 'video_input_size': 224, 'video_grid': 14}
+    width = 1280 if teacher_name == 'dinov3_vith16plus' else 8
+    teacher = {'name': teacher_name, 'weight_sha256': 'teacher-test',
+               'feature_dim': width, 'video_input_size': 224, 'video_grid': 14}
     spec = cache.identity(source, teacher)
     digest = cache_identity_sha256(spec)
     shards = []
     for _, episode, _ in cache.valid_windows(source):
         relative = f'episode_{episode:06d}.safetensors'
         path = tmp_path / relative
-        features = torch.full((1, 5, cache.TOKENS, 8), episode,
+        features = torch.full((1, 5, cache.TOKENS, width), episode,
                               dtype=torch.bfloat16)
         save_file({'features': features}, str(path))
         stat = path.stat()
@@ -133,3 +135,92 @@ def test_numeric_source_identity_change_is_rejected(tmp_path, monkeypatch):
     source.identity_sha256 = 'different-adapter'
     with pytest.raises(ValueError, match='Video cache identity'):
         cache.JepaVideoCachedDataset(**kwargs)
+
+
+def test_dinov3_adjacent_frame_pooling_preserves_time_and_patch_order():
+    features = torch.empty(2, 10, cache.TOKENS, 3, dtype=torch.bfloat16)
+    for frame in range(10):
+        features[:, frame] = frame
+    pooled = pool_adjacent_frame_features(features)
+    assert pooled.shape == (2, 5, cache.TOKENS, 3)
+    assert pooled.dtype == torch.bfloat16
+    torch.testing.assert_close(pooled[0, :, 0, 0],
+                               torch.tensor([0.5, 2.5, 4.5, 6.5, 8.5], dtype=torch.bfloat16))
+    torch.testing.assert_close(pooled[:, :, -1, -1], pooled[:, :, 0, 0])
+
+
+def test_dinov3_pooling_rejects_wrong_frame_or_token_geometry():
+    with pytest.raises(ValueError, match='finite'):
+        pool_adjacent_frame_features(torch.zeros(1, 9, cache.TOKENS, 8))
+
+
+@pytest.mark.parametrize('field,value', [
+    ('schema', 'fastwam-jepa-video-window-v1'),
+    ('temporal_pooling', 'official_video_tubelet2'),
+    ('temporal_slots', [[0, -4], [4, 8], [12, 16], [20, 24], [28, 32]]),
+    ('feature_shape', [5, 392, 768]),
+])
+def test_hplus_cache_rejects_incompatible_representation(tmp_path, monkeypatch, field, value):
+    _, kwargs, _ = make_cache(tmp_path, monkeypatch, 'dinov3_vith16plus')
+    assert cache.JepaVideoCachedDataset(**kwargs)[0]['visual_features'].shape == (5, 392, 1280)
+    path = tmp_path / 'manifest.json'
+    manifest = json.loads(path.read_text())
+    manifest['identity'][field] = value
+    digest = cache_identity_sha256(manifest['identity'])
+    manifest['identity_sha256'] = kwargs['expected_cache_identity'] = digest
+    path.write_text(json.dumps(manifest))
+    with pytest.raises(ValueError, match='Video cache identity'):
+        cache.JepaVideoCachedDataset(**kwargs)
+
+
+def test_hplus_cache_rejects_other_teacher_or_weights(tmp_path, monkeypatch):
+    _, kwargs, _ = make_cache(tmp_path, monkeypatch, 'dinov3_vith16plus')
+    for change in ({'expected_teacher': 'vjepa21_vitg'}, {'expected_weight_sha256': 'other'}):
+        with pytest.raises(ValueError, match='Video cache identity'):
+            cache.JepaVideoCachedDataset(**dict(kwargs, **change))
+
+
+def test_hplus_writer_multiple_batches_and_shards_assemble(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    class ImageEncoder(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.anchor = torch.nn.Parameter(torch.ones(()))
+            self.batch_sizes = []
+
+        def forward_features(self, images):
+            self.batch_sizes.append(len(images))
+            values = images[:, 0, 0, 0]
+            return {'x_norm_patchtokens': values[:, None, None].expand(-1, 196, 1280)}
+
+    encoder = ImageEncoder().eval().requires_grad_(False)
+    teacher = DenseTeacher('dinov3_vith16plus', encoder, 224, 14, 14, 'teacher-test')
+    rgb = torch.linspace(-0.8, 0.8, 40)[:, None, None, None].expand(-1, 3, 224, 448)
+    source = SimpleNamespace(source_sha='test-source', identity_sha256='test-numeric',
+        identity={'action_space': 'joint8'}, episodes=list(range(71)), lengths=[40] * 71,
+        rows=[(0, frame, 0, 40) for frame in range(4, 8)], bounds=[(0, 40)] * 4,
+        decode_episode=lambda episode: rgb)
+    monkeypatch.setattr(cache, 'open_realman_source', lambda *_: source)
+    monkeypatch.setattr(cache, 'load_dense_teacher', lambda *_args, **_kwargs: teacher)
+    monkeypatch.setattr(cache, 'SHARD_WINDOWS', 3)
+    kwargs = dict(dataset='unused', source_sha=source.source_sha,
+        teacher_name=teacher.name, teacher_repo='unused', weights='unused',
+        weight_sha256=teacher.weight_sha256, root=tmp_path, world_size=1)
+    receipt = cache.write_rank_cache(**kwargs, rank=0, frame_batch=2)
+    assert encoder.batch_sizes == [40, 20, 20]
+    assert [(item['start'], item['stop']) for item in receipt['shards']] == [(0, 3), (3, 4)]
+    manifest = cache.assemble_cache(**kwargs)
+    assert manifest['completed_windows'] == 4
+    assert manifest['identity']['feature_shape'] == [5, 392, 1280]
+    assert manifest['identity']['temporal_pooling'] == 'adjacent_frame_mean_v1'
+    tensors = torch.cat([cache.load_file(str(tmp_path / item['path']))['features']
+                         for item in manifest['shards']])
+    for index, (_, frame, _, _) in enumerate(source.rows):
+        offsets = torch.tensor(cache.OFFSETS) + frame
+        normalized = (((rgb[offsets, 0, 0, 0] + 1) * 0.5 - 0.485) / 0.229).bfloat16()
+        expected = normalized.float().reshape(5, 2).mean(1).bfloat16()
+        torch.testing.assert_close(tensors[index, :, 0, 0], expected, rtol=0, atol=0)
+        torch.testing.assert_close(tensors[index, :, -1, -1], expected, rtol=0, atol=0)
+    with pytest.raises(FileExistsError, match='receipt already exists'):
+        cache.write_rank_cache(**kwargs, rank=0, frame_batch=2)

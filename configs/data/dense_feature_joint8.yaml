@@ -4,7 +4,7 @@ train:
   source_sha256: ??
   feature_root: ??
   expected_cache_identity: ??
-  expected_teacher: vjepa21_vitg
+  expected_teacher: dinov3_vith16plus
   expected_weight_sha256: ??
   split: train
   cache_capacity: 2
