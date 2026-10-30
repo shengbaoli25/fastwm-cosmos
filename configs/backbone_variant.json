@@ -1,4 +1,4 @@
 {
-  "variant": "vjepa_vitb",
-  "config": "configs/experiments/rm71d78_vjepa_vitb_28l_50k.yaml"
+  "variant": "dinov3_vithplus",
+  "config": "configs/experiments/rm71d78_dinov3_vithplus_28l_50k.yaml"
 }

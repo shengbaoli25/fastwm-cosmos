@@ -1,10 +1,10 @@
-# RM71D78 · V-JEPA ViT-B · 28-layer Action/Force
+# RM71D78 · DINOv3 ViT-H+ · 28-layer Action/Force
 
-**Branch: `codex/rm71d78-vjepa-vitb-28l-50k`.** Frozen V-JEPA2.1 ViT-B/16
+**Branch: `codex/rm71d78-dinov3-vithplus-28l-50k`.** Frozen DINOv3 ViT-H+/16
 features supervise a fresh 28-layer, width768 predictor with matched Action/Force experts.
-The new DINOv3 ViT-H+ branch shares the downstream geometry, data split and 50k recipe.
+The new V-JEPA ViT-B branch shares the downstream geometry, data split and 50k recipe.
 
-| Parameter scope | V-JEPA ViT-B (this branch) | DINOv3 ViT-H+ |
+| Parameter scope | V-JEPA ViT-B | DINOv3 ViT-H+ (this branch) |
 |---|---:|---:|
 | Trainable model | **1,119,958,542** | **1,120,746,510** |
 | Frozen visual encoder | **86,833,152** | **840,633,600** |
