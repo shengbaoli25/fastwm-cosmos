@@ -1,0 +1,16 @@
+{
+  "training_config": "/absolute/dinov3-run/training/config.yaml",
+  "normalization_file": "/absolute/dinov3-run/normalization.json",
+  "teacher_source": "../third_party/dinov3",
+  "teacher_weights": "/absolute/official-dinov3/model.safetensors",
+  "force_preprocessing_file": "/absolute/training-dataset/meta/force.json",
+  "device": "cuda:0",
+  "model_dtype": "bfloat16",
+  "camera_order": ["global", "wrist"],
+  "camera_width": 640,
+  "camera_height": 480,
+  "action_horizon": 32,
+  "num_inference_steps": 16,
+  "action_seed": 42,
+  "force_seed": 43
+}
