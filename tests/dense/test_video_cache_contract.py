@@ -37,6 +37,9 @@ class FakeJointSource:
 
 def make_cache(tmp_path, monkeypatch):
     source = FakeJointSource()
+    original_spec = cache.teacher_spec
+    monkeypatch.setattr(cache, 'teacher_spec',
+                        lambda name: dict(original_spec(name), feature_dim=8))
     teacher = {'name': 'vjepa21_vitg', 'weight_sha256': 'teacher-test',
                'feature_dim': 8, 'video_input_size': 224, 'video_grid': 14}
     spec = cache.identity(source, teacher)

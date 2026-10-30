@@ -7,7 +7,7 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(ROOT / 'src'), str(ROOT), str(Path(__file__).parent)]
-from runtime import fingerprint, load_run, write_json
+from runtime import fingerprint, load_run, run_contract, write_json
 
 
 def main():
@@ -42,8 +42,10 @@ def main():
     set_global_seed(42)
     trainer = Wan22Trainer(model, dataset, None, cfg=cfg)
     expected = preflight['ranks'][rank]
-    if expected['resource'] != resource_identity() or cache['identity_sha256'] != preflight['cache_identity']:
-        raise ValueError('Restore resource or cache differs from preflight')
+    if (expected['resource'] != resource_identity()
+            or cache['identity_sha256'] != preflight['cache_identity']
+            or expected.get('run_contract') != run_contract(cfg, cache)):
+        raise ValueError('Restore resource, config or cache differs from preflight')
     trainer.load_training_state(expected['checkpoint']['state_path'])
     actual = fingerprint(trainer, model)
     report = dict(rank=rank, accepted=actual == expected['fingerprints'], actual=actual,

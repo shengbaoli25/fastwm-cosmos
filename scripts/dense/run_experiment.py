@@ -88,7 +88,7 @@ def verify_reused_cache(root, teacher, source_sha, weight_sha):
     spec = manifest.get('identity', {})
     if (manifest.get('status') != 'complete'
             or manifest.get('identity_sha256') != cache_identity_sha256(spec)
-            or spec.get('schema') != 'fastwam-jepa-video-window-v1'
+            or spec.get('schema') not in ('fastwam-jepa-video-window-v1', 'fastwam-jepa-video-window-v2')
             or spec.get('source_sha256') != source_sha
             or spec.get('teacher', {}).get('name') != teacher
             or spec.get('teacher', {}).get('weight_sha256') != weight_sha):

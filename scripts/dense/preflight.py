@@ -8,7 +8,7 @@ import time
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(ROOT / 'src'), str(ROOT), str(Path(__file__).parent)]
-from runtime import ExpertGradientProbe, fingerprint, load_run, write_json
+from runtime import ExpertGradientProbe, fingerprint, load_run, run_contract, write_json
 
 
 def main():
@@ -44,8 +44,8 @@ def main():
     zero = trainer.accelerator.state.deepspeed_plugin.deepspeed_config['zero_optimization']
     if (zero['stage'] != 1 or engine.train_micro_batch_size_per_gpu() != 64
             or engine.gradient_accumulation_steps() != 1 or engine.train_batch_size() != 256
-            or trainer.max_steps != 20000 or trainer.eval_every != 0):
-        raise RuntimeError('Actual engine differs from four-H200 B64/rank 20k recipe')
+            or trainer.max_steps != int(cfg.max_steps) or trainer.eval_every != 0):
+        raise RuntimeError('Actual engine differs from configured four-H200 B64/rank recipe')
     if torch.cuda.get_device_name() != 'NVIDIA H200' and 'H200' not in torch.cuda.get_device_name():
         raise RuntimeError('Allocated GPU is not H200')
     started = time.monotonic()
@@ -100,7 +100,11 @@ def main():
         actual_global_batch=engine.train_batch_size(), max_steps=trainer.max_steps,
         checkpoint=saved, fingerprints=fingerprint(trainer, model),
         dataset_source_sha256=args.source_sha, feature_cache_identity=cache['identity_sha256'],
-        teacher=args.teacher, gpu=torch.cuda.get_device_name(), peak_allocated_bytes=torch.cuda.max_memory_allocated())
+        teacher=args.teacher, run_contract=run_contract(cfg, cache),
+        architecture_counts={name: sum(p.numel() for p in module.parameters())
+                             for name, module in model.dit.items()},
+        trainable_parameters=sum(p.numel() for p in model.parameters() if p.requires_grad),
+        gpu=torch.cuda.get_device_name(), peak_allocated_bytes=torch.cuda.max_memory_allocated())
     write_json(Path(args.run_root) / f'rank_{rank:03d}.json', report)
     ranks = [None] * 4
     torch.distributed.all_gather_object(ranks, report)

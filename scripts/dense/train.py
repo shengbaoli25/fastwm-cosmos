@@ -1,4 +1,4 @@
-"""Start exactly 20,000 fresh BF16 Joint8 updates after all gates pass."""
+"""Start the configured fresh BF16 Joint8 run after all gates pass."""
 import argparse
 import json
 import logging
@@ -8,7 +8,7 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(ROOT / 'src'), str(ROOT), str(Path(__file__).parent)]
-from runtime import load_run, write_json
+from runtime import load_run, run_contract, write_json
 
 
 def main():
@@ -38,8 +38,10 @@ def main():
     cfg, model, dataset, cache = load_run(args.config, run_root, args.dataset,
         args.source_sha, args.cache_root, args.teacher, args.teacher_source,
         args.weights, args.weight_sha)
-    if cache['identity_sha256'] != gate['cache_identity'] or restore['cache_identity'] != gate['cache_identity']:
-        raise ValueError('Formal training cache differs from the gate')
+    if (cache['identity_sha256'] != gate['cache_identity']
+            or restore['cache_identity'] != gate['cache_identity']
+            or any(item.get('run_contract') != run_contract(cfg, cache) for item in gate['ranks'])):
+        raise ValueError('Formal training config or cache differs from the gate')
     rank = accelerator.process_index
     cfg.output_dir = str(run_root / 'training')
     Path(cfg.output_dir).mkdir(parents=True, exist_ok=True)
@@ -47,8 +49,8 @@ def main():
     set_global_seed(42)
     setup_logging(log_level=logging.INFO, is_main_process=rank == 0)
     trainer = Wan22Trainer(model, dataset, None, cfg=cfg)
-    if trainer.max_steps != 20000 or trainer.batch_size != 64 or trainer.eval_every != 0:
-        raise ValueError('Formal training must be B64/rank for exactly 20,000 updates')
+    if trainer.max_steps != int(cfg.max_steps) or trainer.batch_size != 64 or trainer.eval_every != 0:
+        raise ValueError('Formal training must be B64/rank for the configured number of updates')
     report = dict(status='formal_training_starting', teacher=args.teacher,
         source_sha256=args.source_sha, cache_identity=cache['identity_sha256'],
         resource=resource_identity(), config=cfg.output_dir, max_steps=trainer.max_steps,
@@ -61,8 +63,8 @@ def main():
         write_json(run_root / 'training' / 'start.json', report)
     accelerator.wait_for_everyone()
     trainer.train()
-    if trainer.global_step != 20000:
-        raise RuntimeError('Formal run ended before 20,000 updates')
+    if trainer.global_step != int(cfg.max_steps):
+        raise RuntimeError('Formal run ended before the configured update count')
     report.update(status='complete', global_step=trainer.global_step)
     write_json(run_root / 'training' / f'origin_rank_{rank:03d}.json', report)
     accelerator.wait_for_everyone()

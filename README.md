@@ -1,16 +1,26 @@
-# JEPA video policy · Cosmos Joint8 Action/Force
+# RM71D78 · V-JEPA ViT-B · 28-layer Action/Force
 
-**Current experiment: V-JEPA 2.1 ViT-g video prediction plus the original
-28-layer Cosmos Action/Force experts.** The paired control sets only the future
-L1 weight to zero. This supersedes the former single-frame feature-flow branch.
-See the [current architecture, training and offline launch guide](docs/cosmos/jepa-video-policy-joint8.md).
+**Branch: `codex/rm71d78-vjepa-vitb-28l-50k`.** Frozen V-JEPA2.1 ViT-B/16
+features supervise a fresh 28-layer, width768 predictor with matched Action/Force experts.
+The new DINOv3 ViT-H+ branch shares the downstream geometry, data split and 50k recipe.
 
-The sections below document the historical Cosmos baselines and deployment tools;
-the new experiment starts with `scripts/dense/run_experiment.py`.
+| Parameter scope | V-JEPA ViT-B (this branch) | DINOv3 ViT-H+ |
+|---|---:|---:|
+| Trainable model | **1,119,958,542** | **1,120,746,510** |
+| Frozen visual encoder | **86,833,152** | **840,633,600** |
+| Logical RGB-to-policy total | **1,206,791,694** | **1,961,380,110** |
+
+See the [comparison, exact counts and runnable preparation/training commands](docs/cosmos/rm71d78-backbone-comparison.md)
+and [reproducible parameter audit](docs/cosmos/backbone-parameter-counts.json).
+The active default is in `configs/backbone_variant.json`; use `scripts/backbones/run.py`.
+Both recipes use RM71D78, 4 H200, batch64/rank, BF16 and50,000 updates.
+Code and CPU/meta checks are prepared; caches, new training and measured inference results are pending.
+
+The sections below retain historical baselines and deployment evidence.
 
 # FastWAM · Cosmos28 · ForceWM28
 
-**Current branch: `codex/realman-cup-joint-30k` — no-reference joint diffusion.**
+**Historical branch: `codex/realman-cup-joint-30k` — no-reference joint diffusion.**
 
 **Joint8 step10000 inference evaluation (2026-10-21):** independent Video/Force/Action
 sampling, compiled inference and CUDA Graph runners, 27-configuration offline replay,

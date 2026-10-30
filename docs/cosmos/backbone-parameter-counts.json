@@ -1,0 +1,311 @@
+{
+  "schema": "fastwam-backbone-parameter-counts-v1",
+  "audited_at_utc": "2026-10-30T16:55:38.459079+00:00",
+  "torch_version": "2.7.1+cu128",
+  "git_head_at_audit": "fa5c3ba28ca552bddb5751b0adb5ef8f4d0be1de",
+  "method": "Actual configured PyTorch constructors on meta; exact trainer freeze method; unique nn.Parameter identity count",
+  "source_files_sha256": {
+    "scripts/backbones/count_parameters.py": "fb0348b1d6370de1b13c06baf8f0b00110ba345379577689ea34f7ab9067e156",
+    "src/fastwam/cosmos/dense_features.py": "89b91d5735c3f1dc522ee0e290724fc588f35be166fb736d696ef12f23544cb2",
+    "src/fastwam/cosmos/dense_encoder.py": "b5c5d4a7859460def5f13584895f76647290adab14e7c5d442bbf0741ad0b96f",
+    "src/fastwam/forcewm/diffusion.py": "b655f51e277d6bedb2db9a73c70462be0004dde4034d86a6e85622177d9860fe",
+    "src/fastwam/forcewm/model.py": "7a1d81c677a2b18d6c81a953df8c65d7dd835b3a55f0b417cc51d1175ee11730",
+    "src/fastwam/models/wan22/action_dit.py": "b789c724659e6e09f176af68e4495148d5f6a3b2d23f2facebdf6262db147912",
+    "src/fastwam/models/wan22/wan_video_dit.py": "578712e83fac2815d3e3a3fd9134178028082deba361433122fe3c5764982dd6",
+    "src/fastwam/baseline/optimizer.py": "f5c6584c592b16c8d020342df25e27204d13664668ae90fce5bfe1d453466be6",
+    "src/fastwam/trainer.py": "76f552b98ebff0042721a5b7c0241cc9ac050d12cb5f6ee597d29e24c818c3ca"
+  },
+  "variants": [
+    {
+      "config": "configs/experiments/rm71d78_vjepa_vitb_28l_50k.yaml",
+      "config_sha256": "1a7767dd3c33e481e5cc3c5855b6587109ddcdf7e0ae1e13ffecb6982abbaed9",
+      "teacher": "vjepa21",
+      "teacher_spec": {
+        "feature_dim": 768,
+        "input_size": 384,
+        "source_grid": 24,
+        "source_commit": "204698b45b3712590f06245fbfba32d3be539812",
+        "factory": "vit_base",
+        "depth": 12,
+        "checkpoint_filename": "vjepa2_1_vitb_dist_vitG_384.pt",
+        "checkpoint_key": "ema_encoder",
+        "temporal_aggregation": "joint_video_tubelet2",
+        "name": "vjepa21",
+        "upstream_commit": "204698b45b3712590f06245fbfba32d3be539812",
+        "output_grid": 14,
+        "feature_tokens": 392,
+        "video_input_size": 224
+      },
+      "model_config": {
+        "manifest": {},
+        "feature_dim": 768,
+        "hidden_dim": 768,
+        "depth": 28,
+        "heads": 12,
+        "view_grid": 14,
+        "action_hidden": 768,
+        "action_ffn": 3072,
+        "force_hidden": 768,
+        "force_ffn": 2048,
+        "joint_heads": 16,
+        "joint_head_dim": 128,
+        "context_dim": 1024,
+        "lambda_future": 1.0,
+        "force_shift": 1.0,
+        "action_seed": 42,
+        "force_seed": 43,
+        "proprio_seed": 44,
+        "gradient_checkpointing": true,
+        "num_inference_steps": 16
+      },
+      "training_model": {
+        "parameters": 1119958542,
+        "trainable_parameters": 1119958542,
+        "frozen_parameters": 0,
+        "unique_parameter_tensors": 1845,
+        "all_registered_parameter_paths": 1845,
+        "duplicate_parameter_aliases": [],
+        "parameter_specs_sha256": "494569a036b27a6d0394745618b5bff75fb3ae233a810bb3b2cea630475e4827",
+        "bf16_parameter_bytes": 2239917084,
+        "registered_buffer_elements": 5880
+      },
+      "components": {
+        "video": {
+          "parameters": 354908416,
+          "trainable_parameters": 354908416,
+          "frozen_parameters": 0,
+          "unique_parameter_tensors": 687,
+          "all_registered_parameter_paths": 687,
+          "duplicate_parameter_aliases": [],
+          "parameter_specs_sha256": "1a3e80c0671cf40b399272bf5b2bd920890eabdc3a22958782f8165cd13b8062",
+          "bf16_parameter_bytes": 709816832,
+          "registered_buffer_elements": 5880
+        },
+        "action": {
+          "parameters": 491060488,
+          "trainable_parameters": 491060488,
+          "frozen_parameters": 0,
+          "unique_parameter_tensors": 770,
+          "all_registered_parameter_paths": 770,
+          "duplicate_parameter_aliases": [],
+          "parameter_specs_sha256": "2fe41e14b2d957753f3bb2d7a404ac39f094b0457593f8d51d4f071775fde6e4",
+          "bf16_parameter_bytes": 982120976,
+          "registered_buffer_elements": 0
+        },
+        "force": {
+          "parameters": 270040838,
+          "trainable_parameters": 270040838,
+          "frozen_parameters": 0,
+          "unique_parameter_tensors": 381,
+          "all_registered_parameter_paths": 381,
+          "duplicate_parameter_aliases": [],
+          "parameter_specs_sha256": "0cd04db5f6bc5e8bffa1e1295708672bada3bf650d0ef3765f9999b332736510",
+          "bf16_parameter_bytes": 540081676,
+          "registered_buffer_elements": 0
+        },
+        "proprio_encoder": {
+          "parameters": 10240,
+          "trainable_parameters": 10240,
+          "frozen_parameters": 0,
+          "unique_parameter_tensors": 2,
+          "all_registered_parameter_paths": 2,
+          "duplicate_parameter_aliases": [],
+          "parameter_specs_sha256": "65b7ebe1df157a33acba1fa3605a0dcf4781dd243ce8acdbe03fe1b96ac5bf0c",
+          "bf16_parameter_bytes": 20480,
+          "registered_buffer_elements": 0
+        },
+        "action_source_time": {
+          "parameters": 3937536,
+          "trainable_parameters": 3937536,
+          "frozen_parameters": 0,
+          "unique_parameter_tensors": 4,
+          "all_registered_parameter_paths": 4,
+          "duplicate_parameter_aliases": [],
+          "parameter_specs_sha256": "be5baa11a697a06a6df0ee90ddabd20dbd70d585dd377523e637e9f6db1828ae",
+          "bf16_parameter_bytes": 7875072,
+          "registered_buffer_elements": 0
+        },
+        "task": {
+          "parameters": 1024,
+          "trainable_parameters": 1024,
+          "frozen_parameters": 0,
+          "unique_parameter_tensors": 1,
+          "all_registered_parameter_paths": 1,
+          "duplicate_parameter_aliases": [],
+          "parameter_specs_sha256": "868d6a46f8e3f91c4c3e69173cac5ca871db86d8e70c4e9256c7d4a2012b7221",
+          "bf16_parameter_bytes": 2048,
+          "registered_buffer_elements": 0
+        }
+      },
+      "optimizer": {
+        "group_count": 2,
+        "parameters": 1119958542,
+        "covers_each_trainable_parameter_exactly_once": true
+      },
+      "frozen_vision_encoder": {
+        "parameters": 86833152,
+        "trainable_parameters": 0,
+        "frozen_parameters": 86833152,
+        "unique_parameter_tensors": 158,
+        "all_registered_parameter_paths": 158,
+        "duplicate_parameter_aliases": [],
+        "parameter_specs_sha256": "ba407d459a5581c15bf035337057fa2dbefffffb59efe303f08ced0b42ebb51a",
+        "bf16_parameter_bytes": 173666304,
+        "registered_buffer_elements": 0
+      },
+      "teacher_is_registered_in_training_model": false,
+      "logical_model_parameters": 1206791694,
+      "logical_model_bf16_parameter_bytes": 2413583388
+    },
+    {
+      "config": "configs/experiments/rm71d78_dinov3_vithplus_28l_50k.yaml",
+      "config_sha256": "8590e9ba3ffe0cde2eebd5876e346f1a06d3f98790993e7f546161ccf053a042",
+      "teacher": "dinov3_vithplus",
+      "teacher_spec": {
+        "feature_dim": 1280,
+        "input_size": 224,
+        "source_grid": 14,
+        "source_commit": "6876159a11b4df116f30f667f8c9888617df0751",
+        "factory": "dinov3_vith16plus",
+        "depth": 32,
+        "checkpoint_filename": "model.safetensors",
+        "checkpoint_key": null,
+        "temporal_aggregation": "independent_frame_encoding_adjacent_pair_mean",
+        "name": "dinov3_vithplus",
+        "upstream_commit": "6876159a11b4df116f30f667f8c9888617df0751",
+        "output_grid": 14,
+        "feature_tokens": 392,
+        "video_input_size": 224
+      },
+      "model_config": {
+        "manifest": {},
+        "feature_dim": 1280,
+        "hidden_dim": 768,
+        "depth": 28,
+        "heads": 12,
+        "view_grid": 14,
+        "action_hidden": 768,
+        "action_ffn": 3072,
+        "force_hidden": 768,
+        "force_ffn": 2048,
+        "joint_heads": 16,
+        "joint_head_dim": 128,
+        "context_dim": 1024,
+        "lambda_future": 1.0,
+        "force_shift": 1.0,
+        "action_seed": 42,
+        "force_seed": 43,
+        "proprio_seed": 44,
+        "gradient_checkpointing": true,
+        "num_inference_steps": 16
+      },
+      "training_model": {
+        "parameters": 1120746510,
+        "trainable_parameters": 1120746510,
+        "frozen_parameters": 0,
+        "unique_parameter_tensors": 1845,
+        "all_registered_parameter_paths": 1845,
+        "duplicate_parameter_aliases": [],
+        "parameter_specs_sha256": "6adc020f8112fe117a843875c223aa3bd0c5cdd9aad8efa8db110873e4b1056c",
+        "bf16_parameter_bytes": 2241493020,
+        "registered_buffer_elements": 5880
+      },
+      "components": {
+        "video": {
+          "parameters": 355696384,
+          "trainable_parameters": 355696384,
+          "frozen_parameters": 0,
+          "unique_parameter_tensors": 687,
+          "all_registered_parameter_paths": 687,
+          "duplicate_parameter_aliases": [],
+          "parameter_specs_sha256": "6c70c57d22af97fa2d18664d0140aee94bdd43d24dac1bbddeee9d9f77e3a804",
+          "bf16_parameter_bytes": 711392768,
+          "registered_buffer_elements": 5880
+        },
+        "action": {
+          "parameters": 491060488,
+          "trainable_parameters": 491060488,
+          "frozen_parameters": 0,
+          "unique_parameter_tensors": 770,
+          "all_registered_parameter_paths": 770,
+          "duplicate_parameter_aliases": [],
+          "parameter_specs_sha256": "2fe41e14b2d957753f3bb2d7a404ac39f094b0457593f8d51d4f071775fde6e4",
+          "bf16_parameter_bytes": 982120976,
+          "registered_buffer_elements": 0
+        },
+        "force": {
+          "parameters": 270040838,
+          "trainable_parameters": 270040838,
+          "frozen_parameters": 0,
+          "unique_parameter_tensors": 381,
+          "all_registered_parameter_paths": 381,
+          "duplicate_parameter_aliases": [],
+          "parameter_specs_sha256": "0cd04db5f6bc5e8bffa1e1295708672bada3bf650d0ef3765f9999b332736510",
+          "bf16_parameter_bytes": 540081676,
+          "registered_buffer_elements": 0
+        },
+        "proprio_encoder": {
+          "parameters": 10240,
+          "trainable_parameters": 10240,
+          "frozen_parameters": 0,
+          "unique_parameter_tensors": 2,
+          "all_registered_parameter_paths": 2,
+          "duplicate_parameter_aliases": [],
+          "parameter_specs_sha256": "65b7ebe1df157a33acba1fa3605a0dcf4781dd243ce8acdbe03fe1b96ac5bf0c",
+          "bf16_parameter_bytes": 20480,
+          "registered_buffer_elements": 0
+        },
+        "action_source_time": {
+          "parameters": 3937536,
+          "trainable_parameters": 3937536,
+          "frozen_parameters": 0,
+          "unique_parameter_tensors": 4,
+          "all_registered_parameter_paths": 4,
+          "duplicate_parameter_aliases": [],
+          "parameter_specs_sha256": "be5baa11a697a06a6df0ee90ddabd20dbd70d585dd377523e637e9f6db1828ae",
+          "bf16_parameter_bytes": 7875072,
+          "registered_buffer_elements": 0
+        },
+        "task": {
+          "parameters": 1024,
+          "trainable_parameters": 1024,
+          "frozen_parameters": 0,
+          "unique_parameter_tensors": 1,
+          "all_registered_parameter_paths": 1,
+          "duplicate_parameter_aliases": [],
+          "parameter_specs_sha256": "868d6a46f8e3f91c4c3e69173cac5ca871db86d8e70c4e9256c7d4a2012b7221",
+          "bf16_parameter_bytes": 2048,
+          "registered_buffer_elements": 0
+        }
+      },
+      "optimizer": {
+        "group_count": 2,
+        "parameters": 1120746510,
+        "covers_each_trainable_parameter_exactly_once": true
+      },
+      "frozen_vision_encoder": {
+        "parameters": 840633600,
+        "trainable_parameters": 0,
+        "frozen_parameters": 840633600,
+        "unique_parameter_tensors": 519,
+        "all_registered_parameter_paths": 519,
+        "duplicate_parameter_aliases": [],
+        "parameter_specs_sha256": "af779e0c886096a1784401cb788400dd74d669590d226f18b4192bf3875460a7",
+        "bf16_parameter_bytes": 1681267200,
+        "registered_buffer_elements": 122896
+      },
+      "teacher_is_registered_in_training_model": false,
+      "logical_model_parameters": 1961380110,
+      "logical_model_bf16_parameter_bytes": 3922760220
+    }
+  ],
+  "exclusions": [
+    "Registered buffers, positional/RoPE caches, gradients, optimizer state and activations are not parameters.",
+    "The frozen vision encoder is cached offline during training and is not part of the optimizer.",
+    "Logical-model totals include the predictor, Action, Force, adapters and frozen vision encoder only.",
+    "No text encoder, video decoder/tokenizer or visualization decoder is instantiated by these variants.",
+    "DINO official combined QKV biases include masked K-bias entries; all registered entries count as parameters.",
+    "BF16 parameter bytes are weight storage, not an inference-memory measurement; GPU count does not multiply model size.",
+    "No model weights, GPU allocations, network requests or forward/training steps were used for this audit."
+  ]
+}

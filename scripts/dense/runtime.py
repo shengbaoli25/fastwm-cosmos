@@ -54,25 +54,36 @@ def load_run(config_path, run_root, dataset, source_sha, cache_root, teacher,
     root = Path(cache_root).resolve()
     if not config_path.is_file():
         raise FileNotFoundError('Training configuration is missing')
+    cfg = OmegaConf.load(config_path)
+    from fastwam.cosmos.dense_encoder import teacher_spec
+    spec = teacher_spec(teacher)
+    if (cfg.teacher != teacher or cfg.data.train.expected_teacher != teacher
+            or int(cfg.model.feature_dim) != spec['feature_dim']):
+        raise ValueError('Configuration teacher differs from requested variant')
+    episode_count = int(cfg.get('dataset_episode_count', 71))
+    if episode_count == 78:
+        from fastwam.cosmos.backbone_experiments import VARIANTS, validate_recipe, DATASET_SHA256
+        variant = next((name for name, item in VARIANTS.items() if item['teacher'] == teacher), None)
+        if (variant is None or source_sha != DATASET_SHA256
+                or weight_sha != VARIANTS[variant]['weight_sha256']):
+            raise ValueError('RM71D78 recipe requires its pinned dataset and comparison teacher')
+        validate_recipe(cfg, variant)
     manifest_path = root / 'manifest.json'
     cache = json.loads(manifest_path.read_text())
     identity = cache.get('identity', {})
     from fastwam.cache.latent import cache_identity_sha256
     digest = cache_identity_sha256(identity)
-    expected_revision = ('204698b45b3712590f06245fbfba32d3be539812'
-                         if teacher in ('vjepa21', 'vjepa21_vitg') else
-                         '6876159a11b4df116f30f667f8c9888617df0751')
+    expected_revision = spec['upstream_commit']
     if (cache.get('status') != 'complete' or digest != cache.get('identity_sha256')
             or identity.get('source_sha256') != source_sha
             or identity.get('teacher', {}).get('name') != teacher
             or identity.get('teacher', {}).get('upstream_commit') != expected_revision
             or identity.get('teacher', {}).get('weight_sha256') != weight_sha
-            or len(identity.get('episode_lengths', [])) != 71
-            or identity.get('feature_shape') != [5, 392, 1408 if teacher == 'vjepa21_vitg' else 768]):
+            or len(identity.get('episode_lengths', [])) != episode_count
+            or identity.get('feature_shape') != [5, 392, spec['feature_dim']]):
         raise ValueError('Completed feature cache identity is not bound to this dataset and teacher')
-    if teacher == 'dinov3' and os.environ.get('DINOV3_LICENSE_ACCEPTED') != '1':
+    if teacher.startswith('dinov3') and os.environ.get('DINOV3_LICENSE_ACCEPTED') != '1':
         raise PermissionError('DINOv3 terms must be accepted before the materials are used')
-    cfg = OmegaConf.load(config_path)
     cfg.output_dir = str(run_root / 'training')
     cfg.data.train.dataset_root = str(Path(dataset).resolve())
     cfg.data.train.source_sha256 = source_sha
@@ -91,15 +102,27 @@ def load_run(config_path, run_root, dataset, source_sha, cache_root, teacher,
     cfg.teacher_weight_sha256 = weight_sha
     if cfg.model.feature_dim != identity['teacher']['feature_dim']:
         raise ValueError('Config teacher width differs from video cache')
+    train_dataset = instantiate(cfg.data.train)
     model = instantiate(cfg.model, device=f"cuda:{int(os.environ.get('LOCAL_RANK', '0'))}",
                         model_dtype=torch.bfloat16)
-    train_dataset = instantiate(cfg.data.train)
     if int(os.environ.get('LOCAL_RANK', '0')) == 0:
         run_root.mkdir(parents=True, exist_ok=True)
         write_json(run_root / 'normalization.json', dict(
             statistics=train_dataset.normalization, train_episodes=identity['splits']['train'],
             cache_identity=digest, normalization='training episodes only'))
     return cfg, model, train_dataset, cache
+
+
+def run_contract(cfg, cache):
+    """Bind GPU gates to model geometry and optimization, not just the cache."""
+    from omegaconf import OmegaConf
+    from fastwam.cache.latent import cache_identity_sha256
+    values = {key: OmegaConf.to_container(cfg[key], resolve=True)
+              if OmegaConf.is_config(cfg[key]) else cfg[key]
+              for key in ('model', 'teacher', 'batch_size', 'gradient_accumulation_steps',
+                          'max_steps', 'learning_rate', 'lr_scheduler_type', 'weight_decay',
+                          'mixed_precision', 'seed', 'max_grad_norm')}
+    return cache_identity_sha256(dict(config=values, cache=cache['identity_sha256']))
 
 
 def fingerprint(trainer, model):
