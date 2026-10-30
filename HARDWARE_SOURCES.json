@@ -1,0 +1,14 @@
+{
+  "source_commit": "9a317a1e9d7d37e953102e3ee37f4bbf70ca5906",
+  "files": {
+    "src/realman_sync_client/camera.py": "9f5f3559eddedbb96d9e3781170198a055ab186aee5ae81615c354f716688e43",
+    "src/realman_sync_client/contracts.py": "80d844e0e5562a4634b3e122903bd0ebd251e3a32c79f18e80d627ea0a95d1b4",
+    "src/realman_sync_client/sdk.py": "500940f01c7d77f4846570c2f785c7848963eb3efbd56756b452f6368256c7c8",
+    "src/realman_sync_client/hardware.py": "c3dcc2125b2e6ff64e644109009cf739ce0a0b50ee213ef666638d22b9849f6c",
+    "src/realman_sync_client/gripper.py": "0e977c37ff703045a2cb7029bc3361284530af02b4187412b967af3536668ba2",
+    "src/realman_force/force_calibration.py": "7ca45806fb8475c705311d9989914cf98baf6f0c042495f23214633555141da1",
+    "src/realman_force/contract.py": "06316559a8cde17eae2a3c10ccbf60b6630448f018bf1beacf5dc75d761e6e82",
+    "src/realman_force/__init__.py": "00357fd441771672e7cbf11bc22e7ba632307f0423bdea7b8e67ddcc7622b60d",
+    "src/realman_force/force_filter.py": "4411d52196584ddf21b7915d303f9bf56feda2895dc1476677d29a1786bdd50b"
+  }
+}

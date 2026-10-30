@@ -1,0 +1,23 @@
+{
+  "type": "kalman",
+  "model": "random_walk",
+  "measurement_variance": [
+    0.25,
+    0.25,
+    0.25,
+    0.0004,
+    0.0004,
+    0.0004
+  ],
+  "process_variance_per_s": [
+    0.03662109375,
+    0.03662109375,
+    0.03662109375,
+    5.859375e-05,
+    5.859375e-05,
+    5.859375e-05
+  ],
+  "sample_rate_hz": 200.0,
+  "warmup_s": 0.5,
+  "max_gap_s": 0.03
+}
