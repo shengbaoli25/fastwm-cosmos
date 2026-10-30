@@ -19,17 +19,17 @@ from realman_sync_client.wire import PROTOCOL, decode_request
 
 
 def metadata(**overrides):
-    return dict(camera_names=["global", "wrist"], width=4, height=3, action_space="joint8",
+    result = dict(camera_names=["global", "wrist"], width=4, height=3, action_space="joint8",
                 action_horizon=32, history_length=32, control_hz=30,
-                video_context_frames=overrides.pop("video_context_frames", 1),
-                video_context_stride=overrides.pop("video_context_stride", 1),
-                force_preprocessing=None, **overrides)
+                video_context_frames=1, video_context_stride=1, force_preprocessing=None)
+    result.update(overrides)
+    return result
 
 
-def response(request):
+def response(request, horizon=32):
     return dict(protocol=PROTOCOL, session_id=request["session_id"], request_id=request["request_id"],
                 source_sequence=request["observation"]["sequence"], action_space="joint8",
-                control_hz=30, actions=[list(request["observation"]["state"]) for _ in range(32)])
+                control_hz=30, actions=[list(request["observation"]["state"]) for _ in range(horizon)])
 
 
 class RecordingTransport:
@@ -44,7 +44,7 @@ class RecordingTransport:
         self.requests.append(copy.deepcopy(request))
         self.infer_times.append(time.monotonic())
         time.sleep(self.delay)
-        result = response(request)
+        result = response(request, self.meta["action_horizon"])
         if self.mutate:
             self.mutate(result)
         return result
@@ -187,12 +187,41 @@ class SyncClientTests(unittest.TestCase):
     def test_metadata_rejects_training_cadence_mismatch(self):
         for change in ({"control_hz": 20}, {"action_space": "eef_pose7"}, {"history_length": 8}):
             with self.assertRaises(ValueError):
-                validate_metadata(dict(protocol=PROTOCOL, metadata=dict(metadata(), **change)))
+                validate_metadata(dict(protocol=PROTOCOL, ready=True, metadata=dict(metadata(), **change)))
+
+    def test_supported_short_horizons_preserve_complete_history(self):
+        for horizon in (1, 4, 32):
+            meta = metadata(action_horizon=horizon)
+            self.assertEqual(validate_metadata(dict(protocol=PROTOCOL, ready=True, metadata=meta))["action_horizon"], horizon)
+            client = SynchronousClient(RecordingTransport(meta), MockHardware(width=4, height=3), meta)
+            self.assertEqual(client.options.execute_steps, horizon)
+            self.assertEqual(client.collector.history.maxlen, 32)
+        for horizon in (0, 33):
+            with self.assertRaises(ValueError):
+                validate_metadata(dict(protocol=PROTOCOL, ready=True, metadata=metadata(action_horizon=horizon)))
+
+    def test_unready_server_and_excess_steps_rejected_before_hardware(self):
+        cases = [(dict(protocol=PROTOCOL, ready=ready, metadata=metadata()), [])
+                 for ready in (False, None, 1)]
+        cases.append((dict(protocol=PROTOCOL, ready=True, metadata=metadata(action_horizon=4)),
+                      ["--execute-steps", "5"]))
+        for health, argv in cases:
+            with patch("realman_sync_client.cli.InferenceHTTPClient") as transport, \
+                    patch("realman_sync_client.cli.MockHardware") as hardware:
+                transport.return_value.health.return_value = health
+                self.assertEqual(main(argv), 1)
+                hardware.assert_not_called()
+
+    def test_explicit_client_options_do_not_silently_clamp_horizon(self):
+        meta = metadata(action_horizon=4)
+        with self.assertRaisesRegex(ValueError, "horizon"):
+            SynchronousClient(RecordingTransport(meta), MockHardware(width=4, height=3), meta,
+                              options=ClientOptions(execute_steps=5))
 
 
 class HTTPIntegrationTests(unittest.TestCase):
     def test_mock_cli_through_real_http_with_bearer_and_release(self):
-        meta = metadata()
+        meta = metadata(action_horizon=3)
         calls = []
         class Handler(BaseHTTPRequestHandler):
             def log_message(self, *args):
@@ -212,7 +241,7 @@ class HTTPIntegrationTests(unittest.TestCase):
                 calls.append((self.path, self.headers.get("Authorization")))
                 if self.path == "/infer":
                     decode_request(request, meta)
-                    self.reply(response(request))
+                    self.reply(response(request, meta["action_horizon"]))
                 else:
                     self.reply(dict(protocol=PROTOCOL, released=True))
         server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
@@ -221,7 +250,7 @@ class HTTPIntegrationTests(unittest.TestCase):
         try:
             with patch.dict("os.environ", {"REALMAN_SERVER_TOKEN": "test-token"}), contextlib.redirect_stdout(io.StringIO()):
                 code = main(["--server", f"http://127.0.0.1:{server.server_port}",
-                             "--cycles", "1", "--execute-steps", "1"])
+                             "--cycles", "1"])
             self.assertEqual(code, 0)
             self.assertEqual([item[0] for item in calls], ["/health", "/infer", "/session/release"])
             self.assertTrue(all(item[1] == "Bearer test-token" for item in calls))

@@ -78,14 +78,14 @@ realman-sync-client \
 
 传感器历史在网络等待和动作执行期间持续更新。不是每次推理才增加一个历史点；32 个点始终对应训练时的 30 Hz 测量网格。首次请求等待完整历史；滤波 epoch 改变时清空历史，并拒绝基于先前 epoch 返回的动作。基础分支使用当前图像；DINO 和 VJEPA 的 `video_context_frames=2, video_context_stride=4` 使用 `[-4,0]` 两帧，即间隔 `4/30` 秒，最后一帧与当前 obs 完全相同。
 
-默认执行完整 32 行，`--execute-steps N` 可选择前 `1..32` 行，仍先验证整个返回块。每行周期包括 SDK 调用耗时；超过一个控制周期立即停机，不追赶补发。最后一行执行完一个周期后才缓停，然后才允许下一次请求。请求只携带原始单位，动作只接收已反归一化的原始单位。
+默认执行 Server 广播的完整 `action_horizon`，支持 `1..32` 行（模型默认 32）。`--execute-steps N` 可选择前 N 行，N 必须不大于 Server horizon，仍先验证整个返回块；观测历史固定保留 32 个点。每行周期包括 SDK 调用耗时；超过一个控制周期立即停机，不追赶补发。最后一行执行完一个周期后才缓停，然后才允许下一次请求。请求只携带原始单位，动作只接收已反归一化的原始单位。
 
 常用运行参数：
 
 | 参数 | 默认值 | 含义 |
 | --- | --- | --- |
 | `--cycles` | `1` | 完成多少轮；`0` 持续运行 |
-| `--execute-steps` | `32` | 每次返回块实际执行的前 N 行 |
+| `--execute-steps` | Server `action_horizon` | 每次返回块实际执行的前 N 行，不能超过 horizon |
 | `--timeout` | `120` | 单次 HTTP 等待秒数，无自动重试 |
 | `--max-result-age` | `120` | 返回动作对应 obs 的最大本机年龄 |
 | `--sensor-timeout` | `10` | 相机预热/完整连续历史等待秒数 |
@@ -94,10 +94,10 @@ realman-sync-client \
 
 ## 协议
 
-- `GET /health`：`{protocol, ready, metadata}`，metadata 明确 `camera_names,width,height,action_space,action_horizon,control_hz,history_length,video_context_frames,video_context_stride,force_preprocessing`。
+- `GET /health`：`{protocol, ready, metadata}`；只有 `ready=true` 才构造硬件连接。metadata 明确 `camera_names,width,height,action_space,action_horizon,control_hz,history_length,video_context_frames,video_context_stride,force_preprocessing`。
 - `POST /infer`：`{protocol,session_id,request_id,force_preprocessing,observation,history,video_context?}`。obs 含 `sequence,stamp,state[8],force[6],action_space,frames,frame_meta,force_meta`；历史不重复发送图像。
 - 图像：`frames[name]={width,height,encoding:"rgb8-base64",data}`，原始 RGB8 无损 base64；相机固定 `global,wrist`。最大 JSON 体积 64 MiB。
-- 返回：`{protocol,session_id,request_id,source_sequence,action_space,control_hz,actions[32][8]}`。
+- 返回：`{protocol,session_id,request_id,source_sequence,action_space,control_hz,actions[action_horizon][8]}`，返回行数必须精确匹配广播的 horizon。
 - `POST /session/release`：`{protocol,session_id}`，只在同步请求结束后发出。
 
 `src/realman_sync_client/wire.py` 与三个 Server 的 `deploy/realman_sync/wire.py` 保持逐字节相同。无需把训练代码复制到客户端即可执行契约校验。

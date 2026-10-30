@@ -20,7 +20,7 @@ def parser():
     result.add_argument("--execute", action="store_true", help="explicitly permit real hardware connection and action execution")
     result.add_argument("--enable-gripper", action="store_true", help="enable the CTAG2F120 before sensing (requires --execute)")
     result.add_argument("--cycles", type=int, default=1, help="cycles to run; 0 runs continuously (default: 1)")
-    result.add_argument("--execute-steps", type=int, default=32, help="execute this many rows of each 32-row chunk")
+    result.add_argument("--execute-steps", type=int, default=None, help="execute this many rows per chunk (default: server action_horizon)")
     result.add_argument("--timeout", type=float, default=120.0, help="HTTP timeout in seconds; no retries")
     result.add_argument("--max-result-age", type=float, default=120.0, help="reject result older than this local observation age")
     result.add_argument("--sensor-timeout", type=float, default=10.0)
@@ -44,7 +44,10 @@ def main(argv=None):
     try:
         transport = InferenceHTTPClient(args.server, timeout_s=args.timeout)
         metadata = validate_metadata(transport.health())
-        options = ClientOptions(args.execute_steps, args.max_result_age, args.sensor_timeout)
+        execute_steps = metadata["action_horizon"] if args.execute_steps is None else args.execute_steps
+        if not 1 <= execute_steps <= metadata["action_horizon"]:
+            raise ValueError("execute_steps must be within the server action horizon")
+        options = ClientOptions(execute_steps, args.max_result_age, args.sensor_timeout)
         if args.hardware == "mock":
             expected = metadata.get("force_preprocessing")
             force_id = metadata.get("force_preprocessing_id") or (

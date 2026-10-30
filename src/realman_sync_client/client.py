@@ -23,6 +23,8 @@ def _positive(value, name):
 def validate_metadata(health):
     if not isinstance(health, dict) or health.get("protocol") != PROTOCOL:
         raise ValueError("server protocol mismatch")
+    if health.get("ready") is not True:
+        raise ValueError("server is not ready for inference")
     meta = health.get("metadata")
     if not isinstance(meta, dict):
         raise ValueError("server health must contain metadata")
@@ -34,8 +36,8 @@ def validate_metadata(health):
             result.setdefault(key, 1)
         if type(result.get(key)) is not int or result[key] <= 0:
             raise ValueError(f"metadata {key} must be a positive integer")
-    if result["action_horizon"] != 32 or result["history_length"] != 32:
-        raise ValueError("client requires the trained 32-step action and observation history contract")
+    if result["action_horizon"] > 32 or result["history_length"] != 32:
+        raise ValueError("client requires action_horizon in [1, 32] and 32-step observation history")
     if result["video_context_frames"] > 32 or result["width"] * result["height"] > 4096 * 4096:
         raise ValueError("unsupported video context or image size")
     result.setdefault("video_context_stride", 1)
@@ -220,7 +222,7 @@ class ClientOptions:
 class SynchronousClient:
     def __init__(self, transport, hardware, metadata, *, options=None):
         self.transport, self.hardware, self.metadata = transport, hardware, metadata
-        self.options = options or ClientOptions()
+        self.options = options or ClientOptions(execute_steps=metadata["action_horizon"])
         if type(self.options.execute_steps) is not int or not 1 <= self.options.execute_steps <= metadata["action_horizon"]:
             raise ValueError("execute_steps must be within the model action horizon")
         _positive(self.options.max_result_age_s, "max_result_age_s")
