@@ -1,7 +1,9 @@
 """Keep new branches tied to the same data, downstream geometry and optimizer."""
 import importlib.util
 import json
+import os
 from pathlib import Path
+import sys
 from types import SimpleNamespace
 
 import pytest
@@ -41,6 +43,97 @@ def test_stage_plan_only_trains_from_already_complete_cache():
             assert command[command.index('--teacher') + 1] == spec['teacher']
             assert command[command.index('--weight-sha') + 1] == spec['weight_sha256']
             assert command[command.index('--num_processes') + 1] == '4'
+
+
+@pytest.mark.parametrize('visible', [None, '4,5,6,7', 'GPU-a,GPU-b,GPU-c,GPU-d'])
+def test_stages_explicitly_select_four_container_gpus(monkeypatch, visible):
+    runner = load_script('scripts/backbones/run.py')
+    if visible is None:
+        monkeypatch.delenv('CUDA_VISIBLE_DEVICES', raising=False)
+    else:
+        monkeypatch.setenv('CUDA_VISIBLE_DEVICES', visible)
+    monkeypatch.setenv('TRAIN_JOB_ID', 'job-test-1234')
+    monkeypatch.setenv('PYTHONPATH', '/existing/dependencies')
+    env = runner.stage_environment()
+    assert env['CUDA_VISIBLE_DEVICES'] == '0,1,2,3'
+    assert env['TRAIN_JOB_ID'] == 'job-test-1234'
+    assert env['PYTHONPATH'].split(os.pathsep) == [str(ROOT / 'src'), str(ROOT), '/existing/dependencies']
+    assert env['HF_HUB_OFFLINE'] == env['TRANSFORMERS_OFFLINE'] == env['HF_DATASETS_OFFLINE'] == '1'
+    assert os.environ.get('CUDA_VISIBLE_DEVICES') == visible
+
+
+@pytest.fixture
+def allocated_launcher(tmp_path, monkeypatch):
+    """Exercise launcher dispatch with real metadata guards and no GPU work."""
+    import torch
+    from fastwam.cosmos import dense_encoder
+    runner = load_script('scripts/backbones/run.py')
+    dataset, cache, run_root = (tmp_path / name for name in ('dataset', 'cache', 'run'))
+    (dataset / 'meta').mkdir(parents=True)
+    (dataset / 'meta/info.json').write_text(json.dumps(dict(
+        total_episodes=78, total_frames=86608, fps=30)))
+    cache.mkdir()
+    make_manifest(cache)
+    spec = VARIANTS['vjepa_vitb']
+    monkeypatch.setattr(dense_encoder, '_git_commit',
+                        lambda _: dense_encoder.teacher_spec(spec['teacher'])['upstream_commit'])
+    monkeypatch.setattr(runner, 'resolve_weights', lambda _, path: path)
+    monkeypatch.setattr(runner.subprocess, 'check_output', lambda *args, **kwargs: 'test-revision\n')
+    monkeypatch.setattr(torch.cuda, 'is_available', lambda: True)
+    monkeypatch.setattr(torch.cuda, 'device_count', lambda: 4)
+    monkeypatch.setattr(torch.cuda, 'get_device_name', lambda _: 'NVIDIA H200')
+    monkeypatch.setenv('TRAIN_JOB_ID', 'job-test-1234')
+    monkeypatch.delenv('CUDA_VISIBLE_DEVICES', raising=False)
+    monkeypatch.delenv('COSMOS_ALLOCATION_ID', raising=False)
+    monkeypatch.setenv('PET_NNODES', '1')
+    monkeypatch.setenv('PET_NODE_RANK', '0')
+    monkeypatch.setattr(sys, 'argv', ['run.py', '--variant', 'vjepa_vitb',
+        '--dataset', str(dataset), '--cache-root', str(cache),
+        '--weights', str(tmp_path / 'weights.pt'), '--run-root', str(run_root)])
+    context = SimpleNamespace(runner=runner, run_root=run_root, calls=[],
+        inventory=[f'GPU-{index}, NVIDIA H200, 143771' for index in range(4)])
+
+    def execute(command, **kwargs):
+        if command[0] == 'nvidia-smi':
+            assert command == ['nvidia-smi', '--query-gpu=uuid,name,memory.total',
+                               '--format=csv,noheader,nounits']
+            assert kwargs == dict(check=True, capture_output=True, text=True)
+            assert not run_root.exists()
+            return SimpleNamespace(stdout='\n'.join(context.inventory) + '\n')
+        context.calls.append((command, kwargs))
+        return SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr(runner.subprocess, 'run', execute)
+    return context
+
+
+def test_every_stage_receives_the_same_validated_device_environment(allocated_launcher):
+    context = allocated_launcher
+    context.runner.main()
+    assert [Path(command[command.index('--num_processes') + 2]).stem
+            for command, _ in context.calls] == ['preflight', 'restore', 'train']
+    environments = [kwargs['env'] for _, kwargs in context.calls]
+    assert len(environments) == 3 and all(env is environments[0] for env in environments)
+    assert environments[0]['CUDA_VISIBLE_DEVICES'] == '0,1,2,3'
+    assert json.loads((context.run_root / 'claim.json').read_text())['status'] == 'complete'
+
+
+@pytest.mark.parametrize('invalid', ['missing', 'extra', 'duplicate', 'wrong_gpu', 'low_memory'])
+def test_physical_allocation_guard_rejects_hidden_or_wrong_cards_before_output(allocated_launcher, invalid):
+    context = allocated_launcher
+    if invalid == 'missing':
+        context.inventory.pop()
+    elif invalid == 'extra':
+        context.inventory += [f'GPU-{index}, NVIDIA H200, 143771' for index in range(4, 8)]
+    elif invalid == 'duplicate':
+        context.inventory[-1] = context.inventory[0]
+    elif invalid == 'wrong_gpu':
+        context.inventory[-1] = context.inventory[-1].replace('H200', 'H100')
+    else:
+        context.inventory[-1] = context.inventory[-1].replace('143771', '80000')
+    with pytest.raises(ValueError, match='Exactly four allocated H200'):
+        context.runner.main()
+    assert not context.run_root.exists() and not context.calls
 
 
 def test_branch_default_must_match_its_config(tmp_path):
