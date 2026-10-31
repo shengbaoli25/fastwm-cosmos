@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 import json
 import os
 from pathlib import Path
+import socket
 import subprocess
 import sys
 
@@ -74,6 +75,24 @@ def stage_commands(config, run_root, dataset, cache_root, variant, teacher_sourc
                                   ('restore', 'restore.py'), ('formal', 'train.py'))]
 
 
+def stage_environment():
+    """Select all four container GPUs consistently for every training stage."""
+    return dict(os.environ, CUDA_VISIBLE_DEVICES='0,1,2,3', OMP_NUM_THREADS='4',
+        TOKENIZERS_PARALLELISM='false', HF_HUB_OFFLINE='1',
+        TRANSFORMERS_OFFLINE='1', HF_DATASETS_OFFLINE='1', WANDB_MODE='offline',
+        PYTHONDONTWRITEBYTECODE='1',
+        PYTHONPATH=os.pathsep.join((str(ROOT / 'src'), str(ROOT), os.environ.get('PYTHONPATH', ''))))
+
+
+def validate_allocation(env):
+    """Reject a wider or different physical allocation before creating output."""
+    from fastwam.cosmos.job_identity import distributed_identity
+    query = subprocess.run(['nvidia-smi', '--query-gpu=uuid,name,memory.total',
+                            '--format=csv,noheader,nounits'], check=True, capture_output=True, text=True)
+    rows = [line.strip() for line in query.stdout.splitlines() if line.strip()]
+    return distributed_identity(env, socket.gethostname(), rows)
+
+
 def write_json(path, value):
     temporary = path.with_suffix('.tmp')
     temporary.write_text(json.dumps(value, indent=2, allow_nan=False) + '\n')
@@ -128,15 +147,13 @@ def main():
     if (not torch.cuda.is_available() or torch.cuda.device_count() != 4
             or any('H200' not in torch.cuda.get_device_name(i) for i in range(4))):
         raise RuntimeError('Exactly four allocated H200 GPUs required')
+    env = stage_environment()
+    validate_allocation(env)
     run_root = args.run_root.resolve()
     run_root.mkdir(parents=True, exist_ok=False)
     (run_root / 'logs').mkdir()
     report.update(job_id=os.environ['TRAIN_JOB_ID'],
                   started_at_utc=datetime.now(timezone.utc).isoformat())
-    env = dict(os.environ, OMP_NUM_THREADS='4', TOKENIZERS_PARALLELISM='false',
-        HF_HUB_OFFLINE='1', TRANSFORMERS_OFFLINE='1', HF_DATASETS_OFFLINE='1',
-        WANDB_MODE='offline', PYTHONDONTWRITEBYTECODE='1',
-        PYTHONPATH=os.pathsep.join((str(ROOT / 'src'), str(ROOT), os.environ.get('PYTHONPATH', ''))))
     for stage, command in stage_commands(config, run_root, dataset, cache_root,
                                           variant, teacher_source, weights):
         report.update(status='running_' + stage, command=command,
