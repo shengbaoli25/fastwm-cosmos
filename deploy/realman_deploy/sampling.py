@@ -8,12 +8,15 @@ PROFILES = {
     "4416": {"id": "4416", "label": "平衡 · 4 / 4 / 16",
              "video_steps": 4, "force_steps": 4, "action_steps": 16,
              "execution_modes": ["synchronous", "async_relaxed"]},
+    "3310": {"id": "3310", "label": "快速 · 3 / 3 / 10",
+             "video_steps": 3, "force_steps": 3, "action_steps": 10,
+             "execution_modes": ["synchronous"]},
 }
 
 
 def profile_steps(profile: str) -> dict:
     if profile not in PROFILES:
-        raise ValueError("采样配置必须为 161616 或 4416")
+        raise ValueError("采样配置必须为 161616、4416 或 3310")
     return {k: PROFILES[profile][k] for k in ("video_steps", "force_steps", "action_steps")}
 
 
@@ -31,7 +34,11 @@ def updated_config(config: dict, profile: str, mode: str) -> dict:
     # the trained model; inference schedules are a separate runtime choice.
     options = dict(config.get("inference_optimization", {}))
     backend = config.get("inference_backend", "joint_multirate")
-    if backend == "joint_expert_schedule":
+    if profile == "3310":
+        # Non-divisible grids need the existing independent expert scheduler.
+        backend = "joint_expert_schedule"
+        options = {"compile_layers": False, "cuda_graph": False}
+    elif backend == "joint_expert_schedule":
         if "mode" in options:
             raise ValueError("joint_expert_schedule uses compile_layers/cuda_graph, not mode")
         options.setdefault("compile_layers", True)

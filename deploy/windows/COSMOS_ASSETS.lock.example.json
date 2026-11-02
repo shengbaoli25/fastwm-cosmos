@@ -1,0 +1,48 @@
+{
+  "schema": "cosmos-local-assets-template-v1",
+  "text_identity": "REPLACE_WITH_VERIFIED_MANIFEST_IDENTITY",
+  "assets": [
+    {
+      "id": "checkpoint",
+      "remote_path": "REPLACE_WITH_EXACT_TRAINING_FILE_PATH",
+      "relative_path": "cosmos/checkpoints/step_020000.pt",
+      "bytes": -1,
+      "sha256": "REPLACE_WITH_VERIFIED_SHA256"
+    },
+    {
+      "id": "training_config",
+      "remote_path": "REPLACE_WITH_EXACT_TRAINING_FILE_PATH",
+      "relative_path": "cosmos/config/training.config.yaml",
+      "bytes": -1,
+      "sha256": "REPLACE_WITH_VERIFIED_SHA256"
+    },
+    {
+      "id": "normalization",
+      "remote_path": "REPLACE_WITH_EXACT_TRAINING_FILE_PATH",
+      "relative_path": "cosmos/config/normalization.json",
+      "bytes": -1,
+      "sha256": "REPLACE_WITH_VERIFIED_SHA256"
+    },
+    {
+      "id": "tokenizer",
+      "remote_path": "REPLACE_WITH_EXACT_TRAINING_FILE_PATH",
+      "relative_path": "cosmos/checkpoints/tokenizer.pth",
+      "bytes": -1,
+      "sha256": "REPLACE_WITH_VERIFIED_SHA256"
+    },
+    {
+      "id": "text_manifest",
+      "remote_path": "REPLACE_WITH_EXACT_TRAINING_FILE_PATH",
+      "relative_path": "cosmos/assets/text/manifest.json",
+      "bytes": -1,
+      "sha256": "REPLACE_WITH_VERIFIED_SHA256"
+    },
+    {
+      "id": "text_context",
+      "remote_path": "REPLACE_WITH_EXACT_TRAINING_FILE_PATH",
+      "relative_path": "cosmos/assets/text/text_000.safetensors",
+      "bytes": -1,
+      "sha256": "REPLACE_WITH_VERIFIED_SHA256"
+    }
+  ]
+}

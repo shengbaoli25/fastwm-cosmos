@@ -14,7 +14,7 @@ sys.path[:0] = [str(ROOT / "src"), str(ROOT / "deploy")]
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--backend", choices=("cosmos", "dense", "mock"), required=True)
+    parser.add_argument("--backend", choices=("cosmos", "cosmos_checkpoint", "dense", "mock"), required=True)
     parser.add_argument("--config", type=Path)
     parser.add_argument("--checkpoint", type=Path)
     parser.add_argument("--host", default="127.0.0.1")
@@ -37,6 +37,8 @@ def main(argv=None):
         config = json.loads(config_path.read_text())
         if args.backend == "cosmos":
             from realman_sync.cosmos_policy import CosmosPolicy as Policy
+        elif args.backend == "cosmos_checkpoint":
+            from realman_sync.cosmos_checkpoint_policy import CheckpointCosmosPolicy as Policy
         else:
             from realman_sync.dense_policy import DensePolicy as Policy
         policy = Policy(config=config, config_path=config_path, checkpoint=args.checkpoint.expanduser().resolve())

@@ -1,0 +1,9 @@
+# Dependency list is source, despite the repository-wide *.txt rule.
+!requirements.server.txt
+
+# Local assets, authentication, and download results are never source.
+COSMOS_ASSETS.lock.json
+*-receipts.json
+server-token.txt
+*.log
+*.jsonl*

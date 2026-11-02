@@ -1,6 +1,7 @@
 """Single in-flight inference worker with a bounded HTTP request interface."""
 from __future__ import annotations
 
+from copy import deepcopy
 import hmac
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
@@ -33,6 +34,39 @@ class InferenceService:
         if self.session_timeout_s <= 0:
             raise ValueError("session timeout must be positive")
         self.failed = False
+        self.reconfiguring = threading.Event()
+        getter = getattr(policy, "sampling_settings", None)
+        self._sampling = (deepcopy(getter()) if callable(getter) else
+                          dict(supported=False, sampling_profile=None, profiles=[]))
+
+    def sampling_status(self):
+        # Published only after successful warm-up/config persistence. A health
+        # reader never sees a candidate runner or partially updated settings.
+        return dict(deepcopy(self._sampling), updating=self.reconfiguring.is_set())
+
+    def configure_sampling(self, payload):
+        if (not isinstance(payload, dict) or set(payload) != {"protocol", "sampling_profile"}
+                or payload.get("protocol") != PROTOCOL
+                or not isinstance(payload.get("sampling_profile"), str)
+                or payload["sampling_profile"] not in {"161616", "4416", "3310"}):
+            raise ValueError("Sampling request requires protocol and profile 161616, 4416 or 3310")
+        if not self.lock.acquire(blocking=False):
+            raise Conflict("Inference busy; pause the client before changing sampling")
+        try:
+            if self.closing.is_set():
+                raise Conflict("Server is shutting down")
+            if self.session_id is not None:
+                raise Conflict("Release the active client session before changing sampling")
+            configure = getattr(self.policy, "configure_sampling", None)
+            if not self._sampling.get("supported") or not callable(configure):
+                raise ValueError("This policy does not support runtime sampling changes")
+            self.reconfiguring.set()
+            sampling = configure(payload["sampling_profile"])
+            self._sampling = deepcopy(sampling)
+            return dict(protocol=PROTOCOL, sampling=dict(deepcopy(self._sampling), updating=False), updated=True)
+        finally:
+            self.reconfiguring.clear()
+            self.lock.release()
 
     def infer(self, payload):
         if not self.lock.acquire(blocking=False):
@@ -166,16 +200,21 @@ class PolicyHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         if not self._authorized():
             return
+        if self.path == "/sampling":
+            self._reply(200, dict(protocol=PROTOCOL, sampling=self.server.service.sampling_status()))
+            return
         if self.path != "/health":
             self._reply(404, dict(error="Unknown endpoint"))
             return
-        self._reply(200, dict(protocol=PROTOCOL, ready=not self.server.service.closing.is_set(),
-                              metadata=self.server.service.metadata))
+        service = self.server.service
+        self._reply(200, dict(protocol=PROTOCOL,
+            ready=not service.closing.is_set() and not service.reconfiguring.is_set(),
+            metadata=service.metadata, sampling=service.sampling_status()))
 
     def do_POST(self):
         if not self._authorized():
             return
-        if self.path not in {"/infer", "/session/release"}:
+        if self.path not in {"/infer", "/session/release", "/sampling"}:
             self._reply(404, dict(error="Unknown endpoint"))
             return
         try:
@@ -187,15 +226,19 @@ class PolicyHandler(BaseHTTPRequestHandler):
             if len(lengths) != 1:
                 raise ValueError("One Content-Length header is required")
             length = int(lengths[0])
-            if not 0 < length <= MAX_BODY_BYTES:
+            if not 0 < length <= (4096 if self.path == "/sampling" else MAX_BODY_BYTES):
                 self._reply(413, dict(error="Request exceeds body limit"))
                 return
             raw = self.rfile.read(length)
             if len(raw) != length:
                 raise ValueError("Incomplete request body")
             payload = json.loads(raw, parse_constant=_reject_constant)
-            result = (self.server.service.infer(payload) if self.path == "/infer"
-                      else self.server.service.release(payload))
+            if self.path == "/infer":
+                result = self.server.service.infer(payload)
+            elif self.path == "/sampling":
+                result = self.server.service.configure_sampling(payload)
+            else:
+                result = self.server.service.release(payload)
             self._reply(200, result)
         except Conflict as exc:
             self._reply(409, dict(protocol=PROTOCOL, error=str(exc)))

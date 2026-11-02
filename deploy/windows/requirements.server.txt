@@ -1,0 +1,4 @@
+# Native Windows inference dependencies. Original experiment source is unchanged.
+-r ../cosmos/code/deploy/requirements.txt
+timm==1.0.15
+huggingface-hub==0.29.2

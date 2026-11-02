@@ -1,0 +1,17 @@
+{
+  "schema": "realman-desktop-inference-code-layout-v1",
+  "experiments": [
+    {
+      "name": "cosmos",
+      "source_path": "C:/path/to/infer/cosmos/code",
+      "commit": "057f78767f52f358b229f4a05b097c0f1455fa3d",
+      "policy_backend": "cosmos"
+    },
+    {
+      "name": "vjepa-vitb-28l",
+      "source_path": "C:/path/to/infer/vjepa-vitb-28l/code",
+      "commit": "9810104d6ffb44f22f485c5f1e9282eabbdebf06",
+      "policy_backend": "dense"
+    }
+  ]
+}
