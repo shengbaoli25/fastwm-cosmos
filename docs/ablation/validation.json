@@ -1,0 +1,54 @@
+{
+  "schema": "rm71d78-fastwam-branch-validation-v1",
+  "date": "2026-11-02",
+  "branch": "codex/ablation-rm71d78-fastwam",
+  "base_commit": "057f78767f52f358b229f4a05b097c0f1455fa3d",
+  "implementation_source_commit": "50080ad",
+  "scope": "Independent FastWAM branch only; test results rerun in this worktree",
+  "working_directory": "<repository-root>",
+  "supported_backends": [
+    "fastwam"
+  ],
+  "checks": {
+    "ablation_tests": {
+      "command": "PYTHONPATH=src:deploy python -m pytest tests/ablation -q",
+      "python_executable": "Existing Python 3.12 / Torch 2.7.1 environment with isolated validation dependencies appended to sys.path",
+      "environment": {
+        "PYTHONPATH": "<working_directory>/src"
+      },
+      "exit_code": 0,
+      "passed": 17,
+      "skipped": 0,
+      "seconds": 18.29,
+      "coverage": [
+        "Official FastWAM constructor signature, BF16 and scheduler argument conversion",
+        "Explicit 7D-to-joint8 head adaptation and strict checkpoint identity",
+        "Semantic training recipe mismatch rejection",
+        "Actual official reader with embedded PNG, two-camera layout, episode-boundary action padding and exact normalization parity",
+        "Synthetic 78-episode capture conversion and Hugging Face embedded-image decoding",
+        "Real local HTTP health/infer/session release with an explicitly injected test predictor"
+      ]
+    },
+    "plan": {
+      "command": "python scripts/ablation/fastwam.py plan",
+      "exit_code": 0,
+      "training_started": false
+    },
+    "compile": {
+      "command": "python -m compileall -q src/fastwam/ablation scripts/ablation tests/ablation",
+      "exit_code": 0
+    },
+    "diff_check": {
+      "command": "git diff --check",
+      "exit_code": 0
+    }
+  },
+  "training_launched": false,
+  "large_weights_downloaded": false,
+  "real_78_episode_dataset_verified_on_this_host": false,
+  "real_checkpoint_load_verified": false,
+  "gpu_training_verified": false,
+  "gpu_inference_verified": false,
+  "robot_closed_loop_verified": false,
+  "limitation": "Code, CPU and synthetic HTTP checks do not establish successful training, real-checkpoint latency or task success."
+}

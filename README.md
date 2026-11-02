@@ -1,6 +1,14 @@
 # FastWAM · Cosmos28 · ForceWM28
 
-**Current branch: `codex/realman-cup-joint-30k` — no-reference joint diffusion.**
+**Current branch: `codex/ablation-rm71d78-fastwam` — independent FastWAM baseline.**
+
+This branch provides data preparation, explicit training/resume, and a `realman-sync-v1`
+server for the 78-demonstration plug-transfer dataset. Start with the
+[branch guide](docs/ablation/README.zh.md) and [FastWAM details](docs/ablation/fastwam.md).
+Training has not been started; real-checkpoint GPU inference remains unverified.
+
+The Cosmos material below is inherited documentation from the base branch
+`codex/realman-cup-joint-30k`; it does not describe this FastWAM experiment.
 
 **Joint8 step10000 inference evaluation (2026-10-21):** independent Video/Force/Action
 sampling, compiled inference and CUDA Graph runners, 27-configuration offline replay,

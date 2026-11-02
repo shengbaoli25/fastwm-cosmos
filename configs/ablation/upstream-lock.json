@@ -1,0 +1,16 @@
+{
+  "fastwam": {
+    "repository": "https://github.com/yuantianyuan01/FastWAM",
+    "revision": "7faa71108368fbb3b6885649f112af607427a2d4",
+    "initialization": "https://huggingface.co/yuanty/fastwam/blob/main/libero_uncond_2cam224.pt",
+    "sha256": "1000437cfcf55c000094f79a2600634c502bcb5b492476b94bf8509883a49579",
+    "adaptation": "Keep complete video/action backbones; reset action input/output and proprio projections for joint8"
+  },
+  "raw_dataset": {
+    "name": "rm71d_plug_transfer_20261029",
+    "source_episodes": 78,
+    "inventory_sha256": "b24b701239f54ad38d16c819b9ea9f6fad5f9374a683a84a68d2cd7ef27067a8",
+    "provenance": "Existing rm71d78_dinov3_vithplus_28l_50k training record, 2026-10-31",
+    "verified_on_this_host": false
+  }
+}

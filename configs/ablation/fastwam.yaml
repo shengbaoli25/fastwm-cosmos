@@ -1,0 +1,82 @@
+# Overlay on configs/train.yaml and configs/model/fastwam.yaml.
+# Resolved by scripts/ablation/fastwam.py; paths must be supplied explicitly.
+dataset_root: ???
+normalization_path: ???
+asset_root: ???
+text_embedding_cache_dir: ???
+pretrained_fastwam_checkpoint: ???
+output_dir: ./runs/ablation/fastwam-rm71d78
+batch_size: 1
+ablation_num_processes: 1
+num_workers: 4
+gradient_accumulation_steps: 16
+learning_rate: 1.0e-4
+num_epochs: 1000
+max_steps: 50000
+mixed_precision: bf16
+seed: 42
+weight_decay: 0.01
+save_every: 5000
+log_every: 10
+# All 78 source episodes are training data; this is not held-out validation.
+eval_every: 0
+resume: null
+model:
+  _target_: fastwam.ablation.fastwam.create_joint8_fastwam
+  # Recipe contains _target_ strings as provenance, never as nested constructors.
+  _recursive_: false
+  dataset_root: ${dataset_root}
+  normalization_path: ${normalization_path}
+  asset_root: ${asset_root}
+  text_embedding_cache_dir: ${text_embedding_cache_dir}
+  pretrained_fastwam_checkpoint: ${pretrained_fastwam_checkpoint}
+  initialize_from_official: true
+  model_init_seed: ${seed}
+  load_text_encoder: false
+  action_dit_pretrained_path: null
+  skip_dit_load_from_pretrain: true
+data:
+  train:
+    _target_: fastwam.datasets.lerobot.robot_video_dataset.RobotVideoDataset
+    dataset_dirs: ["${dataset_root}"]
+    shape_meta:
+      images:
+        - {key: global, raw_shape: [3, 480, 640], shape: [3, 224, 224]}
+        - {key: wrist, raw_shape: [3, 480, 640], shape: [3, 224, 224]}
+      action: [{key: default, raw_shape: 8, shape: 8}]
+      state: [{key: default, raw_shape: 8, shape: 8}]
+    num_frames: 33
+    global_sample_stride: 1
+    action_video_freq_ratio: 4
+    video_size: [224, 448]
+    camera_key: null
+    val_set_proportion: 0.0
+    is_training_set: true
+    pretrained_norm_stats: ${normalization_path}
+    skip_padding_as_possible: false
+    concat_multi_camera: horizontal
+    video_backend: pyav
+    processor:
+      _target_: fastwam.datasets.lerobot.processors.fastwam_processor.FastWAMProcessor
+      shape_meta: ${data.train.shape_meta}
+      num_obs_steps: ${data.train.num_frames}
+      num_output_cameras: 2
+      action_output_dim: 8
+      proprio_output_dim: 8
+      delta_action_dim_mask: {default: [false, false, false, false, false, false, false, false]}
+      action_state_transforms: null
+      use_stepwise_action_norm: false
+      norm_default_mode: z-score
+      norm_exception_mode: null
+      action_state_merger:
+        _target_: fastwam.datasets.lerobot.transforms.action_state_merger.ConcatLeftAlign
+        state_target_dim: 8
+      train_transforms:
+        - {_target_: fastwam.datasets.lerobot.transforms.image.ToTensor}
+        - {_target_: torchvision.transforms.Resize, size: [224, 224]}
+      val_transforms:
+        - {_target_: fastwam.datasets.lerobot.transforms.image.ToTensor}
+        - {_target_: torchvision.transforms.Resize, size: [224, 224]}
+    text_embedding_cache_dir: ${text_embedding_cache_dir}
+    use_text_embed_cache: true
+    context_len: 128

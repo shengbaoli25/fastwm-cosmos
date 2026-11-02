@@ -1,5 +1,11 @@
 # FastWAM
 
+## RM71D78 FastWAM 独立实验分支
+
+本分支提供 78 条插头转换示范的 FastWAM 数据准备、训练/恢复与 `realman-sync-v1` Server。
+入口见[分支使用说明](docs/ablation/README.zh.md)和[FastWAM 细节](docs/ablation/fastwam.md)。
+尚未启动训练，真实 checkpoint 的 GPU 推理仍未验证。下文保留原始上游文档。
+
 **Fast-WAM: Do World Action Models Need Test-time Future Imagination?** 的官方代码仓库。
 
 [![English](https://img.shields.io/badge/README-English-111111.svg)](./README.md)
