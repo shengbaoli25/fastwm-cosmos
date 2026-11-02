@@ -9,7 +9,10 @@ from __future__ import annotations
 from copy import deepcopy
 import json
 import math
+import os
 from pathlib import Path
+import tempfile
+import time
 
 
 _TEACHERS = {
@@ -24,6 +27,56 @@ _ARCHITECTURE = ('feature_dim', 'hidden_dim', 'depth', 'heads', 'view_grid',
 _REQUIRED_MODEL = _ARCHITECTURE + ('manifest', 'lambda_future', 'force_shift',
     'action_seed', 'force_seed', 'proprio_seed', 'gradient_checkpointing',
     'num_inference_steps')
+DENSE_SAMPLING_PROFILES = {
+    'dense16': dict(id='dense16', label='标准 · 力16 / 动作16', video_steps=None,
+                    video_mode='single_forward', force_steps=16, action_steps=16),
+    'dense10': dict(id='dense10', label='快速 · 力10 / 动作10', video_steps=None,
+                    video_mode='single_forward', force_steps=10, action_steps=10),
+}
+
+
+def _sampling_config(config, profile=None, *, default_steps=16):
+    if config.get('execution_mode', 'synchronous') != 'synchronous':
+        raise ValueError('Dense sampling requires synchronous execution')
+    selected = config.get('sampling_profile') if profile is None else profile
+    if selected is not None and (not isinstance(selected, str) or selected not in DENSE_SAMPLING_PROFILES):
+        raise ValueError('Dense sampling profile must be dense16 or dense10')
+    steps = _positive_int(config.get('num_inference_steps', default_steps), 'num_inference_steps')
+    if selected is not None:
+        selected_steps = DENSE_SAMPLING_PROFILES[selected]['action_steps']
+        if profile is None and 'num_inference_steps' in config and steps != selected_steps:
+            raise ValueError('Dense sampling profile and num_inference_steps disagree')
+        steps = selected_steps
+    result = deepcopy(config)
+    result.update(num_inference_steps=steps, execution_mode='synchronous')
+    # Retain legacy explicit positive counts for non-dashboard callers; only
+    # the verified dashboard profiles are selectable through configure_sampling.
+    if selected is not None or steps in (16, 10):
+        result['sampling_profile'] = selected or f'dense{steps}'
+    return result
+
+
+def _persist_sampling(path, config):
+    """Atomically update deployment choices without changing run artifacts."""
+    path = Path(path)
+    saved = json.loads(path.read_text(encoding='utf-8'))
+    if not isinstance(saved, dict):
+        raise ValueError('Runtime configuration must be a JSON object')
+    for key in ('sampling_profile', 'num_inference_steps', 'execution_mode'):
+        saved[key] = config[key]
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', dir=path.parent,
+                prefix=path.name + '.', suffix='.tmp', delete=False) as stream:
+            temporary = Path(stream.name)
+            json.dump(saved, stream, ensure_ascii=False, indent=2, allow_nan=False)
+            stream.write('\n')
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, path)
+    finally:
+        if temporary is not None and temporary.exists():
+            temporary.unlink()
 
 
 def _positive_int(value, label):
@@ -45,7 +98,8 @@ class DensePolicy:
 
     def __init__(self, config: dict, config_path: str | Path, checkpoint: str | Path):
         self.config = deepcopy(config)
-        self.config_dir = Path(config_path).expanduser().resolve().parent
+        self.config_path = Path(config_path).expanduser().resolve()
+        self.config_dir = self.config_path.parent
         self.checkpoint = self._path(checkpoint)
         self.camera_names = list(config.get('camera_order', ['global', 'wrist']))
         if (len(self.camera_names) != 2 or len(set(self.camera_names)) != 2
@@ -64,6 +118,7 @@ class DensePolicy:
         self.device = str(config.get('device', 'cuda'))
         self.model = self.teacher = None
         self.inference_index = 0
+        self.diagnostics = {}
         try:
             self._load()
         except BaseException:
@@ -115,13 +170,22 @@ class DensePolicy:
         if teacher.get('name') not in _TEACHERS or trained.get('teacher') != teacher.get('name'):
             raise ValueError('Checkpoint and training_config teacher differ or are unsupported')
         width, pooling = _TEACHERS[teacher['name']]
+        temporal_contract = (manifest.get('temporal_pooling') == pooling
+            and manifest.get('temporal_slots') == [[-4, 0], [4, 8], [12, 16], [20, 24], [28, 32]])
+        if manifest.get('source_revision') == 'fastwam-jepa-video-window-v2':
+            # The exact ViT-B v2 cache binds the same geometry in its teacher
+            # manifest. Its training config never emitted the legacy top-level
+            # pooling/slots fields; do not invent them in the saved manifest.
+            temporal_contract = (teacher.get('name') == 'vjepa21'
+                and teacher.get('video_input_size') == 224
+                and teacher.get('video_tubelet') == 2 and teacher.get('video_grid') == 14
+                and teacher.get('temporal_aggregation') == 'joint_video_tubelet2')
         if (teacher.get('feature_dim') != width or model['feature_dim'] != width
                 or manifest.get('action_space') != 'joint8'
                 or manifest.get('observation_offsets') != [-4, 0]
                 or manifest.get('future_offsets') != [4, 8, 12, 16, 20, 24, 28, 32]
                 or manifest.get('stride') != 4
-                or manifest.get('temporal_pooling') != pooling
-                or manifest.get('temporal_slots') != [[-4, 0], [4, 8], [12, 16], [20, 24], [28, 32]]
+                or not temporal_contract
                 or manifest.get('normalization') != 'training episodes only'
                 or not manifest.get('dataset_source_sha256')
                 or not manifest.get('cache_identity_sha256')):
@@ -174,8 +238,8 @@ class DensePolicy:
         kwargs = self._model_configuration(trained, manifest)
         self._load_normalizer(manifest)
         self.teacher_name = manifest['teacher']['name']
-        self.num_inference_steps = _positive_int(
-            self.config.get('num_inference_steps', manifest['num_inference_steps']), 'num_inference_steps')
+        self.config = _sampling_config(self.config, default_steps=manifest['num_inference_steps'])
+        self.num_inference_steps = self.config['num_inference_steps']
         device = torch.device(self.device)
         if device.type == 'cuda' and not torch.cuda.is_available():
             raise RuntimeError('CUDA was requested but is unavailable; set device explicitly for CPU testing')
@@ -199,6 +263,49 @@ class DensePolicy:
         for name, value in actual_teacher.items():
             if manifest['teacher'].get(name) != value:
                 raise ValueError(f'Loaded teacher differs from training checkpoint: {name}')
+
+    def sampling_settings(self):
+        return dict(supported=True, sampling_profile=self.config.get('sampling_profile',
+                    f'dense{self.num_inference_steps}'), video_steps=None,
+            video_mode='single_forward', force_steps=self.num_inference_steps,
+            action_steps=self.num_inference_steps, execution_mode='synchronous',
+            inference_backend='dense_joint', optimization='eager',
+            profiles=deepcopy(list(DENSE_SAMPLING_PROFILES.values())))
+
+    def _warmup_sampling(self, steps):
+        """Validate a candidate schedule without a camera, robot or live RNG advance."""
+        import torch
+        video = self.model.dit['video']
+        sample = dict(
+            visual_features=torch.zeros(1, 1, video.tokens_per_frame, video.feature_dim,
+                                        device=self.device, dtype=self.dtype),
+            history=torch.zeros(1, 32, 14, device=self.device, dtype=self.dtype),
+            history_is_pad=torch.zeros(1, 32, device=self.device, dtype=torch.bool),
+            history_channel_valid=torch.ones(1, 32, 14, device=self.device, dtype=torch.bool),
+            proprio=torch.zeros(1, 9, device=self.device, dtype=self.dtype))
+        with torch.inference_mode():
+            result = self.model.infer_joint(sample, num_inference_steps=steps,
+                seed=int(self.config.get('action_seed', 42)),
+                force_seed=int(self.config.get('force_seed', 43)))
+            action = result.get('action') if isinstance(result, dict) else None
+            if (not isinstance(action, torch.Tensor) or action.shape != (1, 32, 8)
+                    or not bool(torch.isfinite(action).all())):
+                raise ValueError('Candidate dense sampler must return finite action[1,32,8]')
+
+    def configure_sampling(self, profile, *, persist=None):
+        """Called under the server lock after the client session is released."""
+        updated = _sampling_config(self.config, profile)
+        if updated == self.config:
+            return self.sampling_settings()
+        steps = updated['num_inference_steps']
+        self._warmup_sampling(steps)
+        if persist is None:
+            _persist_sampling(self.config_path, updated)
+        else:
+            persist(updated)
+        # A failed warmup/write leaves all published settings and RNG intact.
+        self.config, self.num_inference_steps = updated, steps
+        return self.sampling_settings()
 
     @staticmethod
     def _stamp(item):
@@ -300,9 +407,13 @@ class DensePolicy:
             raise RuntimeError('Dense policy is closed or not loaded')
         if observation.get('action_space') != self.action_space:
             raise ValueError('Dense policy requires raw joint8 observations')
+        started = time.monotonic()
         with torch.inference_mode():
             sample = self._history_sample(observation, history)
             sample['visual_features'] = self._encode_observed_video(observation, video_context)
+            if self.device.startswith('cuda'):
+                torch.cuda.synchronize(self.device)
+            encoded = time.monotonic()
             result = self.model.infer_joint(sample, num_inference_steps=self.num_inference_steps,
                 seed=int(self.config.get('action_seed', 42)) + self.inference_index,
                 force_seed=int(self.config.get('force_seed', 43)))
@@ -316,6 +427,14 @@ class DensePolicy:
             for row in raw:
                 row[7] = min(1., max(0., row[7]))
             self.inference_index += 1
+            finished = time.monotonic()
+            self.diagnostics['last_inference'] = dict(backend='dense_joint',
+                teacher_ms=round((encoded - started) * 1000, 1),
+                predictor_force_action_ms=round((finished - encoded) * 1000, 1),
+                total_ms=round((finished - started) * 1000, 1), video_mode='single_forward',
+                visual_predictor_forward_evaluations=1,
+                force_forward_evaluations=self.num_inference_steps,
+                action_forward_evaluations=self.num_inference_steps)
             return raw
 
     def close(self):
