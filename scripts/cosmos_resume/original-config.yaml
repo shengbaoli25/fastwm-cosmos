@@ -1,0 +1,56 @@
+output_dir: /inspire/ssd/project/long-range-embodied-collaborative-intelligence/ky26340/rm71d-jepa-cosmos-50k-20261029/cosmos/online/job-187fc8ee-5443-4786-963b-d48882d3f8ff/runs/long/training
+batch_size: 64
+num_workers: 8
+lr_scheduler_type: cosine
+learning_rate: 0.0001
+num_epochs: 10
+max_steps: 50000
+log_every: 10
+save_every: 5000
+eval_every: 0
+eval_num_inference_steps: 16
+gradient_accumulation_steps: 1
+mixed_precision: bf16
+seed: 42
+max_grad_norm: 1.0
+weight_decay: 0.01
+resume: null
+wandb:
+  enabled: false
+  workspace: null
+  project: fast-wam
+  name: train
+  group: null
+  mode: online
+data:
+  train:
+    _target_: fastwam.cosmos.cache.CosmosCachedDataset
+    cache_root: /inspire/ssd/project/long-range-embodied-collaborative-intelligence/ky26340/rm71d-jepa-cosmos-50k-20261029/cosmos/online/job-187fc8ee-5443-4786-963b-d48882d3f8ff/prepared/features
+    expected_identity_sha256: 13d25abda35ecb39e1d2efb52239ae2438993cb8b693a4c533f5465bfca20224
+    expected_text_identity: a73a28af6561922cfca270c7e67496ca15e186df244c392e69bb2da0f2bc0917
+    require_production: true
+    max_cached_shards: 2
+model:
+  _target_: fastwam.cosmos.assets.create_noaction_joint_cosmos
+  upstream: /inspire/hdd/project/long-range-embodied-collaborative-intelligence/ky26340/realman-noaction-joint8/code-82cb9d2/third_party/cosmos-predict2.5
+  checkpoint: /inspire/hdd/project/long-range-embodied-collaborative-intelligence/ky26340/realman-noaction-joint8/assets/base/base/post-trained/81edfebe-bd6a-4039-8c1d-737df1a790bf_ema_bf16.pt
+  text_cache: /inspire/ssd/project/long-range-embodied-collaborative-intelligence/ky26340/rm71d-jepa-cosmos-50k-20261029/cosmos/online/job-187fc8ee-5443-4786-963b-d48882d3f8ff/prepared/text
+  expected_text_identity: a73a28af6561922cfca270c7e67496ca15e186df244c392e69bb2da0f2bc0917
+  expected_data_identity: 13d25abda35ecb39e1d2efb52239ae2438993cb8b693a4c533f5465bfca20224
+  expected_normalization_sha256: ac2a30c48f9a5d8f92803d05af861bfde2f72872eb473d83cb27f5f353de1236
+  action_seed: 42
+  force_seed: 43
+  memory_seed: 44
+  num_inference_steps: 16
+  gradient_checkpointing: true
+  action_hidden: 768
+  action_space: joint8
+  action_ffn: 3072
+  force_hidden: 768
+  force_ffn: 2048
+  force_heads: 16
+  force_shift: 1.0
+  fps: 7.5
+  training_recipe:
+    batch_per_rank: 64
+    max_steps: 50000

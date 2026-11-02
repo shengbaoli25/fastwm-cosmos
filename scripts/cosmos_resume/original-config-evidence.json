@@ -1,0 +1,29 @@
+{
+  "schema": "cosmos-original-config-local-evidence-v1",
+  "source_local_path": "C:\\Users\\ASUS\\Downloads\\config.yaml",
+  "bytes": 2313,
+  "sha256": "6941b393f453a57d42942a70e0780853405bbdeb37e38fe3b6d4393deb6e6898",
+  "output_dir": "/inspire/ssd/project/long-range-embodied-collaborative-intelligence/ky26340/rm71d-jepa-cosmos-50k-20261029/cosmos/online/job-187fc8ee-5443-4786-963b-d48882d3f8ff/runs/long/training",
+  "remote_hash_verified": false,
+  "original_command_python_from_parent_platform_observation": "/inspire/hdd/project/long-range-embodied-collaborative-intelligence/ky26340/realman-fastwam/.venv/bin/python",
+  "recipe": {
+    "batch_size": 64,
+    "num_workers": 8,
+    "max_steps": 50000,
+    "gradient_accumulation_steps": 1,
+    "mixed_precision": "bf16",
+    "seed": 42,
+    "learning_rate": 0.0001,
+    "weight_decay": 0.01,
+    "lr_scheduler_type": "cosine",
+    "save_every": 5000,
+    "max_grad_norm": 1.0,
+    "eval_every": 0
+  },
+  "model_training_recipe": {
+    "batch_per_rank": 64,
+    "max_steps": 50000
+  },
+  "restore_stop_at_step": 30000,
+  "maintain_original_scheduler_and_model_recipe": true
+}

@@ -1,0 +1,73 @@
+{
+  "path": "C:\\Users\\ASUS\\Downloads\\training.log",
+  "sha256": "11d853e7cf0650b070333f6f6015f646128c8709ce9c402b6a84b137de745285",
+  "completed_save_steps": [
+    5000,
+    10000,
+    15000,
+    20000,
+    25000
+  ],
+  "last_training_record": {
+    "epoch": 106,
+    "step": 26920,
+    "original_target": 50000
+  },
+  "schema": "cosmos-local-log-evidence-v1",
+  "job_id": "job-187fc8ee-5443-4786-963b-d48882d3f8ff",
+  "oldrun": "/inspire/ssd/project/long-range-embodied-collaborative-intelligence/ky26340/rm71d-jepa-cosmos-50k-20261029/cosmos/online/job-187fc8ee-5443-4786-963b-d48882d3f8ff/runs/long/training",
+  "verified_remote": false,
+  "observed": {
+    "cuda_driver_api": 12080,
+    "nccl": "2.26.2+cuda12.2",
+    "world_size": 4,
+    "deepspeed_zero_stage": 1,
+    "mixed_precision": "bf16",
+    "gradient_accumulation_steps": 1,
+    "gradient_clip": 1.0,
+    "train_dataset_size": 64462,
+    "displayed_val_size": 64462,
+    "original_max_steps": 50000
+  },
+  "line_references": {
+    "distributed_configuration": [
+      223,
+      229
+    ],
+    "dataset_and_budget": [
+      421,
+      426
+    ],
+    "last_complete_save": [
+      15649,
+      15711
+    ],
+    "last_training_record": [
+      16858,
+      16863
+    ]
+  },
+  "inferred_not_verified": {
+    "per_gpu_batch_size": 64,
+    "global_batch_size": 256,
+    "warmup_steps": 2500
+  },
+  "not_present_in_log": [
+    "launch_command",
+    "python_executable",
+    "source_root",
+    "source_commit",
+    "runtime_image",
+    "complete_training_config",
+    "exact_package_versions"
+  ],
+  "expected_config_path_not_remotely_verified": "/inspire/ssd/project/long-range-embodied-collaborative-intelligence/ky26340/rm71d-jepa-cosmos-50k-20261029/cosmos/online/job-187fc8ee-5443-4786-963b-d48882d3f8ff/runs/long/training/config.yaml",
+  "resume_target_total_step": 30000,
+  "updates_from_latest_logged_save": 5000,
+  "validation": {
+    "synthetic_audit_tests_passed": 4,
+    "seconds": 0.324,
+    "default_does_not_import_torch": true,
+    "input_files_unchanged_in_cli_test": true
+  }
+}

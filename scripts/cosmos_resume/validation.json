@@ -1,0 +1,55 @@
+{
+  "schema": "cosmos-resume-wrapper-local-validation-v1",
+  "training_started": false,
+  "remote_state_read_locally": false,
+  "real_gpu_restore_verified": false,
+  "checks": {
+    "audit_tests": {
+      "passed": 4,
+      "seconds": 0.266,
+      "command": "python test_audit_resume.py -v"
+    },
+    "wrapper_tests": {
+      "passed": 4,
+      "seconds": 4.639,
+      "command": "python test_resume_to_step.py -v",
+      "accelerate": "1.12.0",
+      "coverage": [
+        "stdlib-only plan without files or torch",
+        "original config hash and immutable 50k model recipe",
+        "actual four-rank Accelerate CPU sharding with 64462 samples/B64/epoch99/batch52, exact tail padding and next epoch",
+        "iterator restart preserves model RNG",
+        "nested scheduler and RNG equality"
+      ]
+    },
+    "compileall": {
+      "exit_code": 0,
+      "command": "python -m compileall -q scripts/cosmos_resume"
+    },
+    "independent_readonly_review": {
+      "agent": "/root/forcevla",
+      "confirmed_blocking_findings": [],
+      "actual_deepspeed_plugin_configuration_equalities": true
+    },
+    "bash_syntax": {
+      "executed": false,
+      "reason": "Local Windows host has no working Bash; run bash -n launch_platform.sh remotely before launch"
+    },
+    "branch_suite": {
+      "command": "python -m unittest discover -s scripts/cosmos_resume -p 'test_*.py' -v",
+      "passed": 8,
+      "seconds": 4.035,
+      "exit_code": 0,
+      "ran_in_this_worktree": true
+    }
+  },
+  "files": {
+    "audit_resume.py": "1a1c4bf148ba70ed6ec4ddaec24aa1c14fa8f94371e5d821b722e8d58723cde8",
+    "resume_to_step.py": "474c29478f55be14a56c1faea88fa8dbe7f7c7802f82db7520f14bd5c467e909",
+    "launch_platform.sh": "824621e6530bd1b6350b5f88834118442454285decd92ef495a5403ee0fdf325",
+    "original-config.yaml": "6941b393f453a57d42942a70e0780853405bbdeb37e38fe3b6d4393deb6e6898"
+  },
+  "limitation": "CPU and static checks do not establish successful GPU model/optimizer restore; the wrapper validates those on all ranks before new optimization.",
+  "branch": "codex/cosmos-rm71d78-resume30k",
+  "base_commit": "057f78767f52f358b229f4a05b097c0f1455fa3d"
+}

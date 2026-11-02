@@ -1,0 +1,5 @@
+*.py text eol=lf
+*.sh text eol=lf
+*.json text eol=lf
+# Exact source bytes are bound by SHA256 in the resume wrapper.
+original-config.yaml -text
