@@ -6,7 +6,7 @@ The HTTP layer supplies RGB uint8 images and consumes absolute joint8 actions.
 from __future__ import annotations
 
 import dataclasses
-import importlib.util
+import importlib
 import json
 import os
 from pathlib import Path
@@ -251,10 +251,25 @@ def normalization_path(config):
 
 
 def _script(root, name):
-    spec = importlib.util.spec_from_file_location("_rm71d_pi05_" + name, root / "scripts" / (name + ".py"))
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module
-    spec.loader.exec_module(module)
+    """Use the official import name so spawned data workers can unpickle it."""
+    if name not in {"compute_norm_stats", "train"}:
+        raise ValueError(f"Unsupported official OpenPI script: {name}")
+    root = Path(root).resolve()
+    expected = {"scripts": root / "scripts" / "__init__.py",
+                f"scripts.{name}": root / "scripts" / f"{name}.py"}
+    for module_name, path in expected.items():
+        loaded = sys.modules.get(module_name)
+        if loaded is not None and Path(getattr(loaded, "__file__", "") or "").resolve() != path:
+            raise RuntimeError(f"Another {module_name} implementation is already imported; use a fresh process")
+    # Multiprocessing spawn copies sys.path into the child before unpickling the
+    # dataset. Keep the upstream root here: adding only root/src is insufficient
+    # for the official statistics transform defined in scripts.compute_norm_stats.
+    sys.path.insert(0, str(root))
+    importlib.invalidate_caches()
+    module = importlib.import_module(f"scripts.{name}")
+    for module_name, path in expected.items():
+        if Path(sys.modules[module_name].__file__).resolve() != path:
+            raise RuntimeError(f"{module_name} was not imported from the pinned OpenPI source")
     return module
 
 

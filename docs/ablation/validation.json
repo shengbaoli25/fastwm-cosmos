@@ -13,9 +13,10 @@
     "pyarrow": "26.0.0",
     "av": "19.0.2",
     "Pillow": "12.3.0",
-    "datasets": "3.6.0"
+    "datasets": "3.6.0",
+    "torch": "2.7.1+cu128"
   },
-  "scope": "Independent pi05 branch after the requested 4xH200 / per-device batch64 / 30000-step update. Results ran in this worktree; trainer/model calls in orchestration tests are stubs.",
+  "scope": "Independent pi05 branch spawn import fix. Real CPU Torch DataLoader spawn tests use small upstream module fixtures; no official JAX model/statistics or GPU run is claimed by this local validation.",
   "requested_training": {
     "num_gpus": 4,
     "gpu_model": "H200",
@@ -24,10 +25,53 @@
     "gradient_accumulation_steps": 1,
     "num_train_steps": 30000,
     "fsdp_devices": 4,
-    "mesh_shape": [1, 4],
+    "mesh_shape": [
+      1,
+      4
+    ],
     "launch_processes": 1
   },
   "checks": [
+    {
+      "command": "python -B -c \"append existing validation/server site-packages; pytest tests/ablation -q\"",
+      "passed": 34,
+      "failed": 0,
+      "skipped": 0,
+      "exit_code": 0,
+      "duration_seconds": 23.24,
+      "evidence": "Full current ablation suite including two real Torch spawn DataLoader cases with two workers each. Statistics class and training function are reimported from stable scripts modules; wrong-source module collisions fail closed."
+    },
+    {
+      "command": "python -B scripts/ablation/pi05.py --config configs/ablation/pi05.example.json",
+      "exit_code": 0,
+      "num_workers": 2,
+      "training_started": false,
+      "runtime_verified": false
+    },
+    {
+      "command": "Compile all src/fastwam/ablation, scripts/ablation and tests/ablation Python sources without executing them",
+      "exit_code": 0
+    },
+    {
+      "command": "git diff --check",
+      "exit_code": 0
+    }
+  ],
+  "not_run": [
+    "Actual frozen 78-episode source audit",
+    "Official pi05 base-weight download/load",
+    "Linux bootstrap/launcher execution and actual JAX 4xH200 hardware check",
+    "GPU forward/backward and optimizer update",
+    "Actual Orbax checkpoint save/restore",
+    "Real trained-model HTTP replay",
+    "GPU memory and inference-latency benchmark"
+  ],
+  "formal_training_started": false,
+  "real_model_load_verified": false,
+  "gpu_training_verified": false,
+  "robot_motion_issued": false,
+  "previous_revision": "584cef987cbea673765d992104fd191094d02501",
+  "previous_checks": [
     {
       "command": "PYTHONPATH=src;deploy python -m pytest tests/ablation deploy/tests/test_sync_server.py -q",
       "passed": 42,
@@ -52,17 +96,11 @@
       "exit_code": 0
     }
   ],
-  "not_run": [
-    "Actual frozen 78-episode source audit",
-    "Official pi05 base-weight download/load",
-    "Linux bootstrap/launcher execution and actual JAX 4xH200 hardware check",
-    "GPU forward/backward and optimizer update",
-    "Actual Orbax checkpoint save/restore",
-    "Real trained-model HTTP replay",
-    "GPU memory and inference-latency benchmark"
-  ],
-  "formal_training_started": false,
-  "real_model_load_verified": false,
-  "gpu_training_verified": false,
-  "robot_motion_issued": false
+  "independent_review": {
+    "agent": "inspect_existing_server",
+    "result": "No confirmed blocker; upstream scripts package and spawn pickle path independently checked",
+    "spawn_tests_passed": 6,
+    "duration_seconds": 12.29,
+    "scope": "Real local CPU spawn with fixture upstream modules, not official JAX statistics or GPU execution"
+  }
 }
