@@ -9,13 +9,16 @@ The published recipe initializes pi0 from `gs://openpi-assets/checkpoints/pi0_ba
 and initializes the added force/LIMoE and LoRA parameters. This is not a claim
 that a full pretrained ForceVLA policy checkpoint was released or downloaded.
 
-The default is the official LoRA method, 50,000 updates, global batch 4,
+The requested run uses the official LoRA method, **30,000 updates, four H200 GPUs,
+64 samples per GPU, global batch 256**, a single JAX process and FSDP across four devices,
 seed 42, checkpoint every 2,000 updates, retained every 10,000, no EMA.
 `training_method=full` instead uses unmodified full Gemma variants and EMA 0.99.
-The upstream table estimates >22.5 GB for LoRA and >70 GB for full fine-tuning;
-plan a Linux GPU worker with at least 48 GB for LoRA until an actual memory
-preflight establishes a smaller budget. FSDP is selected with `fsdp_devices`.
-These are planning estimates, not measurements on this dataset.
+The pinned trainer creates mesh `(device_count / fsdp_devices, fsdp_devices)`.
+For this run `fsdp_devices=4` gives mesh `(1,4)`. Its data PartitionSpec uses
+**both** `batch` and `fsdp` axes, so the actual batch on each device is 256/4=64.
+This is not gradient accumulation. FSDP reduces parameter-state memory; fitting
+the requested activation batch still needs measurement. The runner rejects
+fewer/different GPUs and does not silently lower batch size after OOM.
 
 ## Compatibility changes
 
@@ -60,26 +63,47 @@ python3.11 -m venv /work/envs/forcevla
 source /work/envs/forcevla/bin/activate
 python -m pip install --upgrade pip setuptools wheel
 python -m pip install \
+  -c /path/to/fastwm-cosmos/configs/ablation/forcevla-linux.constraints \
   -e /work/upstream/ForceVLA \
   -e /work/upstream/ForceVLA/flaxformer \
   -e /work/upstream/ForceVLA/packages/openpi-client \
+  'aqtp==0.9.0' 'tensorflow-cpu==2.17.1' \
   'lerobot @ git+https://github.com/huggingface/lerobot@0cf864870cf29f4738d3ade893e6fd13fbd7cdb5'
 python -m pip check
+python -c 'from tensorflow.compiler.xla.service import hlo_pb2; from aqt.jax_legacy.jax import flax_layers; import openpi.models.pi0_force'
 python -m pip freeze > /work/envs/forcevla/installed-requirements.txt
 ```
 
 The upstream `lerobot` gitlink is absent from `.gitmodules`; recursively cloning
 ForceVLA alone does not install it. The explicit pinned installation above is
-required and is checked by the training entrypoint. Install the four packages
+required and is checked by the training entrypoint. Install these packages
 in one resolver transaction so the upstream `jax[cuda12]==0.5.3`, `flax==0.10.2`,
 `transformers==4.48.1`, `orbax-checkpoint==0.11.13` and `numpy<2` constraints
 remain in force when resolving Flaxformer dependencies. The installed freeze is
 part of the eventual worker receipt; upstream leaves several transitive ranges
-open. RLDS/dlimp/TensorFlow is not
-needed for this LeRobot experiment. Do not install this repository's all-model
+open. RLDS/dlimp is not needed for this LeRobot experiment, but vendored
+Flaxformer imports AQT's legacy HLO helpers, which import TensorFlow's
+`hlo_pb2`. AQT does not declare TensorFlow as a package dependency. The explicit
+compatibility additions are `aqtp==0.9.0`, `tensorflow-cpu==2.17.1`, and
+`keras==3.6.0`; these are not entries from the ForceVLA lock file. TensorFlow
+2.17.1 requires `ml-dtypes>=0.3.1,<0.5` and NumPy below 2, compatible with the
+pinned `ml-dtypes==0.4.1` and `numpy==1.26.4`. The upstream optional RLDS
+TensorFlow 2.15 dependency instead requires `ml-dtypes~=0.2` and relies on an
+`uv` override, so it cannot be copied into this ordinary pip resolver command.
+The CPU TensorFlow package supplies these imports; model training remains JAX.
+Sources: [TensorFlow 2.17.1 package metadata](https://pypi.org/pypi/tensorflow-cpu/2.17.1/json),
+[AQT 0.9.0 package metadata](https://pypi.org/pypi/aqtp/0.9.0/json).
+Do not install this repository's all-model
 `pyproject.toml` into this environment; the wrapper adds only its `src` to
 `PYTHONPATH`. The commands are source-reviewed and still require execution in
 the chosen Linux CUDA worker; they are not an environment-installation receipt.
+
+Alternatively, from this repository run
+`bash scripts/ablation/bootstrap_forcevla.sh /work/upstream/ForceVLA /work/envs/forcevla`.
+It checks out the exact source, installs the separately pinned LeRobot gitlink,
+uses core package versions from the official `uv.lock` plus the documented AQT
+import dependencies, checks imports/dependencies,
+and records the installed package freeze. It does not train or download model weights.
 
 ## Configuration and operations
 
@@ -98,11 +122,14 @@ resolve from the working directory):
   "base_params_sha256": "COPY_PATH_SHA256_FROM_ASSET_AUDIT",
   "training_method": "lora",
   "experiment_name": "rm71d78",
-  "num_train_steps": 50000,
-  "batch_size": 4,
+  "num_train_steps": 30000,
+  "batch_size": 256,
+  "gpu_count": 4,
+  "gpu_model": "H200",
+  "per_gpu_batch_size": 64,
   "save_interval": 2000,
   "keep_period": 10000,
-  "fsdp_devices": 1,
+  "fsdp_devices": 4,
   "seed": 42,
   "num_inference_steps": 10
 }
@@ -126,6 +153,41 @@ python scripts/ablation/forcevla.py --config /work/forcevla.json --operation sta
 python scripts/ablation/forcevla.py --config /work/forcevla.json --operation train
 python scripts/ablation/forcevla.py --config /work/forcevla.json --operation resume
 ```
+
+For the requested four-H200 job, the dedicated Linux launcher also checks the
+exact four-H200/256/64/FSDP4 allocation before importing or initializing the model.
+The example config selects 30k updates; a separate explicit smoke config may use
+a shorter positive target without relaxing the device or batch contract:
+
+```bash
+bash scripts/ablation/launch_forcevla_h200.sh /work/envs/forcevla/bin/python /work/forcevla.json train
+# Restart from the same frozen configuration and real optimizer checkpoint:
+bash scripts/ablation/launch_forcevla_h200.sh /work/envs/forcevla/bin/python /work/forcevla.json resume
+```
+
+Launch one process on one host; do not use `torchrun`. The scheduler must expose
+exactly four H200s through `CUDA_VISIBLE_DEVICES`. A launch receipt records actual
+JAX device kinds, batch size, mesh and data identity before entering the official
+training loop. It is not evidence that an optimizer update completed.
+
+Before the formal run, use a **separate smoke run directory and configuration**
+with the same 4 H200s/global256/per-GPU64/FSDP4, but `num_train_steps=3`,
+`save_interval=1`, `keep_period=1`, and `log_interval=1`. Prepare its own statistics
+and hashes; start from [forcevla.smoke.example.json](../../configs/ablation/forcevla.smoke.example.json).
+The optional invocation bound preserves that frozen three-step
+configuration and the official learning-rate schedule:
+
+```bash
+python scripts/ablation/forcevla.py --config /work/forcevla-smoke.json --operation train --stop-after-steps 2
+python scripts/ablation/forcevla.py --config /work/forcevla-smoke.json --operation resume
+```
+
+The first invocation finishes normally after two updates and saves official
+checkpoint step 1 with optimizer `train_state.step=2`. Resuming the unchanged
+three-step config restores that state and performs the third update, producing
+checkpoint step 2. The launch receipt records the invocation bound separately
+from the configured target. Do not reuse the smoke run's binding/checkpoints for
+the formal 30k experiment; keep the formal config and run directory separate.
 
 The default operation is `plan`: no data loading, weight downloading, GPU
 initialization or training. `stats` reads data and computes statistics but does

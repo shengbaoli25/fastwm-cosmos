@@ -2,6 +2,10 @@
 
 Current branch: **`codex/ablation-rm71d78-forcevla`**.
 
+Requested training recipe: **4 × H200, physical batch 64 per GPU (global 256),
+30,000 updates**, single-process JAX with FSDP4. The launch wrapper checks these
+resources and never substitutes gradient accumulation or a smaller batch.
+
 This independent branch adapts the official ForceVLA pi0 + force-aware LIMoE
 model to the 78-demonstration `rm71d_plug_transfer_20261029` dataset and the
 existing RealMan joint8 HTTP client. The new ablation entrypoints support only

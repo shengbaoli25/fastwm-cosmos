@@ -1,0 +1,23 @@
+{
+  "upstream_root": "/work/upstream/ForceVLA",
+  "dataset_root": "/work/data/rm71d78_lerobot21",
+  "dataset_manifest_sha256": "COPY_IDENTITY_SHA256_FROM_EXPORT_MANIFEST",
+  "run_root": "/work/runs/forcevla-rm71d78-smoke",
+  "normalization_path": "/work/runs/forcevla-rm71d78-smoke/norm/norm_stats.json",
+  "normalization_sha256": "FILL_AFTER_STATS",
+  "base_params_path": "/work/weights/pi0_base/params",
+  "base_params_sha256": "COPY_PATH_SHA256_FROM_ASSET_AUDIT",
+  "training_method": "lora",
+  "experiment_name": "rm71d78-smoke",
+  "num_train_steps": 3,
+  "batch_size": 256,
+  "gpu_count": 4,
+  "gpu_model": "H200",
+  "per_gpu_batch_size": 64,
+  "save_interval": 1,
+  "keep_period": 1,
+  "log_interval": 1,
+  "fsdp_devices": 4,
+  "seed": 42,
+  "num_inference_steps": 10
+}

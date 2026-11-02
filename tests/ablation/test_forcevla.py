@@ -66,6 +66,9 @@ def test_plan_never_loads_a_model_or_starts_training():
     assert result["training_started"] is False
     assert result["runtime_validation"] == "not_run"
     assert result["force_input"].startswith("normalized")
+    assert result["num_train_steps"] == 30000
+    assert result["batch_size"] == 256
+    assert result["execution_profile"]["per_gpu_batch_size"] == 64
 
 
 def test_unknown_upstream_source_is_rejected_before_execution():
@@ -320,3 +323,66 @@ def test_resume_rejects_step_zero_and_wrong_embedded_binding(tmp_path):
     checkpoint(2, dict(contract, seed=43))
     with pytest.raises(ValueError, match="embedded training binding"):
         _check_resume_checkpoint(tmp_path, contract)
+
+
+def test_four_h200_profile_is_physical_batch64_without_accumulation():
+    from fastwam.ablation.forcevla import execution_profile, verify_training_devices
+    devices = [types.SimpleNamespace(platform="gpu", device_kind="NVIDIA H200") for _ in range(4)]
+    profile = verify_training_devices({}, devices, 1)
+    assert profile["global_batch_size"] == 256
+    assert profile["per_gpu_batch_size"] == 64
+    assert profile["gradient_accumulation_steps"] == 1
+    assert profile["mesh_shape"] == [1, 4]
+    assert profile["data_axes"] == ["batch", "fsdp"]
+    assert profile["num_train_steps"] == 30000
+    with pytest.raises(ValueError):
+        execution_profile({"batch_size": 64})
+    with pytest.raises(ValueError):
+        execution_profile({"fsdp_devices": 3})
+    with pytest.raises(RuntimeError, match="exactly 4"):
+        verify_training_devices({}, devices[:2], 1)
+    with pytest.raises(RuntimeError, match="one process"):
+        verify_training_devices({}, devices, 4)
+    with pytest.raises(RuntimeError, match="H200"):
+        verify_training_devices({}, [types.SimpleNamespace(platform="gpu", device_kind="NVIDIA A100")] * 4, 1)
+
+
+@pytest.mark.skipif(not os.environ.get("FORCEVLA_SOURCE_ROOT"), reason="optional pinned source audit")
+def test_official_fsdp_mesh_shards_batch_over_all_four_devices():
+    source = (Path(os.environ["FORCEVLA_SOURCE_ROOT"]) / "src/openpi/training/sharding.py").read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    constants = [node for node in tree.body if isinstance(node, ast.Assign)
+                 and any(isinstance(target, ast.Name) and target.id in {"BATCH_AXIS", "FSDP_AXIS", "DATA_AXIS"}
+                         for target in node.targets)]
+    make_mesh = next(node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "make_mesh")
+    module = ast.Module(body=[ast.ImportFrom(module="__future__", names=[ast.alias(name="annotations")], level=0),
+                             *constants, make_mesh], type_ignores=[])
+    namespace = {"jax": types.SimpleNamespace(device_count=lambda: 4,
+                                              make_mesh=lambda shape, axes: (shape, axes))}
+    exec(compile(ast.fix_missing_locations(module), "official_sharding_source_test", "exec"), namespace)
+    assert namespace["make_mesh"](4) == ((1, 4), ("batch", "fsdp"))
+    assert namespace["DATA_AXIS"] == ("batch", "fsdp")
+    assert 256 // np.prod(namespace["make_mesh"](4)[0]) == 64
+
+
+def test_bounded_smoke_keeps_same_frozen_target_and_learning_rate_schedule():
+    from fastwam.ablation.forcevla import _bounded_training_config
+
+    @dataclasses.dataclass(frozen=True)
+    class Config:
+        num_train_steps: int
+        lr_schedule: object
+        checkpoint_dir: str
+
+    schedule = object()
+    original = Config(3, schedule, "separate-smoke-run")
+    bounded = _bounded_training_config(original, 2)
+    assert bounded.num_train_steps == 2 and original.num_train_steps == 3
+    assert bounded.lr_schedule is schedule
+    assert bounded.checkpoint_dir == original.checkpoint_dir
+    assert _bounded_training_config(original, None) is original
+    for bad in (0, 1, 4):
+        with pytest.raises(ValueError, match="stop_after_steps"):
+            _bounded_training_config(original, bad)
+    with pytest.raises(ValueError, match="only supported"):
+        run({}, "plan", stop_after_steps=2)

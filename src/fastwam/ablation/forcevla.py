@@ -26,6 +26,35 @@ CONFIG_NAME = "rm71d78_forcevla_joint8"
 PROMPT = "拔下插头并插入另一插座"
 
 
+def execution_profile(config: dict) -> dict:
+    """JAX's batch_size is global; DATA_AXIS shards it across all devices."""
+    count = int(config.get("gpu_count", 4))
+    per_gpu = int(config.get("per_gpu_batch_size", 64))
+    batch = int(config.get("batch_size", 256))
+    fsdp = int(config.get("fsdp_devices", 4))
+    steps = int(config.get("num_train_steps", 30000))
+    if min(count, per_gpu, fsdp, steps) < 1 or batch != count * per_gpu or count % fsdp:
+        raise ValueError("Require global batch = gpu_count * per_gpu_batch_size and an FSDP divisor of gpu_count")
+    return dict(gpu_count=count, gpu_model=config.get("gpu_model", "H200"),
+                per_gpu_batch_size=per_gpu, global_batch_size=batch, fsdp_devices=fsdp,
+                mesh_shape=[count // fsdp, fsdp], data_axes=["batch", "fsdp"],
+                gradient_accumulation_steps=1, num_train_steps=steps)
+
+
+def verify_training_devices(config: dict, devices, process_count: int) -> dict:
+    """Reject silently running the requested physical batch on fewer GPUs."""
+    profile = execution_profile(config)
+    if process_count != 1:
+        raise RuntimeError("The pinned ForceVLA loader supports one process on one multi-GPU host")
+    devices = list(devices)
+    if len(devices) != profile["gpu_count"] or any(d.platform != "gpu" for d in devices):
+        raise RuntimeError(f"Expected exactly {profile['gpu_count']} visible CUDA GPUs")
+    kinds = [str(d.device_kind) for d in devices]
+    if any(str(profile["gpu_model"]).upper() not in kind.upper() for kind in kinds):
+        raise RuntimeError(f"Expected {profile['gpu_model']} devices, found {kinds}")
+    return {**profile, "visible_devices": kinds, "jax_process_count": process_count}
+
+
 def _vector(value, size: int, name: str) -> np.ndarray:
     result = np.asarray(value, dtype=np.float32)
     if result.shape != (size,) or not np.isfinite(result).all():
@@ -230,10 +259,10 @@ def build_train_config(config: dict, *, resume: bool = False, for_stats: bool = 
         weight_loader=weight_loaders.Pi0GuidanceWeightLoader(config.get("base_params_path", "")),
         freeze_filter=model.get_freeze_filter(), ema_decay=None if method == "lora" else 0.99,
         assets_base_dir=str(run / "assets"), checkpoint_base_dir=str(run / "checkpoints"),
-        num_train_steps=int(config.get("num_train_steps", 50000)), batch_size=int(config.get("batch_size", 4)),
+        num_train_steps=int(config.get("num_train_steps", 30000)), batch_size=int(config.get("batch_size", 256)),
         save_interval=int(config.get("save_interval", 2000)), keep_period=int(config.get("keep_period", 10000)),
         log_interval=int(config.get("log_interval", 10)), seed=int(config.get("seed", 42)),
-        num_workers=0, fsdp_devices=int(config.get("fsdp_devices", 1)), resume=resume,
+        num_workers=0, fsdp_devices=int(config.get("fsdp_devices", 4)), resume=resume,
         overwrite=False, wandb_enabled=False,
         policy_metadata={"dataset_manifest_sha256": manifest["identity_sha256"], "action_space": "joint8",
                          "force_input": True, "upstream_revision": UPSTREAM_REVISION},
@@ -309,13 +338,25 @@ def _check_resume_checkpoint(checkpoint_dir: Path, contract: dict):
             raise ValueError(f"Resume checkpoint has a different embedded training binding: {checkpoint}")
 
 
-def run(config: dict, operation: str) -> dict[str, Any]:
+def _bounded_training_config(config, stop_after_steps: int | None):
+    if stop_after_steps is None:
+        return config
+    if not 2 <= stop_after_steps <= config.num_train_steps:
+        raise ValueError("stop_after_steps must be between 2 and the configured target steps")
+    # Only bound this invocation; retain the original schedule and run identity.
+    return dataclasses.replace(config, num_train_steps=stop_after_steps)
+
+
+def run(config: dict, operation: str, *, stop_after_steps: int | None = None) -> dict[str, Any]:
     """Only explicit train/resume operations call the official training loop."""
+    if stop_after_steps is not None and operation not in {"train", "resume"}:
+        raise ValueError("stop_after_steps is only supported for train/resume")
     if operation == "plan":
         return {"baseline": "forcevla", "upstream": UPSTREAM_URL, "revision": UPSTREAM_REVISION,
                 "training_started": False, "method": config.get("training_method", "lora"),
-                "num_train_steps": int(config.get("num_train_steps", 50000)),
-                "batch_size": int(config.get("batch_size", 4)), "action_horizon": 32,
+                "num_train_steps": int(config.get("num_train_steps", 30000)),
+                "batch_size": int(config.get("batch_size", 256)), "action_horizon": 32,
+                "execution_profile": execution_profile(config),
                 "pretrained_initialization": "official pi0_base + initialized force/LIMoE and LoRA",
                 "force_input": "normalized [Fx,Fy,Fz,Tx,Ty,Tz] from observation.force",
                 "source_episodes": 78, "evaluation": "training-fit, no held-out claim",
@@ -323,6 +364,7 @@ def run(config: dict, operation: str) -> dict[str, Any]:
     if operation not in {"stats", "train", "resume"}:
         raise ValueError(f"Unknown operation: {operation}")
     cfg = build_train_config(config, resume=operation == "resume", for_stats=operation == "stats")
+    cfg = _bounded_training_config(cfg, stop_after_steps)
     _verify_lerobot()
     from fastwam.ablation.contracts import file_sha256, path_sha256
     if operation == "stats":
@@ -357,8 +399,7 @@ def run(config: dict, operation: str) -> dict[str, Any]:
     if norm_binding["dataset_manifest_sha256"] != config["dataset_manifest_sha256"] or norm_binding["normalization_sha256"] != config["normalization_sha256"]:
         raise ValueError("Normalization was computed for a different dataset")
     import jax
-    if not any(device.platform == "gpu" for device in jax.devices()):
-        raise RuntimeError("ForceVLA training requires a supported JAX CUDA GPU environment")
+    device_receipt = verify_training_devices(config, jax.devices(), jax.process_count())
     run_root = Path(config["run_root"]).resolve()
     run_root.mkdir(parents=True, exist_ok=True)
     contract_path = run_root / "forcevla_training_config.json"
@@ -371,6 +412,13 @@ def run(config: dict, operation: str) -> dict[str, Any]:
         with contract_path.open("x", encoding="utf-8") as handle:
             json.dump(contract, handle, ensure_ascii=False, indent=2)
             handle.write("\n")
+    from datetime import datetime, timezone
+    launch_receipt = dict(device_receipt, operation=operation, timestamp_utc=datetime.now(timezone.utc).isoformat(),
+                          upstream_revision=UPSTREAM_REVISION, dataset_manifest_sha256=config["dataset_manifest_sha256"],
+                          checkpoint_dir=str(cfg.checkpoint_dir), optimization_completed=False,
+                          invocation_stop_after_steps=stop_after_steps,
+                          effective_num_train_steps=cfg.num_train_steps)
+    (run_root / "forcevla_launch_receipt.json").write_text(json.dumps(launch_receipt, indent=2) + "\n", encoding="utf-8")
     training = _script(config["upstream_root"], "train.py")
     import logging
     logging.basicConfig(level=logging.INFO)
@@ -378,4 +426,6 @@ def run(config: dict, operation: str) -> dict[str, Any]:
     with bind_checkpoint_assets(training._checkpoints._normalize, contract):
         training.main(cfg)
     return {"operation": operation, "training_started": True, "training_returned": True,
-            "checkpoint_dir": str(cfg.checkpoint_dir), "upstream_revision": UPSTREAM_REVISION}
+            "checkpoint_dir": str(cfg.checkpoint_dir), "upstream_revision": UPSTREAM_REVISION,
+            "configured_target_steps": execution_profile(config)["num_train_steps"],
+            "invocation_stop_after_steps": stop_after_steps}

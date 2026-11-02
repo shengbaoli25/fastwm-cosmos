@@ -20,16 +20,18 @@
     "torchvision": "0.22.1+cu128"
   },
   "tests": {
-    "passed": 39,
+    "passed": 42,
     "subtests_passed": 9,
     "failed": 0,
     "skipped": 0,
-    "elapsed_seconds": 12.08
+    "elapsed_seconds": 8.64
   },
   "additional_checks": {
     "compileall": "passed: src/fastwam/ablation and scripts/ablation",
     "git_diff_check": "passed",
-    "forcevla_default_plan": "passed with configs/ablation/forcevla.example.json; training_started=false",
+    "forcevla_default_plan": "passed: 4 H200 / physical batch64 per GPU / global256 / FSDP4 / 30000 steps; training_started=false",
+    "linux_bootstrap_and_launch": "source reviewed; not executed on this Windows host; platform bash syntax, dependency installation and device validation remain required",
+    "aqt_tensorflow_import_dependencies": "source/package-metadata reviewed: aqtp 0.9.0 legacy HLO helpers require tensorflow.compiler.xla.service.hlo_pb2; tensorflow-cpu 2.17.1 contains the module and supports pinned ml-dtypes 0.4.1 and NumPy 1.26.4; Keras 3.6.0 satisfies its >=3.2 requirement. Bootstrap explicitly installs and imports these; Linux execution remains pending",
     "pinned_forcevla_source_test": "executed against actual official checkout 79de88fdd0651d957a2b5212cae8995159c5ad65",
     "supported_backends": ["forcevla"]
   },
@@ -38,6 +40,8 @@
     "Actual Hugging Face Parquet loader decodes both embedded PNG views as PIL images",
     "Joint8 gripper preservation, force channels, image order and invalid numeric rejection",
     "Reviewed official ForceVLA source adaptations and source drift rejection",
+    "Four-H200 batch/device guards, actual pinned source mesh and DATA_AXIS arithmetic, no gradient accumulation",
+    "Bounded two-update invocation keeps the same three-step smoke target, checkpoint directory and learning-rate schedule",
     "Copied deployment assets without the dataset directory, real file/hash checks with explicit JAX model stubs",
     "Checkpoint embedded training bindings, mismatched-run rejection and step-0-only resume rejection",
     "Actual loopback health/infer/release endpoints with an injected test predictor",

@@ -1,0 +1,29 @@
+# Core versions from official ForceVLA uv.lock at 79de88fdd0651d957a2b5212cae8995159c5ad65.
+# Flaxformer is vendored by that revision; the source pin is set by bootstrap_forcevla.sh.
+av==14.4.0
+chex==0.1.89
+datasets==3.6.0
+equinox==0.12.2
+etils==1.12.2
+flax==0.10.2
+huggingface-hub==0.32.3
+jax==0.5.3
+jaxlib==0.5.3
+ml-dtypes==0.4.1
+numpy==1.26.4
+optax==0.2.4
+orbax-checkpoint==0.11.13
+protobuf==4.25.8
+tensorstore==0.1.74
+torch==2.7.0
+torchcodec==0.4.0
+torchvision==0.22.0
+transformers==4.48.1
+
+# Compatibility additions: vendored Flaxformer imports AQT's legacy HLO helpers,
+# which require TensorFlow although aqtp does not declare that dependency.
+# These are not ForceVLA uv.lock entries. TF 2.17.1 supports ml-dtypes 0.4.1 and
+# NumPy 1.26; the optional upstream TF 2.15 recipe requires ml-dtypes ~=0.2.
+aqtp==0.9.0
+tensorflow-cpu==2.17.1
+keras==3.6.0

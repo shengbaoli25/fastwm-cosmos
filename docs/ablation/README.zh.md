@@ -16,10 +16,13 @@ Hugging Face 图像读取和注入测试预测器的真实 HTTP 调用。真实 
 ## 模型与数据口径
 
 使用官方 pi0 + 六轴力 projection/LIMoE，保留 flow-matching loss、官方优化器和 Orbax 保存恢复。
-默认 LoRA：50,000 次更新、global batch 4、seed 42，每 2,000 步保存，保留每 10,000 步的权重；
+当前指定 LoRA：4 张 H200、每卡真实 batch 64、global batch 256、30,000 次更新、seed 42，
+每 2,000 步保存，保留每 10,000 步的权重；
 无 EMA。`training_method=full` 选择全参数方法。训练与推理使用独立的 Linux CUDA JAX 环境，
-机器人客户端可以继续运行在 Windows。初次 LoRA 验证预留至少 48GB GPU；这是资源规划，
-真实显存峰值须在实际运行中测量。完整 recipe 及官方源码兼容修复见模型指南。
+机器人客户端可以继续运行在 Windows。单个 JAX 进程使用 `fsdp_devices=4`，mesh 为 `(1,4)`；
+官方数据同时沿 batch/fsdp 两轴分片，因此每卡实际处理 256/4=64 个样本，不用梯度累积代替。
+启动时要求恰好 4 张 H200，显存不足不会自动降低 batch；真实显存峰值须实际测量。
+完整 recipe 及官方源码兼容修复见模型指南。
 
 数据源固定为 `rm71d_plug_transfer_20261029`，任务“拔下插头并插入另一插座”，包含 78 条来源轨迹。
 原数据为 LeRobot v3；实测状态的 `[0..6,19]` 映射为 7 个关节角（弧度）和夹爪开度；
@@ -66,8 +69,22 @@ python scripts/ablation/forcevla.py --config /work/forcevla-run.json --operation
 python scripts/ablation/forcevla.py --config /work/forcevla-run.json --operation resume
 ```
 
-正式启动前，在独立试运行目录用少量更新检查有限 loss/梯度、真实参数更新、保存和恢复，
-再冻结正式运行配置。本次未执行此 GPU 预检，不把 plan 或 CPU 测试当作训练结果。
+指定资源的 Linux 环境准备与启动入口如下；bootstrap 不下载权重或训练，launcher 明确开始训练：
+
+```bash
+bash scripts/ablation/bootstrap_forcevla.sh /work/upstream/ForceVLA /work/envs/forcevla
+bash scripts/ablation/launch_forcevla_h200.sh /work/envs/forcevla/bin/python /work/forcevla-run.json train
+```
+
+由调度器分配同一台机器的 4 张 H200；不要使用 `torchrun` 启动 4 个 JAX 进程。
+`forcevla_launch_receipt.json` 记录设备和实际 batch/mesh 口径，是否已产生优化更新仍以训练日志为准。
+
+正式启动前，独立 smoke 配置和目录保持 4×H200、global256、每卡64、FSDP4，设置
+`num_train_steps=3, save_interval=1, keep_period=1, log_interval=1`。先执行
+`--operation train --stop-after-steps 2`，再以同一个未改动配置执行 `--operation resume`，
+验证恢复 optimizer 后完成第三次更新。调用期提前结束不改变冻结配置、学习率或正式30k目标。
+检查有限 loss/梯度、真实参数更新、保存和恢复后再启动独立正式运行目录。
+本次未执行此 GPU 预检，不把 plan 或 CPU 测试当作训练结果。
 统计绑定保存为 `norm_stats.binding.json`；冻结训练记录为 `run_root/forcevla_training_config.json`。
 每个 checkpoint 的 `assets/ablation_training_binding.json` 随 Orbax 原子保存，恢复与部署都核对
 内嵌记录；仅 step 0 的 run 会拒绝恢复，避免上游静默重新训练。完整恢复需要 `train_state`，

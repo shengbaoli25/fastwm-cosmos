@@ -9,11 +9,14 @@
   "base_params_sha256": "COPY_PATH_SHA256_FROM_ASSET_AUDIT",
   "training_method": "lora",
   "experiment_name": "rm71d78",
-  "num_train_steps": 50000,
-  "batch_size": 4,
+  "num_train_steps": 30000,
+  "batch_size": 256,
+  "gpu_count": 4,
+  "gpu_model": "H200",
+  "per_gpu_batch_size": 64,
   "save_interval": 2000,
   "keep_period": 10000,
-  "fsdp_devices": 1,
+  "fsdp_devices": 4,
   "seed": 42,
   "num_inference_steps": 10
 }
