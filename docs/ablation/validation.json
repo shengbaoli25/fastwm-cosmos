@@ -17,10 +17,10 @@
         "PYTHONPATH": "<working_directory>/src"
       },
       "exit_code": 0,
-      "passed": 49,
+      "passed": 53,
       "subtests_passed": 12,
       "skipped": 0,
-      "seconds": 16.45,
+      "seconds": 30.33,
       "coverage": [
         "Official FastWAM constructor signature, BF16 and scheduler argument conversion",
         "Explicit 7D-to-joint8 head adaptation and strict checkpoint identity",
@@ -33,7 +33,8 @@
         "Real local HTTP health/infer/session release with an explicitly injected test predictor",
         "Verified local/Pip HTTP wheel cache reuse; HTTP206 resume and HTTP200 restart; corrupt SHA and expired total deadline rejection (offline fixtures)",
         "Offline smoke audit fixtures require parameter changes, finite gradient norms and actual Adam counters; reject restored RNG/scheduler/optimizer/parameter differences",
-        "Four-rank fixture gate reads actual saved Torch archive samples and rejects altered resumed-rank state; no real baseline training or GPU execution"
+        "Four-rank fixture gate reads actual saved Torch archive samples and rejects altered resumed-rank state; no real baseline training or GPU execution",
+        "Actual Rich/Accelerate native CPU save/load preserve Python/NumPy/Torch CPU RNG with path hyperlinks disabled only in the ablation worker; CUDA transport mocked, real drift remains rejected"
       ]
     },
     "plan": {
@@ -48,6 +49,14 @@
     "diff_check": {
       "command": "git diff --check",
       "exit_code": 0
+    },
+    "logging_rng_regression": {
+      "passed": 4,
+      "command": "python -m pytest tests/ablation/test_logging_rng.py -q",
+      "accelerate": "1.12.0",
+      "rich": "14.2.0",
+      "cuda_transport": "mocked; not GPU validation",
+      "strict_gate_unchanged": true
     }
   },
   "requested_training_recipe": {

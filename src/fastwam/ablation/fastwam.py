@@ -36,6 +36,24 @@ TRAIN_RECIPE_FIELDS = ("batch_size", "gradient_accumulation_steps", "seed", "mix
                        "lr_scheduler_type", "num_workers", "eval_every", "ablation_num_processes")
 
 
+@contextmanager
+def rng_neutral_training_logging(runtime):
+    """Keep native checkpoint RNG intact across Rich save/restore log records."""
+    original = runtime.setup_logging
+
+    def setup_logging(*args, **kwargs):
+        # Rich path hyperlinks allocate IDs through Python's global random
+        # module, including Accelerate's log immediately after restoring RNG.
+        # Keep visible source paths, but disable that link allocation for the
+        # complete ablation worker lifetime. Never reset RNG to hide drift.
+        options = dict(kwargs.pop("rich_handler_kwargs", None) or {})
+        options["enable_link_path"] = False
+        return original(*args, rich_handler_kwargs=options, **kwargs)
+
+    with patch.object(runtime, "setup_logging", setup_logging):
+        yield
+
+
 def execution_profile(cfg):
     profile = {"num_processes": int(cfg.get("ablation_num_processes", 4)),
                "per_gpu_batch_size": int(cfg.get("batch_size", 64)),

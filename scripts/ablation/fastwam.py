@@ -138,9 +138,11 @@ def main(argv=None):
     # Only accelerate's explicit worker command enters the training routine.
     if os.environ.get("ACCELERATE_USE_DEEPSPEED", "").lower() != "true":
         raise RuntimeError("Use train/resume to launch the existing DeepSpeed trainer; do not invoke worker directly")
-    from fastwam.runtime import run_training, Wan22Trainer
-    with bounded_training_invocation(Wan22Trainer, cfg, args.stop_after_steps, smoke_audit=args.smoke_audit):
-        run_training(cfg)
+    import fastwam.runtime as runtime
+    from fastwam.ablation.fastwam import rng_neutral_training_logging
+    with rng_neutral_training_logging(runtime), bounded_training_invocation(
+            runtime.Wan22Trainer, cfg, args.stop_after_steps, smoke_audit=args.smoke_audit):
+        runtime.run_training(cfg)
     return 0
 
 
