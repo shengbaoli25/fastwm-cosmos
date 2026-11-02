@@ -1,0 +1,20 @@
+{
+  "pi05": {
+    "repository": "https://github.com/Physical-Intelligence/openpi",
+    "revision": "215abfb217dbac7d5f1273282331b9b1866c0479",
+    "initialization": "gs://openpi-assets/checkpoints/pi05_base",
+    "weight_identity": "Local params tree SHA256 is recorded before training; URI alone is not a weight digest"
+  },
+  "lerobot_openpi": {
+    "repository": "https://github.com/huggingface/lerobot",
+    "revision": "0cf864870cf29f4738d3ade893e6fd13fbd7cdb5",
+    "dataset_format": "v2.1"
+  },
+  "raw_dataset": {
+    "name": "rm71d_plug_transfer_20261029",
+    "source_episodes": 78,
+    "inventory_sha256": "b24b701239f54ad38d16c819b9ea9f6fad5f9374a683a84a68d2cd7ef27067a8",
+    "provenance": "Existing rm71d78_dinov3_vithplus_28l_50k training record, 2026-10-31",
+    "verified_on_this_host": false
+  }
+}
