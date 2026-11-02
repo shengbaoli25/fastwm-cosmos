@@ -4,7 +4,8 @@
 `057f78767f52f358b229f4a05b097c0f1455fa3d`，独立提供官方 π0.5 的
 78 条插头换插座数据适配、训练/恢复入口及 RealMan HTTP server。
 
-**训练尚未启动，真实权重加载和 GPU 训练/恢复尚未验证。** 当前分支的本地检查结果见
+当前执行目标为 **4×H200、每卡实际 batch 64、global batch 256、30,000 更新**，沿用官方 LoRA。
+本地尚未执行训练，真实权重加载和 GPU 训练/恢复仍须远端验证。当前分支的本地检查结果见
 [validation.json](docs/ablation/validation.json)。默认命令只显示计划：
 
 ```bash

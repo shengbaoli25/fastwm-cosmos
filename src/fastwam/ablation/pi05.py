@@ -99,19 +99,71 @@ def settings(config):
         raise ValueError("finetune_mode must be lora or full")
     out = {
         "finetune_mode": mode,
-        "num_train_steps": int(config.get("num_train_steps", 50000)),
-        "batch_size": int(config.get("batch_size", 8)),
+        "num_train_steps": int(config.get("num_train_steps", 30000)),
+        "batch_size": int(config.get("batch_size", 256)),
+        "num_gpus": int(config.get("num_gpus", 4)),
+        "per_device_batch_size": int(config.get("per_device_batch_size", 64)),
+        "gradient_accumulation_steps": int(config.get("gradient_accumulation_steps", 1)),
+        "gpu_model": str(config.get("gpu_model", "H200")),
         "save_interval": int(config.get("save_interval", 5000)),
+        "log_interval": int(config.get("log_interval", 10)),
         "seed": int(config.get("seed", 42)),
         "num_workers": int(config.get("num_workers", 2)),
-        "fsdp_devices": int(config.get("fsdp_devices", 1)),
+        "fsdp_devices": int(config.get("fsdp_devices", 4)),
     }
-    for key in ("num_train_steps", "batch_size", "save_interval", "fsdp_devices"):
+    for key in ("num_train_steps", "batch_size", "save_interval", "log_interval", "fsdp_devices", "num_gpus", "per_device_batch_size"):
         if out[key] <= 0:
             raise ValueError(f"{key} must be positive")
     if out["num_workers"] < 0:
         raise ValueError("num_workers cannot be negative")
+    if out["batch_size"] != out["num_gpus"] * out["per_device_batch_size"]:
+        raise ValueError("batch_size must equal num_gpus * per_device_batch_size")
+    if out["gradient_accumulation_steps"] != 1:
+        raise ValueError("The official JAX trainer uses one real batch per update; gradient accumulation is unsupported")
+    if out["num_gpus"] % out["fsdp_devices"]:
+        raise ValueError("num_gpus must be divisible by fsdp_devices")
+    if not out["gpu_model"]:
+        raise ValueError("gpu_model must identify the requested hardware")
     return out
+
+
+def verify_training_layout(config, devices, *, process_count, local_device_count):
+    """Validate actual allocation independently from optional model imports."""
+    opts = settings(config)
+    if process_count != 1 or local_device_count != len(devices):
+        raise RuntimeError("Use one Python process with all requested GPUs visible; do not use torchrun or multiple hosts")
+    if len(devices) != opts["num_gpus"]:
+        raise RuntimeError(f"Expected exactly {opts['num_gpus']} visible GPUs, found {len(devices)}")
+    if any(d.platform != "gpu" or opts["gpu_model"].lower() not in d.device_kind.lower() for d in devices):
+        raise RuntimeError(f"All training devices must be {opts['gpu_model']} GPUs")
+    return {
+        "device_kinds": [d.device_kind for d in devices],
+        "num_gpus": len(devices), "process_count": process_count,
+        "global_batch_size": opts["batch_size"], "per_device_batch_size": opts["per_device_batch_size"],
+        "gradient_accumulation_steps": 1,
+        "mesh_shape": [len(devices) // opts["fsdp_devices"], opts["fsdp_devices"]],
+        "mesh_axes": ["batch", "fsdp"], "data_axes": ["batch", "fsdp"],
+    }
+
+
+def check_hardware(config):
+    """Check the same official mesh and batch slices used by scripts/train.py."""
+    _activate(config)
+    import jax
+    from openpi.training import sharding
+
+    opts = settings(config)
+    report = verify_training_layout(config, jax.devices(), process_count=jax.process_count(),
+                                    local_device_count=jax.local_device_count())
+    mesh = sharding.make_mesh(opts["fsdp_devices"])
+    data_sharding = jax.sharding.NamedSharding(mesh, jax.sharding.PartitionSpec(sharding.DATA_AXIS))
+    indices = data_sharding.devices_indices_map((opts["batch_size"], HORIZON, 32))
+    batches = [len(range(opts["batch_size"])[index[0]]) for index in indices.values()]
+    if len(batches) != opts["num_gpus"] or any(size != opts["per_device_batch_size"] for size in batches):
+        raise RuntimeError(f"Official JAX sharding does not produce the requested per-GPU batch: {batches}")
+    report.update(jax_version=jax.__version__, actual_per_device_batch_sizes=batches,
+                  upstream_revision=UPSTREAM_REVISION)
+    return report
 
 
 def _name(config):
@@ -189,7 +241,7 @@ def make_train_config(config, *, resume=False):
         num_train_steps=opts["num_train_steps"], batch_size=opts["batch_size"],
         save_interval=opts["save_interval"], keep_period=opts["save_interval"],
         seed=opts["seed"], num_workers=opts["num_workers"], fsdp_devices=opts["fsdp_devices"],
-        log_interval=10, wandb_enabled=False, overwrite=False, resume=resume,
+        log_interval=opts["log_interval"], wandb_enabled=False, overwrite=False, resume=resume,
         policy_metadata={"action_space": "joint8", "control_hz": 30, "uses_force": False},
     )
 
@@ -249,7 +301,7 @@ def prepare_statistics(config):
     return binding
 
 
-def train(config, *, resume=False):
+def train(config, *, resume=False, stop_after_steps=None):
     from .contracts import bind_checkpoint_assets, file_sha256, load_dataset_manifest, path_sha256
 
     manifest = load_dataset_manifest(config["dataset_root"], verify_files=True)
@@ -268,16 +320,27 @@ def train(config, *, resume=False):
         raise ValueError("Resume must use the originally recorded pretrained parameters")
     root = _activate(config, dataset=True)
     train_config = make_train_config(config, resume=resume)
+    # This only requests an earlier final save/exit; the planned recipe and
+    # learning-rate schedule stay bound so the same run can resume to its target.
+    if stop_after_steps is not None:
+        stop_after_steps = int(stop_after_steps)
+        if not 2 <= stop_after_steps <= train_config.num_train_steps:
+            raise ValueError("stop_after_steps must be between 2 and the configured num_train_steps")
+        train_config = dataclasses.replace(train_config, num_train_steps=stop_after_steps)
     if resume:
         verify_resume_checkpoint(train_config.checkpoint_dir, binding)
     if not resume and train_config.checkpoint_dir.exists():
         raise FileExistsError("Checkpoint directory already exists; use resume or a new run_root")
     import logging
-    import jax
-
-    if not any(d.platform == "gpu" for d in jax.devices()):
-        raise RuntimeError("Pi05 training requires a supported JAX CUDA GPU environment")
     logging.basicConfig(level=logging.INFO)
+    hardware = check_hardware(config)
+    _write_json(Path(config["run_root"]) / "training-hardware.json", hardware)
+    _write_json(Path(config["run_root"]) / "last-train-invocation.json", {
+        "resume": resume, "stop_after_steps": stop_after_steps,
+        "planned_num_train_steps": settings(config)["num_train_steps"],
+        "effective_num_train_steps": train_config.num_train_steps,
+    })
+    logging.info("Verified GPU batch allocation: %s", hardware)
     binding.update(pretrained_params_sha256=base_sha, formal_training_started=True)
     _write_json(binding_path, binding)
     training = _script(root, "train")
@@ -373,5 +436,7 @@ def plan(config):
         "uses_force": False, "action_space": "joint8", "action_horizon": HORIZON,
         "model_action_dim": 32, "control_hz": 30,
         "training_started": False, "runtime_verified": False,
-        "hardware_budget": "Linux CUDA JAX; reserve an 80 GB GPU; measure actual memory before the full run",
+        "hardware_budget": (f"Single Linux host, {opts['num_gpus']} x {opts['gpu_model']}; global batch {opts['batch_size']} / "
+                            f"per-GPU batch {opts['per_device_batch_size']}, no accumulation; measure actual memory"),
+        "launch_processes": 1, "mesh_shape": [opts["num_gpus"] // opts["fsdp_devices"], opts["fsdp_devices"]],
     }

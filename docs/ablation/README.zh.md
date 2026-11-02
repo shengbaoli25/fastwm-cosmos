@@ -2,7 +2,8 @@
 
 本分支 `codex/ablation-rm71d78-pi05` 提供官方 π0.5 的数据准备、训练与恢复入口、
 checkpoint 身份绑定及现有 RealMan 客户端可调用的 HTTP server。
-**训练没有启动，大权重没有下载，真实 GPU 前反向、参数更新、恢复和模型推理尚未验证。**
+执行目标已更新为 **4×H200、每卡实际 batch 64、30,000 步**。本地没有启动训练或下载大权重，
+真实 GPU 前反向、参数更新、恢复和模型推理待远端核验。
 
 环境和模型配置见 [pi05.md](pi05.md)，源码、初始化来源与数据身份见
 [upstream-lock.json](../../configs/ablation/upstream-lock.json)。训练采用独立 Linux CUDA JAX
@@ -22,10 +23,12 @@ LeRobot v3 的实测状态 `[0..6,19]` 转成 7 个关节角（弧度）和夹�
 输出 episode。manifest 保留全部 78 条来源及分段映射，输出 episode 数可能大于 78。
 全部原始轨迹用于训练，离线回放只报告 **training-fit**，不代表留出集泛化或机器人成功率。
 
-默认计划为官方 OpenPI JAX LoRA，50k 更新、global batch 8、每 5k 保存、seed 42。
+当前配置为官方 OpenPI JAX LoRA，30k 更新、global batch 256、每卡 batch 64、每 5k 保存、seed 42。
 内部采用 32D padding 和 32 步输出，7 个关节以官方 delta transform 训练并在推理后还原绝对值。
-默认资源规划预留一张 80GB GPU；实际显存和速度须后续预检。具体归一化、优化器、全量微调
-选项及依赖版本见 [pi05.md](pi05.md)。这些数值是可配置计划，未证明收敛。
+使用单机 4×H200、单个 Python 进程、FSDP4；官方输入同时沿 batch/fsdp 两轴分片，mesh 为 (1,4)。
+不使用梯度累积替代每卡 64，也不自动降低 batch。启动时校验实际 GPU 和每卡分片大小。
+显存和速度须远端预检。具体归一化、优化器、全量微调选项及依赖版本见 [pi05.md](pi05.md)。
+30k 是目标更新次数，未证明收敛。
 
 ## 数据准备
 
@@ -50,7 +53,8 @@ PNG 导出所需磁盘空间高于原视频；原数据保持不变。
 
 ## 计划、统计、训练和恢复
 
-先按模型文档安装固定版本 OpenPI，下载官方基座到本地，然后复制并填写
+先运行 `bash scripts/ablation/bootstrap_pi05.sh /work/upstream/openpi` 安装固定版本 OpenPI，
+按模型文档下载官方基座到本地，然后复制并填写
 [pi05.example.json](../../configs/ablation/pi05.example.json)。下列命令均从本仓库根目录运行；
 除 plan 外，使用固定 OpenPI 环境中的 Python。
 
@@ -58,19 +62,22 @@ PNG 导出所需磁盘空间高于原视频；原数据保持不变。
 # 默认只显示计划，不创建运行目录，不加载模型。
 python scripts/ablation/pi05.py --config /work/pi05-run.json
 
-/work/upstream/openpi/.venv/bin/python scripts/ablation/pi05.py stats --config /work/pi05-run.json
+bash scripts/ablation/launch_pi05.sh check-hardware /work/pi05-run.json
+bash scripts/ablation/launch_pi05.sh stats /work/pi05-run.json
 
 # 仅显式 train / resume 会开始优化；本次未执行。
-/work/upstream/openpi/.venv/bin/python scripts/ablation/pi05.py train --config /work/pi05-run.json
-/work/upstream/openpi/.venv/bin/python scripts/ablation/pi05.py resume --config /work/pi05-run.json
+bash scripts/ablation/launch_pi05.sh train /work/pi05-run.json
+bash scripts/ablation/launch_pi05.sh resume /work/pi05-run.json
 ```
 
 运行绑定记录数据 manifest、统计文件 SHA、源码版本、实际基座参数 SHA、训练设置及唯一 run_id。
 Orbax checkpoint 内嵌 `assets/ablation_training_binding.json`，随 assets 原子保存。
 完整恢复需要真实 optimizer/RNG 等状态，并核验嵌入绑定；仅权重文件不算恢复。
 
-正式启动前，应在独立试运行目录用小 batch 和少量更新检查有限 loss/梯度、参数更新、保存及恢复，
-再冻结正式配置。当前代码检查没有替代这些运行验证，计划输出也不证明模型能够训练。
+正式启动前，在独立试运行目录保持 **相同 4×H200 和每卡 64**，配置目标 3 步、save/log interval=1；
+先 `train --stop-after-steps 2`，再用同一配置 `resume` 完成第 3 步，检查有限 loss/梯度、参数更新、
+保存及恢复。提前停止不改变绑定的目标步数；正式 30k 使用新的 run_root 和统计绑定。
+具体命令见 [pi05.md](pi05.md)。当前代码检查没有替代这些运行验证，计划输出也不证明模型能够训练。
 
 ## 导出与启动 server
 

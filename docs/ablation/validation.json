@@ -15,16 +15,27 @@
     "Pillow": "12.3.0",
     "datasets": "3.6.0"
   },
-  "scope": "Independent pi05 branch; results were run in this worktree and are not copied from the combined branch.",
+  "scope": "Independent pi05 branch after the requested 4xH200 / per-device batch64 / 30000-step update. Results ran in this worktree; trainer/model calls in orchestration tests are stubs.",
+  "requested_training": {
+    "num_gpus": 4,
+    "gpu_model": "H200",
+    "per_device_batch_size": 64,
+    "global_batch_size": 256,
+    "gradient_accumulation_steps": 1,
+    "num_train_steps": 30000,
+    "fsdp_devices": 4,
+    "mesh_shape": [1, 4],
+    "launch_processes": 1
+  },
   "checks": [
     {
       "command": "PYTHONPATH=src;deploy python -m pytest tests/ablation deploy/tests/test_sync_server.py -q",
-      "passed": 33,
+      "passed": 42,
       "subtests_passed": 9,
       "failed": 0,
       "exit_code": 0,
-      "duration_seconds": 9.19,
-      "evidence": "Synthetic 78-episode export and HF PNG decode, pi05 transforms and deployment/run binding, HTTP with injected predictor, existing sync server contracts"
+      "duration_seconds": 8.53,
+      "evidence": "Synthetic 78-episode export and HF PNG decode; pi05 transforms and run binding; HTTP with injected predictor; existing sync server contracts; hardware/batch mismatch rejection; stubbed early-stop at2 and same-binding resume to3"
     },
     {
       "command": "python scripts/ablation/pi05.py --config configs/ablation/pi05.example.json",
@@ -37,13 +48,14 @@
       "exit_code": 0
     },
     {
-      "command": "git diff --cached --check",
+      "command": "git diff --check",
       "exit_code": 0
     }
   ],
   "not_run": [
     "Actual frozen 78-episode source audit",
     "Official pi05 base-weight download/load",
+    "Linux bootstrap/launcher execution and actual JAX 4xH200 hardware check",
     "GPU forward/backward and optimizer update",
     "Actual Orbax checkpoint save/restore",
     "Real trained-model HTTP replay",

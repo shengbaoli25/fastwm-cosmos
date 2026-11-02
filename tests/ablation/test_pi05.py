@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from fastwam.ablation.pi05 import Joint8Inputs, Joint8Outputs, UPSTREAM_REVISION, _verify_binding, plan, settings, wrap_policy
+from fastwam.ablation.pi05 import Joint8Inputs, Joint8Outputs, UPSTREAM_REVISION, _verify_binding, plan, settings, verify_training_layout, wrap_policy
 
 
 def sample():
@@ -81,6 +81,83 @@ def test_plan_never_requires_dataset_weights_or_imports_jax(tmp_path):
 def test_invalid_recipe_rejected(overrides):
     with pytest.raises(ValueError):
         settings(overrides)
+
+
+def test_h200_recipe_is_true_per_device_64_and_allows_short_smoke_target():
+    from types import SimpleNamespace
+    devices = [SimpleNamespace(platform="gpu", device_kind="NVIDIA H200") for _ in range(4)]
+    recipe = settings({"num_train_steps": 3, "log_interval": 1})
+    assert recipe["batch_size"] == 256
+    assert recipe["gradient_accumulation_steps"] == 1
+    assert recipe["num_train_steps"] == 3
+    layout = verify_training_layout(recipe, devices, process_count=1, local_device_count=4)
+    assert layout["per_device_batch_size"] == 64
+    assert layout["mesh_shape"] == [1, 4]
+    assert layout["data_axes"] == ["batch", "fsdp"]
+
+
+@pytest.mark.parametrize("overrides", [{"batch_size": 64}, {"per_device_batch_size": 16},
+                                        {"gradient_accumulation_steps": 4}, {"fsdp_devices": 3}])
+def test_batch_substitution_or_invalid_mesh_rejected(overrides):
+    with pytest.raises(ValueError):
+        settings(overrides)
+
+
+@pytest.mark.parametrize("count,kind,processes", [(1, "NVIDIA H200", 1), (4, "NVIDIA H100", 1), (4, "NVIDIA H200", 4)])
+def test_wrong_training_allocation_rejected(count, kind, processes):
+    from types import SimpleNamespace
+    devices = [SimpleNamespace(platform="gpu", device_kind=kind) for _ in range(count)]
+    with pytest.raises(RuntimeError):
+        verify_training_layout({}, devices, process_count=processes, local_device_count=count)
+
+
+def test_early_stop_then_resume_keeps_bound_recipe(tmp_path, monkeypatch):
+    """Test orchestration only; the official trainer is explicitly stubbed."""
+    import contextlib
+    import dataclasses
+    import json
+    from types import SimpleNamespace
+    from fastwam.ablation import contracts, pi05
+
+    config = {"run_root": str(tmp_path / "run"), "dataset_root": str(tmp_path / "dataset"),
+              "pretrained_checkpoint_path": str(tmp_path / "base"), "num_train_steps": 3, "log_interval": 1}
+    (tmp_path / "base" / "params").mkdir(parents=True)
+    (tmp_path / "base" / "params" / "fixture").write_text("fake base params")
+    norm = pi05.normalization_path(config)
+    norm.parent.mkdir(parents=True)
+    norm.write_text("{}")
+    binding = {"schema": "rm71d78-pi05-training-v1", "upstream_revision": UPSTREAM_REVISION, "run_id": "1" * 32,
+               "settings": settings(config), "dataset_repo_id": "dataset", "dataset_identity_sha256": "abc",
+               "normalization_sha256": contracts.file_sha256(norm), "formal_training_started": False}
+    binding_path = pi05._binding_path(config)
+    binding_path.write_text(json.dumps(binding))
+
+    @dataclasses.dataclass
+    class Train:
+        num_train_steps: int
+        checkpoint_dir: object
+
+    targets = []
+
+    def fake_train(train_config):
+        targets.append(train_config.num_train_steps)
+        target = train_config.checkpoint_dir / str(train_config.num_train_steps - 1)
+        for child in ("params", "train_state", "assets"):
+            (target / child).mkdir(parents=True)
+        (target / "assets" / "ablation_training_binding.json").write_text(binding_path.read_text())
+
+    monkeypatch.setattr(contracts, "load_dataset_manifest", lambda *a, **kw: {"identity_sha256": "abc"})
+    monkeypatch.setattr(contracts, "bind_checkpoint_assets", lambda *a: contextlib.nullcontext())
+    monkeypatch.setattr(pi05, "_activate", lambda *a, **kw: tmp_path)
+    monkeypatch.setattr(pi05, "make_train_config", lambda *a, **kw: Train(3, tmp_path / "checkpoints"))
+    monkeypatch.setattr(pi05, "check_hardware", lambda _: {"fake_test_hardware": True})
+    monkeypatch.setattr(pi05, "_script", lambda *a: SimpleNamespace(main=fake_train,
+                        _checkpoints=SimpleNamespace(_normalize=None)))
+    pi05.train(config, stop_after_steps=2)
+    assert json.loads(binding_path.read_text())["settings"]["num_train_steps"] == 3
+    pi05.train(config, resume=True)
+    assert targets == [2, 3]
+    assert json.loads(binding_path.read_text())["settings"]["num_train_steps"] == 3
 
 
 def test_deployment_binding_does_not_need_dataset_or_run_directory():
