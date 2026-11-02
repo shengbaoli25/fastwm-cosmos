@@ -1,0 +1,60 @@
+{
+  "schema": "rm71d78-ablation-local-validation-v1",
+  "date": "2026-11-02",
+  "timezone": "Asia/Shanghai",
+  "platform": "Windows; CPU and loopback HTTP validation only",
+  "base_revision": "057f78767f52f358b229f4a05b097c0f1455fa3d",
+  "branch": "codex/ablation-rm71d78-forcevla",
+  "baseline": "forcevla",
+  "test_command": "PYTHONPATH=src:deploy FORCEVLA_SOURCE_ROOT=<pinned-official-checkout> python -m pytest tests/ablation deploy/tests/test_sync_server.py -q",
+  "environment_note": "This branch's tests used the existing Torch interpreter with the shared validation-only and bundled runtime site-packages appended through PYTHONPATH. The separate production ForceVLA Linux JAX environment was not installed or executed.",
+  "versions": {
+    "python": "3.12.14",
+    "pytest": "9.2.0",
+    "numpy": "2.3.5",
+    "pyarrow": "26.0.0",
+    "av": "19.0.2",
+    "datasets": "3.6.0",
+    "pandas": "3.0.1",
+    "torch": "2.7.1+cu128",
+    "torchvision": "0.22.1+cu128"
+  },
+  "tests": {
+    "passed": 39,
+    "subtests_passed": 9,
+    "failed": 0,
+    "skipped": 0,
+    "elapsed_seconds": 12.08
+  },
+  "additional_checks": {
+    "compileall": "passed: src/fastwam/ablation and scripts/ablation",
+    "git_diff_check": "passed",
+    "forcevla_default_plan": "passed with configs/ablation/forcevla.example.json; training_started=false",
+    "pinned_forcevla_source_test": "executed against actual official checkout 79de88fdd0651d957a2b5212cae8995159c5ad65",
+    "supported_backends": ["forcevla"]
+  },
+  "executed_coverage": [
+    "Synthetic 78-episode source audit and LeRobot v2.1 export using an explicit test-only inventory identity",
+    "Actual Hugging Face Parquet loader decodes both embedded PNG views as PIL images",
+    "Joint8 gripper preservation, force channels, image order and invalid numeric rejection",
+    "Reviewed official ForceVLA source adaptations and source drift rejection",
+    "Copied deployment assets without the dataset directory, real file/hash checks with explicit JAX model stubs",
+    "Checkpoint embedded training bindings, mismatched-run rejection and step-0-only resume rejection",
+    "Actual loopback health/infer/release endpoints with an injected test predictor",
+    "Complete HTTP replay reporting using an explicitly fake policy",
+    "Existing synchronous server regression suite"
+  ],
+  "not_executed": [
+    "Audit/conversion of actual remote rm71d_plug_transfer_20261029 dataset bytes",
+    "Installation or execution of the pinned Linux ForceVLA JAX training environment",
+    "Download or load of full official pretrained weights",
+    "Real model GPU forward/backward, parameter updates or optimizer-state restoration",
+    "Formal ForceVLA training",
+    "Real trained-checkpoint HTTP inference, latency or peak-memory measurements",
+    "Physical robot execution or task-success evaluation"
+  ],
+  "training_started": false,
+  "real_model_load_verified": false,
+  "real_data_verified": false,
+  "robot_connected": false
+}
