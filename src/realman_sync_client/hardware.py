@@ -24,9 +24,10 @@ from pathlib import Path
 import socket
 import threading
 import time
+from . import clock
 from typing import Any, Mapping, Sequence
 
-from .camera import RealSenseCamera as _Camera
+from .camera import CameraFrameUnavailable, RealSenseCamera as _Camera
 from .contracts import Observation, action_width
 from .gripper import Ctag2F120Worker
 
@@ -143,7 +144,7 @@ class _RobotFeedback:
             route.connect((str(self.config["robot_ip"]), int(self.config["robot_port"])))
             local_ip = route.getsockname()[0]
         self.callback = rm_realtime_arm_state_callback_ptr(
-            lambda state: self.ingest(state, time.monotonic()))
+            lambda state: self.ingest(state, clock.now()))
         self.sdk.rm_realtime_arm_state_call_back(self.callback)
         self.callback_registered = True
         target = dict(original, ip=local_ip,
@@ -159,8 +160,8 @@ class _RobotFeedback:
         if code != 0:
             raise RuntimeError(f"开启 RM75 UDP 反馈失败: {code}")
         self.changed = True
-        deadline = time.monotonic() + float(self.config.get("feedback_start_timeout_s", 2.0))
-        while time.monotonic() < deadline:
+        deadline = clock.now() + float(self.config.get("feedback_start_timeout_s", 2.0))
+        while clock.now() < deadline:
             with self.lock:
                 if (self.q is not None and self.pose is not None and self.force is not None
                         and self.error is None and self.force_error is None):
@@ -172,7 +173,7 @@ class _RobotFeedback:
         with self.lock:
             q, pose, force, received = self.q, self.pose, self.force, self.received
             error = self.error or self.force_error
-        age = time.monotonic() - received
+        age = clock.now() - received
         if q is None or pose is None or force is None or error or not 0 <= age <= max_age_s:
             raise RuntimeError(error or f"RM75 状态/力反馈过期 ({max(age, 0) * 1000:.1f} ms)")
         return q, pose, force, received
@@ -180,7 +181,7 @@ class _RobotFeedback:
     def status(self, max_age_s: float) -> dict[str, Any]:
         with self.lock:
             received, error, force_error, coordinate = self.received, self.error, self.force_error, self.force_coordinate
-        age = time.monotonic() - received if received else None
+        age = clock.now() - received if received else None
         ready = (received > 0 and age is not None and 0 <= age <= max_age_s
                  and error is None and force_error is None)
         return {"ready": ready, "age_ms": round(age * 1000.0, 2) if age is not None else None,
@@ -409,6 +410,8 @@ class RealManHardwareAdapter:
             return self.gripper.set_enabled(operation == "enable")
         if operation == "hold":
             self.gripper.hold()
+        elif operation == "open" and self.config.get('gripper_manual_release') is True:
+            return self.gripper.manual_open(timeout_s=6.0)
         elif operation in {"open", "close"}:
             self.gripper.command(1.0 if operation == "open" else 0.0, source='manual')
         else:
@@ -416,7 +419,60 @@ class RealManHardwareAdapter:
         return self.gripper.status()
 
     def observe(self) -> Observation | None:
-        return self.observe_at(time.monotonic())
+        return self.observe_at(clock.now())
+
+    def _aligned_camera_frames(self, anchor, feedback_stamp, *, wait_s=0.):
+        """Select causal frames with one shared, bounded IPC arrival budget.
+
+        Both timestamps stay fixed while waiting. The next 30 Hz grid is an
+        upper bound, not an excuse to shift observations or relax freshness.
+        Preflight uses wait_s=0 and never creates an observation/sequence.
+        """
+        deadline = min(clock.now() + max(0., min(float(wait_s), .010)), anchor + 1 / 30)
+        skew = float(self.config['camera_pair_skew_s'])
+        while True:
+            revisions = [camera.frame_revision() for camera in self.cameras]
+            selected = []
+            pending = None
+            for index, camera in enumerate(self.cameras):
+                try:
+                    selected.append(camera.snapshot(feedback_stamp, clock.now()))
+                except CameraFrameUnavailable as exc:
+                    pending = (index, exc)
+                    break
+            if pending is None:
+                if len(selected) != 2:
+                    raise RuntimeError('观测必须有两路相机')
+                stamps = [float(meta['received']) for _, meta in selected]
+                if any(not math.isfinite(stamp) or stamp > feedback_stamp for stamp in stamps):
+                    raise RuntimeError('相机帧来自状态锚点之后或时间戳无效')
+                differences = [feedback_stamp - stamp for stamp in stamps]
+                oldest = differences.index(max(differences))
+                pair_difference = max(stamps) - min(stamps)
+                if pair_difference > skew:
+                    pending = (oldest, RuntimeError(
+                        f'两路相机时间差超限 ({pair_difference * 1000:.1f} ms > {skew * 1000:.1f} ms)'))
+                elif max(differences) > skew:
+                    pending = (oldest, RuntimeError(
+                        '相机与机械臂状态时间差超限 ('
+                        + ', '.join(f"{self.config['cameras'][i]['name']}={value * 1000:.1f} ms"
+                                    for i, value in enumerate(differences))
+                        + f'，阈值 {skew * 1000:.1f} ms)'))
+                else:
+                    # Recheck both frames against a fresh common wall-clock
+                    # sample after selection, including time spent waiting.
+                    now = clock.now()
+                    ages = [now - stamp for stamp in stamps]
+                    max_age = float(self.config['camera_max_age_s'])
+                    if any(not 0 <= age <= max_age for age in ages):
+                        raise RuntimeError('相机画面过期 (当前最大帧龄 '
+                                           f'{max(ages) * 1000:.1f} ms > {max_age * 1000:.1f} ms)')
+                    return selected
+            remaining = deadline - clock.now()
+            if remaining <= 0:
+                raise pending[1]
+            index = pending[0]
+            self.cameras[index].wait_for_frame_update(revisions[index], remaining)
 
     def observe_at(self, anchor: float) -> Observation | None:
         if not self.connected or self.feedback is None:
@@ -426,19 +482,11 @@ class RealManHardwareAdapter:
             q, pose, force, feedback_stamp, force_meta = self.feedback.model_snapshot(anchor)
         else:
             q, pose, force, feedback_stamp = self.feedback.snapshot(float(self.config["feedback_max_age_s"]))
-        now = time.monotonic()
         frames: dict[str, bytes] = {}
         metadata: dict[str, Mapping[str, Any]] = {}
-        for camera in self.cameras:
-            rgb, meta = camera.snapshot(feedback_stamp, now)
+        for rgb, meta in self._aligned_camera_frames(anchor, feedback_stamp, wait_s=.010):
             frames[str(meta["name"])] = rgb
             metadata[str(meta["name"])] = meta
-        stamps = [float(meta["received"]) for meta in metadata.values()]
-        if max(stamps) - min(stamps) > float(self.config["camera_pair_skew_s"]):
-            raise RuntimeError("两路相机时间差超限")
-        if any(abs(stamp - feedback_stamp) > float(self.config["camera_pair_skew_s"])
-               for stamp in stamps):
-            raise RuntimeError("相机与机械臂状态时间差超限")
         gripper = self.gripper.snapshot(
             feedback_stamp, float(self.config.get("gripper_feedback_max_age_s", 0.5))) if self.gripper else None
         if gripper is None:
@@ -513,6 +561,7 @@ class RealManHardwareAdapter:
             raise RuntimeError("硬件已停机或未 arm")
         # Do not hold the Python state lock across an SDK motion call: a stop
         # request must be able to reach the controller on its own worker.
+        self._check_command_dispatch()
         code = self.sdk.rm_movep_canfd(list(pose), bool(self.config["follow"]),
                                        int(self.config["trajectory_mode"]),
                                        int(self.config["trajectory_radio"]))
@@ -522,7 +571,7 @@ class RealManHardwareAdapter:
             self.last_command = tuple(pose) + (action[6],)
         if self.config.get("log_motion_trace", False):
             logger.info("Motion trace %s", json.dumps({
-                "stamp": time.monotonic(), "feedback_stamp": feedback_stamp,
+                "stamp": clock.now(), "feedback_stamp": feedback_stamp,
                 "measured_pose": list(current), "requested_pose": list(action[:6]),
                 "sent_pose": list(pose), "gripper": action[6], "ik_jump_deg": jump,
             }, allow_nan=False, separators=(",", ":")))
@@ -554,17 +603,27 @@ class RealManHardwareAdapter:
             raise RuntimeError('CTAG2F120 夹爪 worker 未连接')
         if self.closed or not self.armed or self.estop_latched:
             raise RuntimeError('硬件已停机或未 arm')
+        self._check_command_dispatch()
         code = self.sdk.rm_movej_canfd(list(target),bool(self.config['follow']),expand=0.,
             trajectory_mode=int(self.config['trajectory_mode']),radio=int(self.config['trajectory_radio']))
         if code != 0:
             raise RuntimeError(f'RM75 关节指令失败: {code}')
         with self.lock:
+            previous_command = self.last_command
             self.last_command = tuple(action)
         if self.config.get('log_motion_trace',False):
-            logger.info('Motion trace %s',json.dumps(dict(stamp=time.monotonic(),feedback_stamp=stamp,
+            adjacent_delta = (max(abs(math.degrees(new-old))
+                for new, old in zip(action[:7], previous_command[:7]))
+                if previous_command is not None else None)
+            logger.info('Motion trace %s',json.dumps(dict(stamp=clock.now(),feedback_stamp=stamp,
                 action_space='joint8',measured_joints_deg=list(q),requested_joints_rad=list(action[:7]),
-                sent_joints_deg=list(target),joint_jump_deg=jump,gripper=action[-1]),allow_nan=False))
+                sent_joints_deg=list(target),joint_jump_deg=jump,
+                measured_tracking_error_deg=jump, adjacent_command_delta_deg=adjacent_delta,
+                configured_jump_limit_deg=limit, gripper=action[-1]),allow_nan=False))
         self.gripper.command(action[-1])
+
+    def _check_command_dispatch(self):
+        """Adapters may recheck asynchronously changing state at SDK dispatch."""
 
     def _stop(self, emergency: bool) -> None:
         if emergency:

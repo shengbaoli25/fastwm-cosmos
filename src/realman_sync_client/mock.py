@@ -1,6 +1,7 @@
 """Deterministic CPU-only hardware for protocol and scheduling validation."""
 import threading
 import time
+from . import clock
 
 from .contracts import Observation
 
@@ -54,7 +55,7 @@ class MockHardware:
             if not self.armed or self.closed:
                 raise RuntimeError("mock hardware is not armed")
             self.state = tuple(action)
-            self.commands.append((time.monotonic(), self.state))
+            self.commands.append((clock.now(), self.state))
 
     def slow_stop(self):
         self.armed = False

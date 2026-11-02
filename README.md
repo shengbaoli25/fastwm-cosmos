@@ -2,6 +2,10 @@
 
 独立机器人客户端分支 `codex/realman-sync-client`。只采集机械臂关节、六轴力、夹爪和两路 RGB 图像，向远程 Server 请求动作，再在本机执行。无需训练仓库、checkpoint、PyTorch、CUDA 或模型依赖。
 
+Windows 本地网页入口与操作说明见 [WEB_CLIENT.zh.md](WEB_CLIENT.zh.md)。网页提供双相机预览、实际 FPS/Hz、action 延时、执行控制与夹爪报警状态；默认自动请求推理，动作执行默认关闭。
+
+夹爪独立通信、两速轮询、故障恢复与实测限制见 [夹爪通信优化记录](GRIPPER_COMMUNICATION_OPTIMIZATION.zh.md)。当前部署使用专用 JSON/Modbus 通路，位置/报警快速读取，使能独立校验；已识别的短暂故障可按会话许可自动恢复，未知故障和设备报警保持停止，见 [自动恢复](AUTO_RECOVERY.zh.md)。
+
 支持相同 `realman-sync-v1` 接口的三个推理分支：
 
 - `codex/realman-cup-joint-30k`
@@ -104,6 +108,38 @@ realman-sync-client \
 
 ## 源码与验证范围
 
-`hardware.py,camera.py,gripper.py,sdk.py,contracts.py` 和 `realman_force` 来自基础分支提交 `9a317a1e9d7d37e953102e3ee37f4bbf70ca5906`，逐字节保留；文件哈希记录在 `HARDWARE_SOURCES.json`。本分支是独立 orphan 分支，工作树只包含采集、通信、控制和必要的传感器处理代码。
+`hardware.py,camera.py,gripper.py,sdk.py,contracts.py` 和 `realman_force` 来自基础分支提交 `9a317a1e9d7d37e953102e3ee37f4bbf70ca5906`，初次提取逐字节一致；当前本地 Windows 计时修复修改了部分文件的时钟调用，原始哈希和本地差异分别记录在 `HARDWARE_SOURCES.json` 的 `files`、`local_patches`，详见下节。本分支是独立 orphan 分支，工作树只包含采集、通信、控制和必要的传感器处理代码。
 
 单元/集成测试覆盖连续历史、同步轮次、VJEPA 间隔、响应身份、过期动作、后续行 NaN、网络不重试、执行周期超时、显式硬件启动、鉴权、真实 HTTP mock CLI 和会话释放。测试不连接物理设备；真实 SDK/相机/机器人和 GPU checkpoint 的端到端效果仍需在对应部署机器验证。
+
+
+## 当前 Windows 主机的本地计时修复（2026-11-01）
+
+本分支以提交 `78fff14` 为基线，包含 Windows 计时和本地网页补丁。
+本机 Python 3.12 的 `time.monotonic()` 使用 GetTickCount64（15.625 ms 分辨率）；
+`Event.wait()` 也会出现提前唤醒或粗粒度延迟。原实现曾产生未来观测时间戳，
+并将命令间隔拖慢至约 47 ms。
+
+新增 `realman_sync_client.clock`，所有 Client、相机子进程、UDP 反馈、夹爪、
+Observation/ActionChunk 和 mock 时间戳统一使用 `time.perf_counter()`，即 Windows
+Python 3.10+ 共享原点的 QPC。采样和控制采用最多 5 ms 的 `time.sleep()` 小段等待，
+每次重新检查截止时刻和停止标志；保持原有新鲜度、30 Hz 网格及超时检查，不使用
+全局时钟补丁、timeBeginPeriod 或忙等待。
+
+`HARDWARE_SOURCES.json` 的 `files` 仍保留原始来源哈希；新增 `local_patches`
+记录 camera/contracts/hardware/gripper 的本地时钟差异及当前哈希，因此这些文件
+不再声称逐字节等同上游。SDK 和 realman_force 校准/滤波算法保持原样。
+`realman_force` 中未使用的校准会话辅助类不属于当前在线 Client 执行路径。
+
+验证产物位于工作区 `diagnostics/client-tests-after-clock-fix.log`、
+`diagnostics/windows-mock-check.json` 和 `diagnostics/windows-timing.patch`。
+真实机械臂闭环尚未执行，模拟测试结果不等于硬件时序承诺。
+
+
+## 本机配置与上传范围
+
+`config/`、`diagnostics/`、权重、令牌文件、复位位置和运行收据不进入版本库。请将硬件示例复制到本地 `config/hardware.json`，填入实际设备信息，并按训练契约放置匹配的滤波与标定文件；`examples/force_calibration.json` 是基线已包含的原工具校准快照，不是其他机械臂可通用的标定。不要上传新采集的本机标定或复位位置。
+
+Windows 可在仓库内创建 `.venv`，安装 `.[hardware,web]` 后运行 `./start-web.ps1`。认证通过可选 `-TokenFile` 或 `REALMAN_SERVER_TOKEN` 环境变量提供。只测试网页协议可加 `-Mode mock`，仍需准备相应 Server。
+
+离线分析 RTU 日志使用 `python tools/compare_gripper_pacing.py --help`；该工具不连接硬件。完整 Python 回归之外，网页测试可运行 `node --test tests/test_web_sampling.js`。

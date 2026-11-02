@@ -10,5 +10,33 @@
     "src/realman_force/contract.py": "06316559a8cde17eae2a3c10ccbf60b6630448f018bf1beacf5dc75d761e6e82",
     "src/realman_force/__init__.py": "00357fd441771672e7cbf11bc22e7ba632307f0423bdea7b8e67ddcc7622b60d",
     "src/realman_force/force_filter.py": "4411d52196584ddf21b7915d303f9bf56feda2895dc1476677d29a1786bdd50b"
+  },
+  "local_patches": {
+    "src/realman_sync_client/camera.py": {
+      "source_sha256": "9f5f3559eddedbb96d9e3781170198a055ab186aee5ae81615c354f716688e43",
+      "sha256": "2b00781bb49cddc34bcaf49d6be9d05c449efd3a451126af54a1d6658c2220c9",
+      "reason": "Shared Windows QPC clock; match realman-data-collection 762e4a2 camera auto exposure=1, exposure priority=0, frames queue=1, restoring prior settings on exit; Fixed-anchor causal camera selection with a shared <=10ms IPC wait capped by the next 30Hz grid; nonblocking preflight reuses alignment; original skew/freshness limits retained",
+      "reference_commit": "762e4a2bb4ff29c6a7ec447592f92688990b8237"
+    },
+    "src/realman_sync_client/contracts.py": {
+      "source_sha256": "80d844e0e5562a4634b3e122903bd0ebd251e3a32c79f18e80d627ea0a95d1b4",
+      "sha256": "6d6f22c472e7d8b66cc5f1933c5ccd3dcb09568cc89b35c402179cf0049cba30",
+      "reason": "Use shared QPC/perf_counter clock for all parent/child observation, feedback and control timestamps on Windows; no hardware command semantics changed"
+    },
+    "src/realman_sync_client/hardware.py": {
+      "source_sha256": "c3dcc2125b2e6ff64e644109009cf739ce0a0b50ee213ef666638d22b9849f6c",
+      "sha256": "b6480f7792e4fa0aa58f89454948b1ab2296ce4ff3f51f770523a494b70a2473",
+      "reason": "Shared Windows QPC; adapter dispatch guard immediately before native motion calls; explicit opt-in manual-open torque-hold release through the sole RTU worker; Fixed-anchor causal camera selection with a shared <=10ms IPC wait capped by the next 30Hz grid; nonblocking preflight reuses alignment; original skew/freshness limits retained; motion tracing separates measured tracking error from adjacent command delta"
+    },
+    "src/realman_sync_client/gripper.py": {
+      "source_sha256": "0e977c37ff703045a2cb7029bc3361284530af02b4187412b967af3536668ba2",
+      "sha256": "489cddb6db8aa5220d8c4f90d1f085d7e32f8068363228b5fabec94e2b30d037",
+      "reason": "Shared Windows QPC; bounded single-owner JSON RTU transport, independent enable/position freshness, cancellation-safe dispatch; explicit manual torque-hold release and measured-target neutralization before manual enable, with cancellation cleanup and no policy auto-enable; configurable manual separate target-readback-trigger protocol with guarded dispatch and no uncertain-ACK retries; deadline-aware enable/position polling before target dispatch, bounded freshness reserve and no uncertain motion retries; optional cancellable JSON request quiet time with post-wait intent guards and pacing-aware feedback budgets; latch hard device/unknown faults independently of transient feedback gaps; freshness-only target rejection continues read monitoring without replay; manual admission checks captured cancellation generation under hold lock; ordinary enable also retains ticket through final transport guard"
+    },
+    "src/realman_sync_client/web_hardware.py": {
+      "previous_local_sha256": "7aaa05d72b1c55c6850b9d99707f9079e3ff18de800a3cbd2132dfbf9a89fd8b",
+      "sha256": "03356018d0e4395da529ccabdf072ce2b436baa2b0ff422c6b2e37ca90038390",
+      "reason": "Fixed-anchor causal camera selection with a shared <=10ms IPC wait capped by the next 30Hz grid; nonblocking preflight reuses alignment; original skew/freshness limits retained; expose deadline-aware gripper feedback scheduling diagnostics; object-bound execution recovery tokens retain historical gripper and arm hard faults, invalidate on manual control/reconnect/close, and only acknowledge stable measured feedback without hardware writes; manual UI tokens bind worker identity and original cancellation generation through final worker admission without blocking stop on hardware lock; explicit epoch-cancellable 10-percent planned joint reset validates native limits and fresh arm-only feedback, confirms stable measured arrival, and never retries uncertain motion ACKs"
+    }
   }
 }

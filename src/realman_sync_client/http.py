@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import math
 import os
+import time
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
 from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener
@@ -13,6 +14,32 @@ from .wire import MAX_BODY_BYTES, PROTOCOL
 
 def _reject_constant(value):
     raise ValueError(f"non-finite JSON constant: {value}")
+
+
+def _encode_json_body(data):
+    """Keep sensor callbacks schedulable while encoding multi-frame RGB JSON.
+
+    JSONEncoder.iterencode preserves the existing JSON bytes, but avoids the
+    one-shot C encoder holding the GIL across all camera strings. On Windows,
+    sleep(0) did not reliably wake the 200 Hz feedback thread; a short timed
+    yield is needed. The initial yield separates preceding base64 work from
+    this stage. The HTTP request is still a single bounded byte body, with no
+    transport streaming, changed protocol, or request retry.
+    """
+    time.sleep(.001)
+    encoder = json.JSONEncoder(separators=(",", ":"), allow_nan=False)
+    body = bytearray()
+    pending = 0
+    for part in encoder.iterencode(data):
+        block = part.encode("utf-8")
+        if len(body) + len(block) > MAX_BODY_BYTES:
+            raise ValueError("request exceeds 64 MiB")
+        body.extend(block)
+        pending += len(block)
+        if pending >= 128 * 1024:
+            time.sleep(.001)
+            pending = 0
+    return bytes(body)
 
 
 class _NoRedirect(HTTPRedirectHandler):
@@ -39,10 +66,7 @@ class InferenceHTTPClient:
         self.opener = build_opener(ProxyHandler({}), _NoRedirect())
 
     def _request(self, path, data=None, *, timeout_s=None):
-        body = None if data is None else json.dumps(
-            data, separators=(",", ":"), allow_nan=False).encode("utf-8")
-        if body is not None and len(body) > MAX_BODY_BYTES:
-            raise ValueError("request exceeds 64 MiB")
+        body = None if data is None else _encode_json_body(data)
         headers = {"Content-Type": "application/json", "Accept": "application/json"}
         if self.token:
             headers["Authorization"] = "Bearer " + self.token
@@ -54,7 +78,16 @@ class InferenceHTTPClient:
                 if len(raw) > MAX_BODY_BYTES:
                     raise ValueError("response exceeds 64 MiB")
                 result = json.loads(raw, parse_constant=_reject_constant)
-        except (HTTPError, URLError, TimeoutError, OSError) as exc:
+        except HTTPError as exc:
+            detail = str(exc)
+            try:
+                error = json.loads(exc.read(4096), parse_constant=_reject_constant)
+                if isinstance(error, dict) and error.get('protocol') == PROTOCOL and isinstance(error.get('error'), str):
+                    detail += ': ' + error['error'][:1000]
+            except (ValueError, OSError):
+                pass
+            raise RuntimeError(f"inference HTTP request failed; no retry: {detail}") from exc
+        except (URLError, TimeoutError, OSError) as exc:
             raise RuntimeError(f"inference HTTP request failed; no retry: {exc}") from exc
         if not isinstance(result, dict):
             raise ValueError("server response must be a JSON object")
@@ -64,6 +97,10 @@ class InferenceHTTPClient:
 
     def health(self):
         return self._request("/health")
+
+    def set_sampling(self, sampling_profile):
+        return self._request("/sampling", dict(protocol=PROTOCOL, sampling_profile=sampling_profile),
+                             timeout_s=120.0)
 
     def infer(self, request):
         return self._request("/infer", request)

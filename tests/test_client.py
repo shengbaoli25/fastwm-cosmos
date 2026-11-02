@@ -3,19 +3,27 @@ import copy
 import hashlib
 import io
 import json
+import multiprocessing
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import pathlib
 import threading
 import time
 import unittest
 from unittest.mock import patch
+from urllib.error import HTTPError
 
+from realman_sync_client import clock
 from realman_sync_client.cli import main
 from realman_sync_client.client import (ClientOptions, ObservationCollector, SynchronousClient,
                                        validate_actions, validate_metadata)
 from realman_sync_client.http import InferenceHTTPClient
 from realman_sync_client.mock import MockHardware
 from realman_sync_client.wire import PROTOCOL, decode_request
+
+
+def _child_clock(connection):
+    connection.send(clock.now())
+    connection.close()
 
 
 def metadata(**overrides):
@@ -42,7 +50,7 @@ class RecordingTransport:
     def infer(self, request):
         decode_request(request, self.meta)
         self.requests.append(copy.deepcopy(request))
-        self.infer_times.append(time.monotonic())
+        self.infer_times.append(clock.now())
         time.sleep(self.delay)
         result = response(request, self.meta["action_horizon"])
         if self.mutate:
@@ -60,14 +68,97 @@ class RecordingHardware(MockHardware):
 
     def slow_stop(self):
         super().slow_stop()
-        self.stop_acknowledgements.append(time.monotonic())
+        self.stop_acknowledgements.append(clock.now())
 
 
 class SyncClientTests(unittest.TestCase):
-    def test_hardware_sources_and_force_modules_match_original_hashes(self):
+    def test_early_timer_wake_never_samples_a_future_anchor(self):
+        clock = [100.0]
+        waits = []
+        anchors = []
+        hardware = MockHardware(width=4, height=3)
+        collector = ObservationCollector(hardware, metadata())
+
+        class EarlyEvent:
+            stopped = False
+
+            def is_set(self):
+                return self.stopped
+
+        event = EarlyEvent()
+        collector.stop_event = event
+        original = hardware.observe_at
+
+        def observed(anchor):
+            self.assertLessEqual(anchor, clock[0])
+            anchors.append(anchor)
+            result = original(anchor)
+            if len(anchors) == 2:
+                event.stopped = True
+            return result
+
+        hardware.observe_at = observed
+        def early_sleep(timeout):
+            waits.append(timeout)
+            # The first timer wake is early; no future timestamp is accepted.
+            clock[0] += max(0, timeout - .003) if len(waits) == 1 else timeout
+
+        with patch("realman_sync_client.clock.now", side_effect=lambda: clock[0]), \
+                patch("realman_sync_client.clock.time.sleep", side_effect=early_sleep):
+            collector._run()
+        self.assertIsNone(collector.error)
+        self.assertEqual(len(anchors), 2)
+        self.assertGreaterEqual(len(waits), 2)
+        self.assertLessEqual(max(waits), .005)
+        self.assertAlmostEqual(anchors[1] - anchors[0], 1 / 30)
+
+    def test_stop_during_sampling_wait_does_not_acquire_another_observation(self):
+        clock = [100.0]
+        hardware = MockHardware(width=4, height=3)
+        collector = ObservationCollector(hardware, metadata())
+
+        class StopEvent:
+            stopped = False
+
+            def is_set(self):
+                return self.stopped
+
+        collector.stop_event = StopEvent()
+        with patch("realman_sync_client.clock.now", side_effect=lambda: clock[0]), \
+                patch("realman_sync_client.clock.time.sleep", side_effect=lambda _: setattr(collector.stop_event, 'stopped', True)):
+            collector._run()
+        self.assertEqual(hardware.sequence, 1)
+        self.assertIsNone(collector.error)
+
+    def test_spawn_worker_clock_shares_parent_epoch(self):
+        ctx = multiprocessing.get_context('spawn')
+        parent, child = ctx.Pipe()
+        worker = ctx.Process(target=_child_clock, args=(child,))
+        before = clock.now()
+        worker.start()
+        child.close()
+        try:
+            self.assertTrue(parent.poll(5), 'spawn worker did not return a clock sample')
+            stamp = parent.recv()
+            after = clock.now()
+            self.assertLessEqual(before, stamp)
+            self.assertLessEqual(stamp, after)
+        finally:
+            parent.close()
+            worker.join(5)
+            if worker.is_alive():
+                worker.terminate()
+                worker.join(2)
+        self.assertEqual(worker.exitcode, 0)
+
+    def test_hardware_source_hashes_and_documented_local_clock_patches(self):
         root = pathlib.Path(__file__).resolve().parents[1]
         manifest = json.loads((root / "HARDWARE_SOURCES.json").read_text())
         for name, expected in manifest["files"].items():
+            local = manifest.get('local_patches', {}).get(name)
+            if local:
+                self.assertEqual(local['source_sha256'], expected)
+                expected = local['sha256']
             self.assertEqual(hashlib.sha256((root / name).read_bytes()).hexdigest(), expected, name)
 
     def test_continuous_history_strided_video_and_stop_before_fresh_request(self):
@@ -137,7 +228,7 @@ class SyncClientTests(unittest.TestCase):
         meta = metadata()
         hardware = RecordingHardware(width=4, height=3)
         client = SynchronousClient(RecordingTransport(meta), hardware, meta, options=ClientOptions(execute_steps=2))
-        observation = hardware.observe_at(time.monotonic())
+        observation = hardware.observe_at(clock.now())
         client.collector.history.append(observation)
         original = hardware.command
         def slow(action):
@@ -154,7 +245,7 @@ class SyncClientTests(unittest.TestCase):
         meta = metadata()
         hardware = MockHardware(width=4, height=3)
         collector = ObservationCollector(hardware, meta)
-        now = time.monotonic()
+        now = clock.now()
         collector._append(hardware.observe_at(now), now)
         later = hardware.observe_at(now + 1 / 30)
         later.force_meta["epoch"] = 1
@@ -166,6 +257,15 @@ class SyncClientTests(unittest.TestCase):
         with patch.object(transport, "_request", return_value={}) as request:
             transport.release("session")
         self.assertEqual(request.call_args.kwargs["timeout_s"], 2.0)
+
+    def test_sampling_conflict_preserves_server_reason_without_retry(self):
+        transport = InferenceHTTPClient('http://127.0.0.1:8766', token=None)
+        body = json.dumps({'protocol': PROTOCOL, 'error': 'Release the active client session'}).encode()
+        error = HTTPError(transport.server_url+'/sampling', 409, 'Conflict', {}, io.BytesIO(body))
+        with patch.object(transport.opener, 'open', side_effect=error) as request:
+            with self.assertRaisesRegex(RuntimeError, 'Release the active client session'):
+                transport.set_sampling('4416')
+        request.assert_called_once()
 
     def test_joint_soft_limits_checked_for_all_rows_before_arm(self):
         from realman_sync_client.client import validate_hardware_chunk

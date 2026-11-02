@@ -18,13 +18,13 @@
     {
       "name": "global",
       "label": "全局",
-      "serial": "027322072283",
+      "serial": "REPLACE_GLOBAL_CAMERA_SERIAL",
       "model": "D435i"
     },
     {
       "name": "wrist",
       "label": "腕部",
-      "serial": "146322073578",
+      "serial": "REPLACE_WRIST_CAMERA_SERIAL",
       "model": "D435"
     }
   ],

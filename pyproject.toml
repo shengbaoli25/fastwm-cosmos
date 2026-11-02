@@ -11,12 +11,15 @@ dependencies = []
 
 [project.optional-dependencies]
 hardware = ["numpy>=1.24,<3", "scipy>=1.10,<2", "pyrealsense2>=2.54"]
+web = ["Pillow>=10,<14"]
 
 [project.scripts]
 realman-sync-client = "realman_sync_client.cli:main"
+realman-sync-web = "realman_sync_client.webapp:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools.package-data]
 realman_force = ["SOURCE_HASHES.json"]
+realman_sync_client = ["web/*.html", "web/*.css", "web/*.js"]

@@ -8,6 +8,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 import math
 import time
+from . import clock
 from typing import Any, Mapping, Sequence
 
 
@@ -63,7 +64,7 @@ class Observation:
     def now(cls, sequence: int, state: Sequence[float], force: Sequence[float],
             frames: Mapping[str, bytes], frame_meta: Mapping[str, Mapping[str, Any]] | None = None,
             *, action_space: str = 'eef_pose7') -> "Observation":
-        return cls(time.monotonic(), sequence, tuple(state), tuple(force), dict(frames), frame_meta or {}, action_space=action_space)
+        return cls(clock.now(), sequence, tuple(state), tuple(force), dict(frames), frame_meta or {}, action_space=action_space)
 
 
 @dataclass(frozen=True)
@@ -74,7 +75,7 @@ class ActionChunk:
     source_stamp: float
     epoch: int
     actions: tuple[tuple[float, ...], ...]
-    created_stamp: float = field(default_factory=time.monotonic)
+    created_stamp: float = field(default_factory=clock.now)
     action_space: str = 'eef_pose7'
 
     def __post_init__(self) -> None:

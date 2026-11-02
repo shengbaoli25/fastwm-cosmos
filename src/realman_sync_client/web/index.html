@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="client-key" content="__CLIENT_KEY__">
+  <meta name="color-scheme" content="dark">
+  <title>RealMan · 本地推理控制台</title>
+  <link rel="stylesheet" href="/style.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="brand"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span><div><span class="eyebrow">REALMAN / LOCAL CLIENT</span><h1>推理控制台</h1></div></div>
+      <div class="topbar-status"><span class="pill muted" id="mode-badge">等待客户端</span><span class="connection-label" id="connection-label"><i class="status-dot"></i><span>正在连接</span></span><span class="clock" id="local-clock">—</span></div>
+    </header>
+
+    <div id="connection-alert" class="notice warning" role="status" hidden></div>
+    <div id="recovery-notice" class="notice warning" role="status" hidden></div>
+    <div id="command-message" class="notice" role="status" hidden></div>
+
+    <section class="metrics" aria-label="实时采样与推理指标">
+      <article class="metric"><div class="metric-heading"><span>STATE 采样</span><span class="metric-icon">S</span></div><div class="metric-number"><strong id="state-hz">—</strong><span>Hz</span></div><div class="metric-footer"><span id="state-age">等待状态</span><span id="state-samples">— 次</span></div></article>
+      <article class="metric"><div class="metric-heading"><span>力反馈采样</span><span class="metric-icon">F</span></div><div class="metric-number"><strong id="force-hz">—</strong><span>Hz</span></div><div class="metric-footer"><span id="force-age">等待反馈</span><span id="force-samples">— 次</span></div></article>
+      <article class="metric accent"><div class="metric-heading"><span>SERVER 推理耗时</span><span class="metric-icon">↗</span></div><div class="metric-number"><strong id="inference-latency">—</strong><span>ms</span></div><div class="metric-footer"><span>最近一次动作生成</span><span id="request-count">0 次完成</span></div></article>
+      <article class="metric"><div class="metric-heading"><span>端到端请求耗时</span><span class="metric-icon">⇄</span></div><div class="metric-number"><strong id="roundtrip-latency">—</strong><span>ms</span></div><div class="metric-footer"><span>发送观测 → 收到动作</span><span id="source-age">观测年龄 —</span></div></article>
+    </section>
+
+    <main>
+      <div class="workspace-grid">
+        <section class="camera-section" aria-labelledby="camera-title">
+          <div class="section-title"><h2 id="camera-title">实时视野</h2><span class="subtle">RGB · 两路相机</span></div>
+          <div class="camera-grid">
+            <article class="panel camera-card" data-camera="global">
+              <div class="panel-heading"><h3><span class="camera-number">01</span>全局相机 <span class="subtle">Global</span></h3><span class="pill muted" id="global-status">未连接</span></div>
+              <div class="camera-viewport"><img id="global-image" alt="全局相机实时画面" hidden><div class="camera-placeholder" id="global-placeholder"><svg viewBox="0 0 48 48" aria-hidden="true"><rect x="7" y="13" width="34" height="25" rx="4"/><path d="M16 13l3-5h10l3 5"/><circle cx="24" cy="25" r="7"/></svg><span>等待相机画面</span></div><div class="camera-overlay" id="global-overlay" hidden></div><div class="camera-caption"><span id="global-resolution">640 × 480</span><span id="global-serial">序列号 —</span></div></div>
+              <div class="camera-stats"><div><strong id="global-fps">—</strong><span>采集 FPS</span></div><div><strong id="global-frame">—</strong><span>帧号</span></div><div><strong id="global-age">—</strong><span>图像年龄 ms</span></div></div>
+              <p class="camera-error" id="global-error" hidden></p>
+            </article>
+            <article class="panel camera-card" data-camera="wrist">
+              <div class="panel-heading"><h3><span class="camera-number">02</span>腕部相机 <span class="subtle">Wrist</span></h3><span class="pill muted" id="wrist-status">未连接</span></div>
+              <div class="camera-viewport"><img id="wrist-image" alt="腕部相机实时画面" hidden><div class="camera-placeholder" id="wrist-placeholder"><svg viewBox="0 0 48 48" aria-hidden="true"><rect x="7" y="13" width="34" height="25" rx="4"/><path d="M16 13l3-5h10l3 5"/><circle cx="24" cy="25" r="7"/></svg><span>等待相机画面</span></div><div class="camera-overlay" id="wrist-overlay" hidden></div><div class="camera-caption"><span id="wrist-resolution">640 × 480</span><span id="wrist-serial">序列号 —</span></div></div>
+              <div class="camera-stats"><div><strong id="wrist-fps">—</strong><span>采集 FPS</span></div><div><strong id="wrist-frame">—</strong><span>帧号</span></div><div><strong id="wrist-age">—</strong><span>图像年龄 ms</span></div></div>
+              <p class="camera-error" id="wrist-error" hidden></p>
+            </article>
+          </div>
+          <p class="caption-note">FPS 来自相机实际采集；网页预览最高 5 次/秒，不影响采集与推理频率。</p>
+        </section>
+
+        <aside class="control-column" aria-label="连接与运行控制">
+          <div class="section-title"><h2>运行控制</h2><span class="status-text" id="phase-label">等待连接</span></div>
+          <section class="panel control-panel">
+            <div class="panel-heading"><h3>推理 Server</h3><span class="pill muted" id="server-status">检测中</span></div>
+            <div class="server-detail"><span>服务地址</span><code id="server-url">—</code></div>
+            <div class="server-detail"><span>模型后端</span><strong id="server-backend">—</strong></div>
+            <div class="server-detail"><span>健康检查</span><strong id="server-ping">—</strong></div>
+            <p class="inline-error" id="server-error" hidden></p>
+            <div class="button-row"><button class="button secondary" id="connect-button" data-action="connect">连接设备</button><button class="button quiet" id="disconnect-button" data-action="disconnect">断开设备</button></div>
+            <div class="control-divider"></div>
+            <div class="control-label"><div><h3>自动请求动作</h3><p>持续采集，逐次请求 Server</p></div><span class="pill muted" id="inference-status">已暂停</span></div>
+            <button class="button primary full" id="inference-button" data-action="inference_start" disabled>开始自动推理</button>
+            <p class="inline-error" id="inference-error" hidden></p>
+          </section>
+          <section class="panel execution-panel">
+            <div class="panel-heading"><h3>机械臂执行</h3><span class="pill muted" id="execution-status">未执行</span></div>
+            <p class="control-description">自动推理会生成动作；点击“开始执行”后才会下发机械臂。</p>
+            <div class="button-row"><button class="button execution" id="execute-button" data-action="execute_start" disabled>开始执行</button><button class="button secondary" id="stop-button" data-action="execute_stop" disabled>停止执行</button></div>
+            <p class="blocked-reason" id="execution-blocked">等待设备与执行条件检查</p>
+            <button class="button secondary full" id="reset-pose-button" data-action="reset_pose" disabled>复位到记录位置</button>
+            <p class="control-description reset-pose-description" id="reset-pose-detail">等待记录位置 · 夹爪保持</p>
+            <p class="control-description" id="reset-pose-recorded">记录时间：—</p>
+            <p class="blocked-reason" id="reset-pose-reason">尚未取得复位配置</p>
+            <p class="control-description" id="reset-pose-result" role="status" hidden></p>
+            <button class="button emergency full" id="emergency-button" data-action="emergency_stop"><span aria-hidden="true">■</span> 紧急停止</button>
+          </section>
+          <section class="panel sampling-panel">
+            <div class="panel-heading"><h3>推理采样档位</h3><span class="pill muted" id="sampling-status">等待 Server</span></div>
+            <div class="sampling-current"><span>当前实际档位</span><strong id="sampling-current">—</strong></div>
+            <p class="sampling-steps" id="sampling-steps">等待 Server 采样配置</p>
+            <label class="sampling-label" id="sampling-label" for="sampling-select">模型采样档位</label>
+            <div class="sampling-controls">
+              <select id="sampling-select" disabled><option value="">等待 Server 声明档位</option></select>
+              <button class="button secondary" id="sampling-apply-button" data-action="sampling_set" disabled>应用</button>
+            </div>
+            <p class="sampling-note" id="sampling-note">应用后暂停推理并预热；完成后手动恢复自动推理。动作段仍为 32 步，设备采集 Hz 不变。</p>
+            <p class="sampling-error" id="sampling-error" role="status" hidden></p>
+          </section>
+        </aside>
+      </div>
+
+      <div class="telemetry-grid">
+        <section class="panel telemetry-panel">
+          <div class="panel-heading"><h2>关节与夹爪 <span class="subtle">State</span></h2><span class="subtle">关节 rad</span></div>
+          <div class="value-grid joint-values" id="state-values"></div><p class="inline-error" id="state-error" hidden></p>
+          <div class="gripper-strip">
+            <div class="gripper-heading"><h3>夹爪控制</h3><span class="pill muted" id="gripper-status">等待反馈</span></div>
+            <div class="gripper-readings">
+              <div><span>实测开度</span><strong id="gripper-opening">—</strong></div>
+              <div><span>目标开度</span><strong id="gripper-target">—</strong></div>
+              <div><span>使能状态</span><strong id="gripper-enabled">未知</strong></div>
+              <div><span>反馈年龄</span><strong id="gripper-age">—</strong></div>
+              <div><span>实测反馈频率</span><strong id="gripper-hz">—</strong></div>
+              <div><span>最近反馈间隔</span><strong id="gripper-interval">—</strong></div>
+            </div>
+            <p class="gripper-cadence" id="gripper-cadence">等待实测反馈频率</p>
+            <p class="gripper-cadence" id="gripper-communication">等待通信与使能反馈</p>
+            <p class="gripper-cadence" id="gripper-link-state">通信状态：等待反馈</p>
+            <p class="gripper-cadence" id="gripper-transport-stats">等待事务耗时统计</p>
+            <div class="gripper-buttons" aria-label="夹爪手动控制">
+              <button class="button secondary" id="gripper-enable-button" data-action="gripper_enable" disabled>使能</button>
+              <button class="button quiet" id="gripper-disable-button" data-action="gripper_disable" disabled>失能</button>
+              <button class="button secondary" id="gripper-open-button" data-action="gripper_open" disabled>张开</button>
+              <button class="button secondary" id="gripper-close-button" data-action="gripper_close" disabled>闭合</button>
+              <button class="button quiet" id="gripper-reconnect-button" data-action="gripper_reconnect" aria-describedby="gripper-reconnect-reason" disabled>重连通信</button>
+            </div>
+            <p class="gripper-clear-reason" id="gripper-reconnect-reason">只读重连通信，不使能、不开合、不清错</p>
+            <div class="gripper-operation"><span>报警码 <code id="gripper-fault">未知</code></span><button class="button secondary" id="gripper-clear-button" data-action="gripper_clear_error" aria-describedby="gripper-clear-reason" disabled>清除错误并重连</button></div>
+            <p class="gripper-clear-reason" id="gripper-clear-reason">等待夹爪诊断</p>
+            <p class="gripper-feedback-error" id="gripper-error" hidden></p>
+            <p class="gripper-result" id="gripper-result" role="status" hidden></p>
+          </div>
+        </section>
+        <section class="panel telemetry-panel"><div class="panel-heading"><h2>六维力反馈</h2><span class="pill muted" id="force-kind">等待反馈</span></div><div class="value-grid force-values" id="force-values"></div><p class="inline-error" id="force-error" hidden></p></section>
+        <section class="panel latency-panel"><div class="panel-heading"><h2>请求延时</h2><div class="legend"><span><i class="legend-inference"></i>推理</span><span><i class="legend-roundtrip"></i>端到端</span></div></div><div class="chart-wrap"><svg id="latency-chart" viewBox="0 0 420 144" role="img" aria-label="最近请求延时曲线，单位毫秒"></svg><p id="chart-empty">首个动作返回后显示延时曲线</p></div></section>
+      </div>
+
+      <div class="details-grid">
+        <section class="panel action-panel"><div class="panel-heading"><h2>最近动作序列</h2><span class="pill muted" id="action-shape">等待结果</span></div><div class="table-wrap"><table><thead><tr><th>步</th><th>J1</th><th>J2</th><th>J3</th><th>J4</th><th>J5</th><th>J6</th><th>J7</th><th>夹爪</th></tr></thead><tbody id="action-rows"><tr class="empty-row"><td colspan="9">尚无 action，完成一次推理后显示。</td></tr></tbody></table></div><p class="table-caption">绝对关节位置（rad）· 夹爪开度 0–1 · 这里只显示最近生成结果</p></section>
+        <section class="panel event-panel"><div class="panel-heading"><h2>运行事件</h2><span class="subtle" id="event-count">0 条</span></div><ol class="event-list" id="event-list"><li class="event-empty">等待客户端事件</li></ol></section>
+      </div>
+    </main>
+    <footer><span><i class="status-dot" id="footer-dot"></i><span id="last-update">等待首次状态更新</span></span><span>同步推理 · 本地设备采集</span></footer>
+  </div>
+</body>
+</html>

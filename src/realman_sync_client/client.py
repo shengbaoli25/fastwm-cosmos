@@ -7,6 +7,7 @@ import logging
 import math
 import threading
 import time
+from . import clock
 import uuid
 
 from .wire import PROTOCOL, encode_observation, validate_response
@@ -119,24 +120,28 @@ class ObservationCollector:
         self.started = True
 
     def _run(self):
-        deadline = time.monotonic()
+        deadline = clock.now()
         startup_deadline = deadline + self.startup_timeout_s
         while not self.stop_event.is_set():
+            # Recheck the actual high-resolution deadline after every sleep.
+            # Keep the fixed 30 Hz grid and freshness checks unchanged.
+            if not clock.wait_until(deadline, self.stop_event):
+                return
             try:
                 observation = self.hardware.observe_at(deadline)
                 if observation is None:
                     raise RuntimeError("hardware returned no observation")
                 with self.condition:
-                    self._append(observation, time.monotonic())
+                    self._append(observation, clock.now())
                     self.condition.notify_all()
             except Exception as exc:
                 with self.condition:
-                    if self.started or time.monotonic() >= startup_deadline:
+                    if self.started or clock.now() >= startup_deadline:
                         self.error = exc
                         self.condition.notify_all()
                         return
             deadline += self.period_s
-            now = time.monotonic()
+            now = clock.now()
             if deadline < now:
                 with self.condition:
                     if self.started:
@@ -144,17 +149,16 @@ class ObservationCollector:
                         self.condition.notify_all()
                         return
                 deadline = now + self.period_s
-            self.stop_event.wait(max(0, deadline - time.monotonic()))
 
     def check(self):
         with self.condition:
             if self.error is not None:
                 raise RuntimeError(f"sensor collection failed: {self.error}") from self.error
-            if not self.history or not 0 <= time.monotonic() - self.history[-1].stamp <= self.max_age_s:
+            if not self.history or not 0 <= clock.now() - self.history[-1].stamp <= self.max_age_s:
                 raise RuntimeError("latest observation is stale")
 
     def snapshot_after(self, stamp, sequence, *, timeout_s):
-        deadline = time.monotonic() + timeout_s
+        deadline = clock.now() + timeout_s
         with self.condition:
             while True:
                 if self.error is not None:
@@ -165,7 +169,7 @@ class ObservationCollector:
                     self.check()
                     video = tuple(self.video)[::self.metadata["video_context_stride"]]
                     return self.history[-1], tuple(self.history), video
-                remaining = deadline - time.monotonic()
+                remaining = deadline - clock.now()
                 if remaining <= 0:
                     raise TimeoutError("timed out waiting for fresh 30 Hz observation history")
                 self.condition.wait(min(.1, remaining))
@@ -238,19 +242,16 @@ class SynchronousClient:
                        history=[history_row(item) for item in history],
                        force_preprocessing=self.hardware.status().get("force_preprocessing"))
         if self.metadata["video_context_frames"] > 1:
-            request["video_context"] = [observation_row(item, self.metadata) for item in video]
+            # Collector video ends with the very same immutable Observation.
+            # Keep both wire entries but avoid encoding its two RGB views twice.
+            request["video_context"] = [request["observation"] if item is observation
+                                        else observation_row(item, self.metadata) for item in video]
         return request
 
     def _wait_control(self, duration):
-        deadline = time.monotonic() + duration
-        while True:
-            self.collector.check()
-            if self.stop_event.is_set():
-                raise InterruptedError("client stop requested")
-            remaining = deadline - time.monotonic()
-            if remaining <= 0:
-                return
-            self.stop_event.wait(min(.01, remaining))
+        deadline = clock.now() + duration
+        if not clock.wait_until(deadline, self.stop_event, check=self.collector.check):
+            raise InterruptedError("client stop requested")
 
     def _execute(self, actions):
         self.collector.check()
@@ -263,16 +264,16 @@ class SynchronousClient:
             self.collector.check()
             if self.stop_event.is_set():
                 raise InterruptedError("client stop requested")
-            started = time.monotonic()
+            started = clock.now()
             self.hardware.command(action)
-            remaining = period - (time.monotonic() - started)
+            remaining = period - (clock.now() - started)
             if remaining <= 0:
                 raise RuntimeError("30 Hz hardware command period overrun; refusing a catch-up burst")
             # Account for SDK latency inside the 30 Hz period. The next slot is
             # anchored to this command's actual start, never a past deadline.
             self._wait_control(remaining)
         self.hardware.slow_stop()  # Returns only after native stop acknowledgement.
-        return time.monotonic()
+        return clock.now()
 
     def run(self, *, cycles=0):
         if type(cycles) is not int or cycles < 0:
@@ -281,24 +282,24 @@ class SynchronousClient:
         pending_error = None
         try:
             self.hardware.slow_stop()
-            fresh_after = time.monotonic()
+            fresh_after = clock.now()
             self.collector.start()
             while not self.stop_event.is_set() and (cycles == 0 or self.completed_cycles < cycles):
                 observation, history, video = self.collector.snapshot_after(fresh_after, last_sequence,
                     timeout_s=self.options.sensor_timeout_s)
                 request = self._request(observation, history, video)
                 self.collector.check()
-                started = time.monotonic()
+                started = clock.now()
                 response = self.transport.infer(request)
                 self.collector.check()
                 with self.collector.condition:
                     if self.collector.history[-1].force_meta.get("epoch") != observation.force_meta.get("epoch"):
                         raise ValueError("force filter epoch changed while awaiting this action result")
-                actions = validate_actions(response, request, self.metadata, now=time.monotonic(),
+                actions = validate_actions(response, request, self.metadata, now=clock.now(),
                                            max_source_age_s=self.options.max_result_age_s)
                 if self.stop_event.is_set():
                     raise InterruptedError("client stop requested")
-                inference_s = time.monotonic() - started
+                inference_s = clock.now() - started
                 fresh_after = self._execute(actions)
                 last_sequence = observation.sequence
                 self.completed_cycles += 1
