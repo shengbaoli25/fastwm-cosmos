@@ -132,6 +132,36 @@ def restore_rng(snapshot):
     torch.cuda.set_rng_state_all(cuda)
 
 
+def rank_rng_comparison(snapshot, saved, accelerator_step):
+    """Report exact comparisons separately; never approximate RNG equality."""
+    py, npy, cpu, cuda = snapshot
+    saved_cuda = saved.get("torch_cuda_manual_seed")
+    checks = {
+        "python": equal_state(py, saved.get("random_state")),
+        "numpy": equal_state(npy, saved.get("numpy_random_seed")),
+        "torch_cpu": equal_state(cpu, saved.get("torch_manual_seed")),
+        "torch_cuda": equal_state(cuda, saved_cuda),
+        "accelerate_step": accelerator_step == saved.get("step"),
+    }
+    return {"checks": checks, "mismatches": [key for key, value in checks.items() if not value],
+            "current_cuda_state_count": len(cuda),
+            "saved_cuda_state_count": len(saved_cuda) if isinstance(saved_cuda, (list, tuple)) else None,
+            "current_accelerate_step": accelerator_step, "saved_accelerate_step": saved.get("step")}
+
+
+def setup_resume_logging(setup_logging, is_main_process):
+    """Keep path text while preventing Rich hyperlink IDs from drawing Python RNG.
+
+    Rich Style creates link IDs with global random.randint. The rank-zero log
+    emitted by Accelerate *after* restoring RNG otherwise changes the saved
+    Python state before our strict check. This configures the original handler
+    before load_state; it neither resets generators nor bypasses verification.
+    """
+    import logging
+    setup_logging(log_level=logging.INFO, is_main_process=is_main_process,
+                  rich_handler_kwargs={"enable_link_path": False})
+
+
 class FirstEpochContinuation:
     """Skip already consumed sharded batches while retaining original end padding."""
     def __init__(self, loader, sampler, epoch, batches):
@@ -203,12 +233,9 @@ def verify_restored(trainer, state, progress):
         raise ValueError("Restored optimizer step or model parameters are invalid")
     rank = trainer.accelerator.process_index
     saved_rng = torch.load(state / f"random_states_{rank}.pkl", map_location="cpu", weights_only=False)
-    py, npy, cpu, cuda = rng_snapshot()
-    if (not equal_state(py, saved_rng["random_state"]) or not equal_state(npy, saved_rng["numpy_random_seed"])
-            or not equal_state(cpu, saved_rng["torch_manual_seed"])
-            or not equal_state(cuda, saved_rng["torch_cuda_manual_seed"])
-            or trainer.accelerator.step != saved_rng["step"]):
-        raise ValueError("Per-rank Python/NumPy/Torch/CUDA/Accelerate RNG state was not restored")
+    rng_status = rank_rng_comparison(rng_snapshot(), saved_rng, trainer.accelerator.step)
+    if rng_status["mismatches"]:
+        raise ValueError("Per-rank Python/NumPy/Torch/CUDA/Accelerate RNG state was not restored: " + json.dumps(rng_status))
     sampler = trainer.train_sampler
     if (sampler.epoch_offset != progress["epoch"] or sampler.resume_batch_offset != progress["batch_in_epoch"]
             or (sampler.seed, sampler.batch_size, sampler.num_processes) != (42, 64, 4)
@@ -226,7 +253,7 @@ def verify_restored(trainer, state, progress):
     del module, current
     return {"trainer": actual, "engine_step": int(engine.global_steps), "scheduler": scheduler_summary,
             "adam_partitions": partitions, "adam_steps": sorted(set(steps)), "finite_model_and_adam": True,
-            "per_rank_rng_restored": True, "force_buffers_verified": keys,
+            "per_rank_rng_restored": True, "rank_rng_comparison": rng_status, "force_buffers_verified": keys,
             "configured_max_grad_norm": trainer.max_grad_norm,
             "actual_engine_gradient_clipping": float(engine.gradient_clipping())}
 
@@ -282,7 +309,7 @@ def execute(args):
     misc.register_work_dir(str(out))
     set_global_seed(42)
     import logging
-    setup_logging(log_level=logging.INFO, is_main_process=acc.is_main_process)
+    setup_resume_logging(setup_logging, acc.is_main_process)
     if acc.is_main_process:
         handler = logging.FileHandler(out / "training.log", mode="x", encoding="utf-8")
         handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s %(filename)s:%(lineno)d"))
@@ -293,7 +320,8 @@ def execute(args):
                "resume_state": str(state), "original_recipe_steps": ORIGINAL_STEPS, "stop_at_step": STOP_STEP,
                "batch_per_rank": 64, "global_batch": 256, "gradient_accumulation_steps": 1,
                "gpu": torch.cuda.get_device_name(), "python": sys.executable, **provenance,
-               "packages": {name: importlib.metadata.version(name) for name in ("torch", "accelerate", "deepspeed")}}
+               "logging": {"rich_enable_link_path": False, "reason": "path hyperlink IDs consume Python RNG"},
+               "packages": {name: importlib.metadata.version(name) for name in ("torch", "accelerate", "deepspeed", "rich")}}
     origin = out / f"origins/rank_{acc.process_index:03d}.json"
     write_json(origin, dict(receipt, status="restoring"))
     if acc.is_main_process:

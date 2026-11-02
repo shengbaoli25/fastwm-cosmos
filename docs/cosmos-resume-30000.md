@@ -5,7 +5,8 @@
 
 状态：[resume_to_step.py](../scripts/cosmos_resume/resume_to_step.py) 与
 [launch_platform.sh](../scripts/cosmos_resume/launch_platform.sh) 已实现本方案，默认plan。
-真实GPU恢复尚未启动；执行依赖远端审计文件。4项wrapper测试与4项audit测试已通过。
+首次远端恢复任务 `job-1d4a068e…` 在首个新更新前因 rank0 RNG 校验失败退出，
+rank1–3 的恢复校验已通过；修复后的四卡恢复仍待重试。当前12项本地测试与7项子测试通过。
 其中真实Accelerate1.12.0 CPU分片测试覆盖原64462长度、四rank B64、恢复剩余200个batch、
 epoch末padding、下一epoch顺序，以及重建iterator不推进model RNG；独立只读审阅未发现确定阻断。
 
@@ -134,6 +135,26 @@ python -m compileall -q scripts/cosmos_resume
 
 验证证据位于 [validation.json](../scripts/cosmos_resume/validation.json)。
 完整模型/优化器的GPU恢复、实际到30000步训练和最终checkpoint尚未在本次本地验证中执行。
+
+## rank0 日志 RNG 修复（2026-11-02）
+
+远端诊断显示 Accelerate1.12.0 已成功载入四个 RNG 文件，各 rank 的 CUDA 状态列表长度均为4，
+保存的 Accelerate 内部 step 为52。rank1–3 的模型、Adam、scheduler、Force buffer 和 RNG 校验均通过。
+rank0 在 `All random states loaded successfully` 和恢复数据进度日志后触发严格 RNG 比较失败。
+
+本地使用真实 Accelerate1.12.0、Torch2.7.1 和 Rich14.2.0 重现：原日志配置的路径超链接创建
+`rich.style.Style._link_id`，调用全局 `random.randint`，使原生 RNG 恢复后的成功日志自身推进
+Python RNG。其他 RNG 域保持一致；非主 rank 的静默日志不触发该变化。
+
+恢复入口在原生 `load_state` 之前通过已有 `rich_handler_kwargs` 仅设置
+`enable_link_path=False`，保留日志文本、文件名和行号。该修复不重设任何 checkpoint RNG，
+不改模型、优化器、scheduler、数据顺序或配方；全部原有严格检查继续执行。
+每个 rank 的 receipt 额外记录逐域检查结果、Rich 版本和日志设置，错误信息列出具体不匹配域。
+
+新增回归使用真实原始日志函数和 Accelerate 原生恢复，确认原配置只破坏 Python RNG；
+修复配置在成功日志、数据进度和数据大小日志后保持全部域相同，并重现保存状态的下一组
+Python/NumPy/Torch CPU 随机数。CUDA setter/getter 在此 CPU 回归中被替代，不声称已经验证 GPU。
+原 checkpoint 与失败任务输出保留，重试必须使用新的任务输出目录。
 
 ## 尚缺的远端证据
 

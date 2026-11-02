@@ -36,20 +36,44 @@
       "reason": "Local Windows host has no working Bash; run bash -n launch_platform.sh remotely before launch"
     },
     "branch_suite": {
-      "command": "python -m unittest discover -s scripts/cosmos_resume -p 'test_*.py' -v",
-      "passed": 8,
-      "seconds": 4.035,
+      "command": "pytest scripts/cosmos_resume/test_rng_restore.py scripts/cosmos_resume/test_resume_to_step.py scripts/cosmos_resume/test_audit_resume.py -q --tb=short",
+      "passed": 12,
+      "subtests_passed": 7,
+      "seconds": 4.35,
       "exit_code": 0,
       "ran_in_this_worktree": true
+    },
+    "rank_zero_rich_rng_regression": {
+      "passed": 4,
+      "accelerate": "1.12.0",
+      "torch": "2.7.1+cu128",
+      "rich": "14.2.0",
+      "numpy": "2.3.5",
+      "real_cpu_native_accelerate_restore": true,
+      "cuda_transport_mocked": true,
+      "coverage": [
+        "original success log changes Python RNG only",
+        "enable_link_path=False retains strict checkpoint equality and next CPU draws",
+        "nonmain silence reproduces ranks 1-3 passing",
+        "true Python/NumPy/Torch/CUDA/Accelerate mismatch remains detectable without repair"
+      ],
+      "independent_review": {
+        "agent": "/root/forcevla",
+        "real_rich_reproduction": true,
+        "path_text_retained": true,
+        "confirmed_blocking_findings": []
+      }
     }
   },
   "files": {
     "audit_resume.py": "1a1c4bf148ba70ed6ec4ddaec24aa1c14fa8f94371e5d821b722e8d58723cde8",
-    "resume_to_step.py": "474c29478f55be14a56c1faea88fa8dbe7f7c7802f82db7520f14bd5c467e909",
+    "resume_to_step.py": "e3af13669ea58721c4501ca100f7f171a6e8524270a9a1f5e0e58568ca5b7a1b",
     "launch_platform.sh": "824621e6530bd1b6350b5f88834118442454285decd92ef495a5403ee0fdf325",
-    "original-config.yaml": "6941b393f453a57d42942a70e0780853405bbdeb37e38fe3b6d4393deb6e6898"
+    "original-config.yaml": "6941b393f453a57d42942a70e0780853405bbdeb37e38fe3b6d4393deb6e6898",
+    "test_rng_restore.py": "491ff7aa4cec081eb829d5264db4fed037dfdcca14bb8178a48339921b6e204c"
   },
   "limitation": "CPU and static checks do not establish successful GPU model/optimizer restore; the wrapper validates those on all ranks before new optimization.",
   "branch": "codex/cosmos-rm71d78-resume30k",
-  "base_commit": "057f78767f52f358b229f4a05b097c0f1455fa3d"
+  "base_commit": "057f78767f52f358b229f4a05b097c0f1455fa3d",
+  "scope": "local CPU validation of the retry wrapper; first remote attempt failed rank0 before new updates"
 }
