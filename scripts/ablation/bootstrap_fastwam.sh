@@ -47,7 +47,7 @@ if [[ -n "${FASTWAM_TORCH_WHEEL_BASE_URL:-}" ]]; then wheel_args+=(--base-url "$
 bounded "$(( ${FASTWAM_WHEEL_TIMEOUT:-600} + 60 ))" official-torch-wheel-cache \
   "$python_env" "$repo_root/scripts/ablation/prefetch_fastwam_wheels.py" "${wheel_args[@]}"
 # Install verified official local wheels. CUDA/NVIDIA and all other dependencies
-# inherit PIP_INDEX_URL (e.g. TUNA); never route the entire resolution to PyTorch.
+# inherit PIP_INDEX_URL; never route the entire resolution to PyTorch.
 bounded "${FASTWAM_PIP_TIMEOUT:-900}" torch-and-cuda-dependencies \
   "$python_env" -m pip install --only-binary=:all: -r "$wheelhouse/requirements.txt"
 bounded 180 build-prerequisites "$python_env" -m pip install 'packaging==25.0' 'numpy==2.2.6' ninja psutil py-cpuinfo

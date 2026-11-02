@@ -25,6 +25,7 @@ def main(argv=None):
                         help="Override configured ablation_num_processes (default: 4)")
     parser.add_argument("--set", action="append", default=[], metavar="KEY=VALUE")
     parser.add_argument("--stop-after-steps", type=int, help="Save and stop early while preserving the configured scheduler and run identity")
+    parser.add_argument("--smoke-audit", action="store_true", help="Collect and enforce actual update/restore evidence for the separate 3-step smoke run")
     args = parser.parse_args(argv)
     from fastwam.ablation.fastwam import (UPSTREAM_REVISION, RELEASE_SHA256, write_stats,
                                          make_training_config, build_binding, semantic_recipe,
@@ -32,6 +33,8 @@ def main(argv=None):
     from fastwam.ablation.contracts import file_sha256, write_json
     if args.stop_after_steps is not None and args.command not in {"train", "resume", "worker"}:
         parser.error("--stop-after-steps only applies to train/resume")
+    if args.smoke_audit and args.command not in {"train", "resume", "worker"}:
+        parser.error("--smoke-audit only applies to train/resume")
 
     if args.command == "plan":
         print(json.dumps({"baseline": "fastwam", "official_revision": UPSTREAM_REVISION,
@@ -58,6 +61,8 @@ def main(argv=None):
     if args.resume:
         overrides.append(f"resume={Path(args.resume).resolve().as_posix()}")
     cfg = make_training_config(args.config, overrides)
+    if args.smoke_audit and int(cfg.max_steps) != 3:
+        parser.error("--smoke-audit requires the separate 3-step configuration")
     if args.command == "check-hardware":
         print(json.dumps(check_hardware(cfg), ensure_ascii=False, indent=2))
         return 0
@@ -123,6 +128,8 @@ def main(argv=None):
                    "worker", "--config", str(resolved)]
         if args.stop_after_steps is not None:
             command.extend(["--stop-after-steps", str(args.stop_after_steps)])
+        if args.smoke_audit:
+            command.append("--smoke-audit")
         env = os.environ.copy()
         env["DIFFSYNTH_SKIP_DOWNLOAD"] = "true"
         env["PYTHONPATH"] = str(ROOT / "src") + os.pathsep + env.get("PYTHONPATH", "")
@@ -132,7 +139,7 @@ def main(argv=None):
     if os.environ.get("ACCELERATE_USE_DEEPSPEED", "").lower() != "true":
         raise RuntimeError("Use train/resume to launch the existing DeepSpeed trainer; do not invoke worker directly")
     from fastwam.runtime import run_training, Wan22Trainer
-    with bounded_training_invocation(Wan22Trainer, cfg, args.stop_after_steps):
+    with bounded_training_invocation(Wan22Trainer, cfg, args.stop_after_steps, smoke_audit=args.smoke_audit):
         run_training(cfg)
     return 0
 

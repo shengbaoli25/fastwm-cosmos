@@ -145,9 +145,10 @@ class FastWAMContracts(unittest.TestCase):
                     patch("fastwam.ablation.contracts.file_sha256", return_value=RELEASE_SHA256), \
                     patch("subprocess.run", return_value=SimpleNamespace(returncode=0)) as launch:
                 self.assertEqual(entry(argv + ["--output", str(smoke_output), "--set", "max_steps=3",
-                                               "--stop-after-steps", "2"]), 0)
+                                               "--stop-after-steps", "2", "--smoke-audit"]), 0)
             command = launch.call_args.args[0]
             self.assertEqual(command[command.index("--stop-after-steps") + 1], "2")
+            self.assertIn("--smoke-audit", command)
             saved = OmegaConf.load(smoke_output / "launch_config.yaml")
             self.assertEqual(saved.max_steps, 3)
             self.assertEqual(saved.model.training_recipe.training.max_steps, 3)

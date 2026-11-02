@@ -49,7 +49,7 @@ T5 tokenizer/文本清理。脚本检出官方 `7faa711`，核对本仓 ActionDi
 执行 `pip check` 与模型/trainer 导入，并保存环境版本、源码 hash 和 `pip freeze`。不下载模型或启动训练。
 后续 `python` 均指 `/work/envs/fastwam/bin/python`。
 
-网络受限时可设置 `PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple`。bootstrap 先用标准库
+网络受限时可设置 `PIP_INDEX_URL=https://mirrors.aliyun.com/pypi/simple`。bootstrap 先用标准库
 预缓存器下载固定官方 Torch/torchvision CUDA12.8 wheel，按官方索引 SHA256 和文件大小验证，随后
 从本地 wheel 安装；NVIDIA/CUDA 传递依赖和项目依赖均使用 `PIP_INDEX_URL`，不会被 PyTorch
 索引覆盖。此实现没有 uv 或 FlashAttention 安装步骤，注意力沿用原版 PyTorch SDPA。
@@ -127,16 +127,41 @@ bash scripts/ablation/launch_fastwam_h200.sh /work/envs/fastwam/bin/python /work
 
 ```bash
 bash scripts/ablation/launch_fastwam_h200.sh /work/envs/fastwam/bin/python /work/fastwam-rm71d78.yaml train \
-  --output /work/fastwam-smoke --set max_steps=3 --set save_every=1 --set log_every=1 --stop-after-steps 2
+  --output /work/fastwam-smoke --set max_steps=3 --set save_every=1 --set log_every=1 --stop-after-steps 2 --smoke-audit
 bash scripts/ablation/launch_fastwam_h200.sh /work/envs/fastwam/bin/python /work/fastwam-rm71d78.yaml resume \
   --output /work/fastwam-smoke --set max_steps=3 --set save_every=1 --set log_every=1 \
-  --resume /work/fastwam-smoke/checkpoints/state/step_000002
+  --resume /work/fastwam-smoke/checkpoints/state/step_000002 --smoke-audit
 ```
 
 `--stop-after-steps` 只在 trainer 已构造 scheduler/恢复状态后设置当前训练循环的停止点；配置、
 scheduler 总长度和 checkpoint recipe 仍为原目标 3。第一次由原 trainer 完整保存 step_000002，
 第二次恢复 optimizer/scheduler/RNG/读取位置后完成 step_000003。核验真实有限 loss/梯度、参数变化、
 完整 state 文件和恢复起始 step=2，再启动独立正式目录。这里没有实际执行这些 GPU 命令。
+
+`--smoke-audit` 只允许独立 3 步配置上的 `0→2` 与 `2→3`。它观察真正的
+`Accelerator.backward`：Accelerate 1.12 在该调用内执行 DeepSpeed optimizer update，随后读取
+真实 loss、全局梯度范数、Adam counter 和 FP32 master/m/v 分片样本。非有限/零梯度、跳过更新、
+没有参数变化均直接失败。原模型、损失和 optimizer 不修改。四个 rank 分别保存
+`smoke-audit/from_000000-to_000002.rank_*.json`、`from_000002-to_000003.rank_*.json`，
+每份包含实际 CUDA allocated/reserved/peak、训练耗时和参数指纹。
+每个原始完整 state checkpoint 内附加 `smoke-audit-rank-*.json`；重新构造模型并真实
+`load_state` 后，严格比较 scheduler、Adam counter、trainer/data位置、Python/NumPy/Torch/CUDA
+RNG，以及参数/master/m/v 样本。样本比较不能声称全张量逐位相同，但能拒绝只改 step 的假恢复。
+
+平台准备脚本生成独立的 `fastwam-smoke.yaml` 与 `fastwam-30k.yaml`（都保持 `resume:null`）。
+在各阶段后运行下列验收，只有 `resumed3` 成功才启动正式训练：
+
+```bash
+python scripts/ablation/verify_fastwam_smoke.py --smoke-config /work/fastwam-smoke.yaml \
+  --formal-config /work/fastwam-30k.yaml --phase saved2
+python scripts/ablation/verify_fastwam_smoke.py --smoke-config /work/fastwam-smoke.yaml \
+  --formal-config /work/fastwam-30k.yaml --phase resumed3
+```
+
+验收器检查全部四个 rank，比较保存/恢复前后真实状态，实际反序列化训练权重归档并核对保存的
+policy 样本字节；它不以 exit0 或文件存在作为通过条件。最终写入
+`smoke-audit/resumed3-verified.json`。平台包装器还用 `nvidia-smi` 每秒记录完整准备/训练过程显存。
+这些是待 H200 执行的检查，目前只通过离线测试，尚无真实 GPU 验收结果。
 
 `--set key=value` 可覆盖训练预算等字段；当前启动器固定要求 4×H200、每卡 64、累积 1。完整 resume 使用 Accelerate 保存的 optimizer、scheduler、
 RNG 与数据读取进度；传入单独权重文件不被视为 resume。首次运行可配置步数、batch、seed 等；

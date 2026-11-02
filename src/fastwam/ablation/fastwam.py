@@ -13,7 +13,7 @@ import os
 from pathlib import Path
 from types import MethodType
 from unittest.mock import patch
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 
 from .contracts import file_sha256, identity_sha256, load_dataset_manifest, write_json
 
@@ -75,7 +75,7 @@ def verify_prepared_batch(trainer, cfg):
 
 
 @contextmanager
-def bounded_training_invocation(trainer_class, cfg, stop_after_steps=None):
+def bounded_training_invocation(trainer_class, cfg, stop_after_steps=None, *, smoke_audit=False):
     """Keep full-target scheduler/recipe creation, bound only the prepared loop."""
     target = execution_profile(cfg)["max_steps"]
     if stop_after_steps is not None and not 2 <= int(stop_after_steps) <= target:
@@ -97,7 +97,13 @@ def bounded_training_invocation(trainer_class, cfg, stop_after_steps=None):
         # Its original final-save path now exits at the invocation bound.
         trainer.max_steps = limit
         try:
-            return original(trainer)
+            if smoke_audit:
+                from .training_audit import audit_prepared_training
+                audit = audit_prepared_training(trainer, cfg, limit)
+            else:
+                audit = nullcontext()
+            with audit:
+                return original(trainer)
         finally:
             trainer.max_steps = planned
 
