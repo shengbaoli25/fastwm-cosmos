@@ -17,10 +17,10 @@
         "PYTHONPATH": "<working_directory>/src"
       },
       "exit_code": 0,
-      "passed": 34,
+      "passed": 40,
       "subtests_passed": 12,
       "skipped": 0,
-      "seconds": 15.50,
+      "seconds": 15.73,
       "coverage": [
         "Official FastWAM constructor signature, BF16 and scheduler argument conversion",
         "Explicit 7D-to-joint8 head adaptation and strict checkpoint identity",
@@ -30,7 +30,8 @@
         "Stub trainer stops at2 and resumes to3 while keeping original3-step scheduler/recipe; CLI forwards early-stop to worker",
         "Actual official reader with embedded PNG, two-camera layout, episode-boundary action padding and exact normalization parity",
         "Synthetic 78-episode capture conversion and Hugging Face embedded-image decoding",
-        "Real local HTTP health/infer/session release with an explicitly injected test predictor"
+        "Real local HTTP health/infer/session release with an explicitly injected test predictor",
+        "Verified local/Pip HTTP wheel cache reuse; HTTP206 resume and HTTP200 restart; corrupt SHA and expired total deadline rejection (offline fixtures)"
       ]
     },
     "plan": {

@@ -48,6 +48,20 @@ bash scripts/ablation/bootstrap_fastwam.sh /work/envs/fastwam python3 /work/upst
 T5 tokenizer/文本清理。脚本检出官方 `7faa711`，核对本仓 ActionDiT/MoT 与官方文件逐字节一致（统一换行），
 执行 `pip check` 与模型/trainer 导入，并保存环境版本、源码 hash 和 `pip freeze`。不下载模型或启动训练。
 后续 `python` 均指 `/work/envs/fastwam/bin/python`。
+
+网络受限时可设置 `PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple`。bootstrap 先用标准库
+预缓存器下载固定官方 Torch/torchvision CUDA12.8 wheel，按官方索引 SHA256 和文件大小验证，随后
+从本地 wheel 安装；NVIDIA/CUDA 传递依赖和项目依赖均使用 `PIP_INDEX_URL`，不会被 PyTorch
+索引覆盖。此实现没有 uv 或 FlashAttention 安装步骤，注意力沿用原版 PyTorch SDPA。
+`FASTWAM_WHEELHOUSE` 可指定共享预缓存目录；`FASTWAM_WHEEL_REUSE_ROOT` 可指定已有 wheel/pip
+HTTP `.body` 缓存根目录，只有完全匹配的字节才会复制。也可设置 `FASTWAM_TORCH_WHEEL_BASE_URL`
+到包含相同文件名的更快 HTTPS 镜像；SHA 不匹配立即拒绝。CPython3.10/3.11/3.12 Linux x86_64
+的六个固定 SHA 与大小见 `scripts/ablation/prefetch_fastwam_wheels.py`，不替换 CUDA 或 Torch 版本。
+下载每 15 秒报告真实字节数和速率，支持 `.part` 续传；默认总预算 600 秒，连续 90 秒低于
+128KiB/s 切换来源，失败保留 partial 供后续重试。可用 `FASTWAM_WHEEL_TIMEOUT` 修改预算。
+各 pip 大阶段默认总预算 900 秒（`FASTWAM_PIP_TIMEOUT`），另有每连接 30 秒、最多 2 次重试；
+每 30 秒心跳明确标识为运行状态，不冒充下载进度。超时终止本阶段并返回非零，不继续训练。
+
 本次训练配置为 4 张 H200，每卡真实 microbatch 64、累积 1，全局 batch 256。
 入口选择现有 ZeRO1 启动配置，未指定 `--num-processes` 时采用配置中的 4 个进程。
 训练前检查实际可见 GPU 为四张 H200；Accelerate 准备完成后，读取 DeepSpeed engine 的实际
