@@ -8,6 +8,10 @@
 真实 78 条数据尚未在本机完整核验；真实 checkpoint 加载、GPU 显存、吞吐与闭环成功率尚未验证。
 代码/CPU/模拟 HTTP 测试证据见 [validation.json](validation.json)。
 
+当前执行目标为 4×H200、每卡真实 batch 64、累积 1、全局 batch 256、30,000 步。
+独立 Linux venv bootstrap、真实 GPU/DeepSpeed batch 预检，以及保持相同硬件的两步保存/第三步恢复
+命令见 [FastWAM 环境与训练指南](fastwam.md)。本地尚未执行这些 GPU 操作。
+
 ## 任务契约
 
 数据集是 `rm71d_plug_transfer_20261029`，78 条原始示范，任务文本“拔下插头并插入另一插座”。
@@ -50,13 +54,15 @@ python scripts/ablation/fastwam.py stats \
 # 缺少现成缓存时显式编码文本；此命令不做优化训练。
 python scripts/ablation/fastwam.py text-cache --config /work/fastwam/config.yaml
 python scripts/ablation/fastwam.py train --config /work/fastwam/config.yaml \
-  --output /work/fastwam/run --num-processes 1
+  --output /work/fastwam/run --num-processes 4
 python scripts/ablation/fastwam.py resume --config /work/fastwam/config.yaml \
-  --output /work/fastwam/run --num-processes 1 \
+  --output /work/fastwam/run --num-processes 4 \
   --resume /work/fastwam/run/checkpoints/state/step_005000
 ```
 
-默认 50000 optimizer steps、每 5000 步保存；首次运行可配置预算。完整 resume 恢复 optimizer、
+当前配置为 4×H200、每卡 batch64、梯度累积 1、全局 batch256，训练至 30000 optimizer steps，
+每 5000 步保存。启动入口默认从配置读取 4 个进程，不会把每卡 batch64 转换成累积后的等效 batch。
+实际显存与吞吐仍需平台运行验证。完整 resume 恢复 optimizer、
 scheduler、RNG 与读取进度，要求已绑定的训练语义保持一致。训练产生 `config.yaml`、
 `fastwam_binding.json`、字节一致的 `normalization.json`、`checkpoints/weights/step_*.pt`
 及完整 state。部署使用 `normalization.json`，不能以重新格式化的 `dataset_stats.json` 替换。
@@ -67,7 +73,7 @@ scheduler、RNG 与读取进度，要求已绑定的训练语义保持一致。�
 
 ```json
 {
-  "checkpoint_path": "/work/fastwam/run/checkpoints/weights/step_050000.pt",
+  "checkpoint_path": "/work/fastwam/run/checkpoints/weights/step_030000.pt",
   "normalization_path": "/work/fastwam/run/normalization.json",
   "training_config_path": "/work/fastwam/run/config.yaml",
   "binding_path": "/work/fastwam/run/fastwam_binding.json",

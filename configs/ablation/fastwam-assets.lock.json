@@ -1,0 +1,13 @@
+{
+  "schema": "fastwam-official-assets-v1",
+  "verified_metadata_date": "2026-11-02",
+  "files": [
+    {"provider": "huggingface", "repo_id": "yuanty/fastwam", "revision": "8eaceeb24c3cc92ff2a9c9a9d266a4941b836705", "filename": "libero_uncond_2cam224.pt", "destination": "yuanty/fastwam/libero_uncond_2cam224.pt", "size": 12041735140, "sha256": "1000437cfcf55c000094f79a2600634c502bcb5b492476b94bf8509883a49579"},
+    {"provider": "modelscope", "repo_id": "DiffSynth-Studio/Wan-Series-Converted-Safetensors", "revision": "150f75d811d51f6c7760154aa7fec371dccda529", "filename": "Wan2.2_VAE.safetensors", "destination": "DiffSynth-Studio/Wan-Series-Converted-Safetensors/Wan2.2_VAE.safetensors", "size": 1409401152, "sha256": "0e913a2ca571c75fcb63385a8edadcca73454af5842596cb1ad11e4142590996"},
+    {"provider": "modelscope", "repo_id": "DiffSynth-Studio/Wan-Series-Converted-Safetensors", "revision": "150f75d811d51f6c7760154aa7fec371dccda529", "filename": "models_t5_umt5-xxl-enc-bf16.safetensors", "destination": "DiffSynth-Studio/Wan-Series-Converted-Safetensors/models_t5_umt5-xxl-enc-bf16.safetensors", "size": 11361845432, "sha256": "d92de679881d38af9c89eff7bb1b6d6c9d96cb2b69831e4027e9ecabdd38eb23"},
+    {"provider": "huggingface", "repo_id": "Wan-AI/Wan2.1-T2V-1.3B", "revision": "37ec512624d61f7aa208f7ea8140a131f93afc9a", "filename": "google/umt5-xxl/special_tokens_map.json", "destination": "Wan-AI/Wan2.1-T2V-1.3B/google/umt5-xxl/special_tokens_map.json", "size": 6623, "git_blob_sha1": "14855e7052ffbb595057dfd791d293c1c940db2c"},
+    {"provider": "huggingface", "repo_id": "Wan-AI/Wan2.1-T2V-1.3B", "revision": "37ec512624d61f7aa208f7ea8140a131f93afc9a", "filename": "google/umt5-xxl/spiece.model", "destination": "Wan-AI/Wan2.1-T2V-1.3B/google/umt5-xxl/spiece.model", "size": 4548313, "sha256": "e3909a67b780650b35cf529ac782ad2b6b26e6d1f849d3fbb6a872905f452458"},
+    {"provider": "huggingface", "repo_id": "Wan-AI/Wan2.1-T2V-1.3B", "revision": "37ec512624d61f7aa208f7ea8140a131f93afc9a", "filename": "google/umt5-xxl/tokenizer.json", "destination": "Wan-AI/Wan2.1-T2V-1.3B/google/umt5-xxl/tokenizer.json", "size": 16837417, "sha256": "6e197b4d3dbd71da14b4eb255f4fa91c9c1f2068b20a2de2472967ca3d22602b"},
+    {"provider": "huggingface", "repo_id": "Wan-AI/Wan2.1-T2V-1.3B", "revision": "37ec512624d61f7aa208f7ea8140a131f93afc9a", "filename": "google/umt5-xxl/tokenizer_config.json", "destination": "Wan-AI/Wan2.1-T2V-1.3B/google/umt5-xxl/tokenizer_config.json", "size": 61728, "git_blob_sha1": "4e1cc1cd85599ce0b47fd0a746af188fe4043ff2"}
+  ]
+}

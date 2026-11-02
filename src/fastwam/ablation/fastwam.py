@@ -13,6 +13,7 @@ import os
 from pathlib import Path
 from types import MethodType
 from unittest.mock import patch
+from contextlib import contextmanager
 
 from .contracts import file_sha256, identity_sha256, load_dataset_manifest, write_json
 
@@ -33,6 +34,75 @@ MODEL_RECIPE_FIELDS = ("model_id", "tokenizer_model_id", "tokenizer_max_len", "l
 TRAIN_RECIPE_FIELDS = ("batch_size", "gradient_accumulation_steps", "seed", "mixed_precision",
                        "learning_rate", "weight_decay", "max_grad_norm", "max_steps", "num_epochs",
                        "lr_scheduler_type", "num_workers", "eval_every", "ablation_num_processes")
+
+
+def execution_profile(cfg):
+    profile = {"num_processes": int(cfg.get("ablation_num_processes", 4)),
+               "per_gpu_batch_size": int(cfg.get("batch_size", 64)),
+               "gradient_accumulation_steps": int(cfg.get("gradient_accumulation_steps", 1)),
+               "max_steps": int(cfg.get("max_steps", 30000)), "gpu_model": "H200"}
+    if (profile["num_processes"], profile["per_gpu_batch_size"], profile["gradient_accumulation_steps"]) != (4, 64, 1):
+        raise ValueError("This run requires four H200 GPUs with real per-GPU batch 64 and accumulation 1")
+    if profile["max_steps"] < 1:
+        raise ValueError("max_steps must be positive; use a separate short smoke config before the 30000-step run")
+    profile["global_batch_size"] = 256
+    return profile
+
+
+def check_hardware(cfg):
+    import torch
+    profile = execution_profile(cfg)
+    if not torch.cuda.is_available() or torch.cuda.device_count() != profile["num_processes"]:
+        raise RuntimeError("Expected exactly four visible CUDA H200 GPUs")
+    devices = [torch.cuda.get_device_properties(i) for i in range(torch.cuda.device_count())]
+    if any("H200" not in device.name.upper() for device in devices):
+        raise RuntimeError(f"Expected H200 GPUs, found {[device.name for device in devices]}")
+    return {**profile, "torch_version": torch.__version__, "torch_cuda_version": torch.version.cuda,
+            "device_names": [d.name for d in devices], "device_memory_bytes": [d.total_memory for d in devices]}
+
+
+def verify_prepared_batch(trainer, cfg):
+    """Read the actual DeepSpeed engine after Accelerate resolved its auto fields."""
+    profile = execution_profile(cfg)
+    engine = trainer.model
+    actual = {"num_processes": int(trainer.accelerator.num_processes),
+              "per_gpu_batch_size": int(engine.train_micro_batch_size_per_gpu()),
+              "gradient_accumulation_steps": int(engine.gradient_accumulation_steps()),
+              "global_batch_size": int(engine.train_batch_size())}
+    if any(actual[k] != profile[k] for k in actual):
+        raise RuntimeError(f"DeepSpeed did not retain the requested physical batch: {actual}")
+    return actual
+
+
+@contextmanager
+def bounded_training_invocation(trainer_class, cfg, stop_after_steps=None):
+    """Keep full-target scheduler/recipe creation, bound only the prepared loop."""
+    target = execution_profile(cfg)["max_steps"]
+    if stop_after_steps is not None and not 2 <= int(stop_after_steps) <= target:
+        raise ValueError("stop_after_steps must be between 2 and the configured max_steps")
+    original = trainer_class.train
+
+    def train(trainer):
+        actual = verify_prepared_batch(trainer, cfg)
+        planned = trainer.max_steps
+        limit = target if stop_after_steps is None else int(stop_after_steps)
+        if planned != target or int(trainer.global_step) >= limit:
+            raise ValueError("Training target differs from the frozen recipe or resume already reached this invocation's limit")
+        if trainer.accelerator.is_main_process:
+            write_json(Path(cfg.output_dir) / "training-execution.json", {
+                **actual, "configured_max_steps": target, "stop_after_steps": stop_after_steps,
+                "restored_global_step": int(trainer.global_step), "effective_loop_target": limit,
+            })
+        # Wan22Trainer creates scheduler and restores optimizer/RNG before train().
+        # Its original final-save path now exits at the invocation bound.
+        trainer.max_steps = limit
+        try:
+            return original(trainer)
+        finally:
+            trainer.max_steps = planned
+
+    with patch.object(trainer_class, "train", train):
+        yield
 
 
 def semantic_recipe(cfg):

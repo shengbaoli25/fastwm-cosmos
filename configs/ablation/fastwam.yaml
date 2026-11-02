@@ -6,13 +6,13 @@ asset_root: ???
 text_embedding_cache_dir: ???
 pretrained_fastwam_checkpoint: ???
 output_dir: ./runs/ablation/fastwam-rm71d78
-batch_size: 1
-ablation_num_processes: 1
+batch_size: 64
+ablation_num_processes: 4
 num_workers: 4
-gradient_accumulation_steps: 16
+gradient_accumulation_steps: 1
 learning_rate: 1.0e-4
 num_epochs: 1000
-max_steps: 50000
+max_steps: 30000
 mixed_precision: bf16
 seed: 42
 weight_decay: 0.01

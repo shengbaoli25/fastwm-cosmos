@@ -11,19 +11,23 @@
   ],
   "checks": {
     "ablation_tests": {
-      "command": "PYTHONPATH=src:deploy python -m pytest tests/ablation -q",
-      "python_executable": "Existing Python 3.12 / Torch 2.7.1 environment with isolated validation dependencies appended to sys.path",
+      "command": "PYTHONPATH=src:deploy python -m pytest tests/ablation deploy/tests/test_sync_server.py -q",
+      "python_executable": "Existing Python 3.12 / Torch 2.7.1 environment with validation and base Python site-packages appended to sys.path",
       "environment": {
         "PYTHONPATH": "<working_directory>/src"
       },
       "exit_code": 0,
-      "passed": 17,
+      "passed": 34,
+      "subtests_passed": 12,
       "skipped": 0,
-      "seconds": 18.29,
+      "seconds": 15.50,
       "coverage": [
         "Official FastWAM constructor signature, BF16 and scheduler argument conversion",
         "Explicit 7D-to-joint8 head adaptation and strict checkpoint identity",
         "Semantic training recipe mismatch rejection",
+        "Real launcher command retains configured four processes, per-GPU batch 64, accumulation 1 and total 30000 steps",
+        "Physical microbatch/accumulation substitution rejection and prepared-engine batch mismatch rejection",
+        "Stub trainer stops at2 and resumes to3 while keeping original3-step scheduler/recipe; CLI forwards early-stop to worker",
         "Actual official reader with embedded PNG, two-camera layout, episode-boundary action padding and exact normalization parity",
         "Synthetic 78-episode capture conversion and Hugging Face embedded-image decoding",
         "Real local HTTP health/infer/session release with an explicitly injected test predictor"
@@ -43,7 +47,24 @@
       "exit_code": 0
     }
   },
+  "requested_training_recipe": {
+    "accelerator": "4 x NVIDIA H200",
+    "num_processes": 4,
+    "per_gpu_batch_size": 64,
+    "gradient_accumulation_steps": 1,
+    "global_batch_size": 256,
+    "max_optimizer_steps": 30000,
+    "save_every": 5000,
+    "mixed_precision": "bf16",
+    "deepspeed_zero_stage": 1
+  },
   "training_launched": false,
+  "linux_bootstrap_executed": false,
+  "official_asset_metadata_verified": true,
+  "official_core_source_equal": {
+    "src/fastwam/models/wan22/action_dit.py": "631fdf598fbe06a95a41c1a27acd9de16f2187f3a2009e10690197527d18283b",
+    "src/fastwam/models/wan22/mot.py": "2383e4cfa00efa9cde889493e0b6c861bc7b17d24d731f5ff38d3ebf8ab7f541"
+  },
   "large_weights_downloaded": false,
   "real_78_episode_dataset_verified_on_this_host": false,
   "real_checkpoint_load_verified": false,

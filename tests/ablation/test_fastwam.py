@@ -11,6 +11,7 @@ from fastwam.ablation.fastwam import (
     HEAD_KEYS, adaptation_state, convert_stats, text_cache_path, prepare_observation,
     load_joint8_checkpoint, make_training_config, normalization_parameters, semantic_recipe,
     build_binding, VAE_RELATIVE_PATH,
+    execution_profile, bounded_training_invocation, verify_prepared_batch,
 )
 
 HAS_TORCH = importlib.util.find_spec("torch") is not None
@@ -93,7 +94,10 @@ class FastWAMContracts(unittest.TestCase):
                   "text_embedding_cache_dir", "pretrained_fastwam_checkpoint")]
         cfg = make_training_config(root / "configs/ablation/fastwam.yaml", values)
         self.assertEqual(cfg.model.action_dit_config.action_dim, 8)
-        self.assertEqual(cfg.max_steps, 50000)
+        self.assertEqual(cfg.max_steps, 30000)
+        self.assertEqual(cfg.batch_size, 64)
+        self.assertEqual(cfg.ablation_num_processes, 4)
+        self.assertEqual(cfg.gradient_accumulation_steps, 1)
         self.assertEqual(cfg.save_every, 5000)
         self.assertTrue(Path(cfg.output_dir).is_absolute())
         self.assertEqual(cfg.model.dataset_root, cfg.dataset_root)
@@ -105,6 +109,91 @@ class FastWAMContracts(unittest.TestCase):
         self.assertNotEqual(semantic_recipe(cfg), recipe)
         cfg = make_training_config(root / "configs/ablation/fastwam.yaml", values + ["seed=43"])
         self.assertNotEqual(semantic_recipe(cfg), recipe)
+
+    @unittest.skipUnless(HAS_OMEGA, "OmegaConf required")
+    def test_launcher_preserves_four_gpu_batch64_recipe_without_cli_override(self):
+        import runpy
+        from types import SimpleNamespace
+        from unittest.mock import patch
+        from omegaconf import OmegaConf
+        from fastwam.ablation.fastwam import RELEASE_SHA256
+        root = Path(__file__).resolve().parents[2]
+        entry = runpy.run_path(str(root / "scripts/ablation/fastwam.py"))["main"]
+        with tempfile.TemporaryDirectory() as directory:
+            temporary = Path(directory)
+            normalizer = temporary / "source-stats.json"
+            normalizer.write_text("{}", encoding="utf-8")
+            output = temporary / "run"
+            argv = ["train", "--output", str(output), "--set", f"normalization_path={normalizer.as_posix()}"]
+            for key in ("dataset_root", "asset_root", "text_embedding_cache_dir", "pretrained_fastwam_checkpoint"):
+                argv += ["--set", f"{key}={(temporary / key).as_posix()}"]
+            # Test the real CLI and generated command, without launching any worker.
+            with patch("fastwam.ablation.fastwam.build_binding", return_value={"synthetic_test": True}), \
+                    patch("fastwam.ablation.fastwam.check_hardware", return_value={"synthetic_test_hardware": True}), \
+                    patch("fastwam.ablation.contracts.file_sha256", return_value=RELEASE_SHA256), \
+                    patch("subprocess.run", return_value=SimpleNamespace(returncode=0)) as launch:
+                self.assertEqual(entry(argv), 0)
+            command = launch.call_args.args[0]
+            self.assertEqual(command[command.index("--num_processes") + 1], "4")
+            saved = OmegaConf.load(output / "launch_config.yaml")
+            self.assertEqual((saved.batch_size, saved.ablation_num_processes, saved.gradient_accumulation_steps,
+                              saved.max_steps), (64, 4, 1, 30000))
+            self.assertEqual(saved.model.training_recipe.training.ablation_num_processes, 4)
+            smoke_output = temporary / "smoke"
+            with patch("fastwam.ablation.fastwam.build_binding", return_value={"synthetic_test": True}), \
+                    patch("fastwam.ablation.fastwam.check_hardware", return_value={"synthetic_test_hardware": True}), \
+                    patch("fastwam.ablation.contracts.file_sha256", return_value=RELEASE_SHA256), \
+                    patch("subprocess.run", return_value=SimpleNamespace(returncode=0)) as launch:
+                self.assertEqual(entry(argv + ["--output", str(smoke_output), "--set", "max_steps=3",
+                                               "--stop-after-steps", "2"]), 0)
+            command = launch.call_args.args[0]
+            self.assertEqual(command[command.index("--stop-after-steps") + 1], "2")
+            saved = OmegaConf.load(smoke_output / "launch_config.yaml")
+            self.assertEqual(saved.max_steps, 3)
+            self.assertEqual(saved.model.training_recipe.training.max_steps, 3)
+
+    def test_requested_batch_cannot_be_replaced_by_accumulation(self):
+        self.assertEqual(execution_profile({})["global_batch_size"], 256)
+        self.assertEqual(execution_profile({"max_steps": 3})["max_steps"], 3)
+        for changed in ({"batch_size": 16, "gradient_accumulation_steps": 4}, {"ablation_num_processes": 1},
+                        {"max_steps": 0}):
+            with self.subTest(changed=changed), self.assertRaises(ValueError):
+                execution_profile(changed)
+
+    @unittest.skipUnless(HAS_OMEGA, "OmegaConf required")
+    def test_stop_after_two_keeps_three_step_scheduler_and_recipe_for_resume(self):
+        from types import SimpleNamespace
+        from omegaconf import OmegaConf
+        with tempfile.TemporaryDirectory() as directory:
+            cfg = OmegaConf.create({"output_dir": directory, "max_steps": 3})
+            class Trainer:
+                def __init__(self, restored_step=0):
+                    self.max_steps = 3
+                    self.global_step = restored_step
+                    self.scheduler_total_steps = 3  # Created before bounded train().
+                    self.accelerator = SimpleNamespace(num_processes=4, is_main_process=True)
+                    self.model = SimpleNamespace(train_micro_batch_size_per_gpu=lambda: 64,
+                                                 gradient_accumulation_steps=lambda: 1,
+                                                 train_batch_size=lambda: 256)
+
+                def train(self):
+                    assert self.scheduler_total_steps == 3
+                    self.global_step = self.max_steps
+
+            first = Trainer()
+            with bounded_training_invocation(Trainer, cfg, 2):
+                first.train()
+            self.assertEqual((first.global_step, first.max_steps, cfg.max_steps), (2, 3, 3))
+            restored = Trainer(restored_step=first.global_step)
+            with bounded_training_invocation(Trainer, cfg):
+                restored.train()
+            self.assertEqual(restored.global_step, 3)
+            receipt = json.loads((Path(directory) / "training-execution.json").read_text())
+            self.assertEqual(receipt["restored_global_step"], 2)
+            self.assertEqual(receipt["per_gpu_batch_size"], 64)
+            restored.model.train_micro_batch_size_per_gpu = lambda: 16
+            with self.assertRaisesRegex(RuntimeError, "physical batch"):
+                verify_prepared_batch(restored, cfg)
 
     @unittest.skipUnless(HAS_TORCH and HAS_OMEGA and importlib.util.find_spec("transformers") is not None,
                          "Needs official model imports")
