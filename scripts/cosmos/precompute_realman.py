@@ -20,8 +20,12 @@ def main():
         p.add_argument('--'+key,required=True)
     p.add_argument('--rank',type=int)
     p.add_argument('--assemble',action='store_true')
+    p.add_argument('--action-representation',choices=['absolute','delta_current_joint7'],default='absolute')
+    p.add_argument('--expected-episodes',type=int)
     a=p.parse_args(); torch.set_num_threads(4)
-    s=open_realman_source(a.dataset,a.source_sha)
+    s=open_realman_source(a.dataset,a.source_sha,action_representation=a.action_representation)
+    if a.expected_episodes is not None:
+        require(len(s.lengths)==a.expected_episodes, 'The complete requested episode set is required')
     bank,tm,td=read_text_bank(a.text_cache); del bank
     require([x['prompt'] for x in tm['texts']]==sorted(set(s.prompts)), 'Recorded prompt mismatch')
     i=dict(schema=SCHEMA,scope='production',dataset_profile=s.identity['profile'],
@@ -31,6 +35,8 @@ def main():
         numeric_sidecar_identity=s.identity_sha256,text_identity=td,
         upstream_hashes=verify_upstream(Path(a.upstream)),episode_lengths=s.lengths,
         prompts=sorted(set(s.prompts)),exporter_sha256=file_sha256(__file__),realman_source=s.identity)
+    if hasattr(s,'action_contract'):
+        i.update(s.action_contract)
     digest=cache_identity_sha256(i); output=Path(a.output); stage=Path(a.stage)
     if a.assemble:
         shards=[]; cursor=0

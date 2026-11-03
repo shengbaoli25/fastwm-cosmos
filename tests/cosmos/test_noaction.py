@@ -128,8 +128,11 @@ def test_resume_reproduces_next_optimizer_step(tmp_path):
     assert n.load_checkpoint(p,no)==1
     torch.testing.assert_close(update(n,no),expected,rtol=0,atol=0)
     for a,b in zip(m.parameters(),n.parameters()):torch.testing.assert_close(a,b,rtol=0,atol=0)
-    payload=torch.load(p,weights_only=True);payload['schema']='old';torch.save(payload,p)
-    with pytest.raises(ValueError,match='differ'):n.load_checkpoint(p)
+    # Restored optimizer tensors may still mmap the original file on Windows.
+    # Keep the rejection fixture separate from that live checkpoint.
+    payload=torch.load(p,weights_only=True);payload['schema']='old'
+    invalid=tmp_path/'invalid-checkpoint.pt';torch.save(payload,invalid)
+    with pytest.raises(ValueError,match='differ'):n.load_checkpoint(invalid)
 
 
 def test_noaction_training_config_and_model_sizes():

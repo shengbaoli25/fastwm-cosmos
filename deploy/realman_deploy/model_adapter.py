@@ -88,6 +88,9 @@ class CosmosJointPolicy:
         from fastwam.cosmos.noaction import SCHEMA
         payload = torch.load(self.checkpoint, map_location="cpu", weights_only=True, mmap=True)
         self.reference_mode = "none" if payload.get("schema") == SCHEMA else "rolling_ae"
+        self.normalizer.validate_action_contract(payload.get('manifest', {}))
+        if self.reference_mode != 'none' and self.normalizer.action_representation != 'absolute':
+            raise ValueError('Relative actions require a no-reference Joint8 checkpoint')
         if self.reference_mode == "none" and self.inference_backend == "video_isolated_reuse":
             raise ValueError("New joint diffusion requires a joint backend, not video_isolated_reuse")
         if self.reference_mode != "none" and self.inference_backend in {"joint_static_cache", "joint_multirate", "joint_optimized", "joint_expert_schedule"}:
@@ -103,6 +106,11 @@ class CosmosJointPolicy:
             if self.inference_backend not in {"joint_multirate", "joint_expert_schedule"} and int(self.config.get('joint_steps', 16)) < 1:
                 raise ValueError('Joint sampler step count must be positive')
             trained = payload["manifest"]["extra_config"]
+            if trained.get('action_representation', 'absolute') != self.normalizer.action_representation:
+                raise ValueError('Checkpoint model settings and normalization action representation differ')
+            if ('action_representation' in kwargs
+                    and kwargs['action_representation'] != self.normalizer.action_representation):
+                raise ValueError('Deployment and checkpoint action representation differ')
             if (payload['manifest']['action_space'] != self.normalizer.action_space
                     or payload['manifest']['action_dim'] != self.normalizer.action_dim):
                 raise ValueError('Checkpoint and normalization action space differ')

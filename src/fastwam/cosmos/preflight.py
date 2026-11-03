@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import time
+from fastwam.utils.training_schedule import resolve_scheduler_total_steps
 
 ROOT=Path(__file__).resolve().parents[3]
 
@@ -23,6 +24,18 @@ def validate_config(cfg):
     if cfg['data'].get('val') is not None:
         raise ValueError('The inherited recipe has no separate validation split')
     m=cfg['model'];d=cfg['data']['train']
+    horizon = resolve_scheduler_total_steps(steps, cfg.get('scheduler_total_steps'))
+    if horizon != steps and (not noaction or horizon != 50000):
+        raise ValueError('Only the no-reference model may preserve the original 50000-step scheduler')
+    if cfg.get('scheduler_total_steps') is not None:
+        recipe = m.get('training_recipe', {})
+        expected_recipe = dict(batch_per_rank=batch, max_steps=steps, scheduler_total_steps=horizon)
+        if any(recipe.get(key) != value for key, value in expected_recipe.items()):
+            raise ValueError('Model training_recipe must bind batch, stop max_steps and scheduler_total_steps')
+    else:
+        recipe_horizon = m.get('training_recipe', {}).get('scheduler_total_steps')
+        if recipe_horizon is not None and recipe_horizon != horizon:
+            raise ValueError('Model training_recipe scheduler horizon differs from the trainer')
     if m['_target_'] == 'fastwam.cosmos.assets.create_noaction_joint_cosmos':
         required = dict(action_hidden=768, action_ffn=3072, force_hidden=768, force_ffn=2048,
                         force_heads=16, force_shift=1., num_inference_steps=16,
@@ -67,6 +80,18 @@ def build_probe_datasets(data_cfg):
     return train_ds, val_ds
 
 
+def verify_trainer_schedule(trainer, cfg, *, step=0):
+    """Verify actual scheduler geometry at preflight, formal start and restore."""
+    stop = int(cfg['max_steps'])
+    horizon = resolve_scheduler_total_steps(stop, cfg.get('scheduler_total_steps'))
+    warmup = int(horizon * .05)
+    expected = dict(last_epoch=step, warmup_milestones=[warmup], cosine_steps=horizon-warmup)
+    actual = helpers().inspect_scheduler(trainer.scheduler)
+    if (trainer.max_steps != stop or trainer.scheduler_total_steps != horizon or actual != expected):
+        raise RuntimeError('Actual stop limit or learning rate schedule differs from configured horizons')
+    return dict(max_steps=stop, scheduler_total_steps=horizon, scheduler=actual)
+
+
 def execute(config_path,output):
     import torch
     from accelerate import Accelerator
@@ -109,9 +134,7 @@ def execute(config_path,output):
         raise RuntimeError('Actual engine differs from configured four-rank batch and ZeRO1')
     h=helpers();adam=h.unwrap_optimizer(trainer.optimizer)
     if not isinstance(adam,torch.optim.AdamW):raise RuntimeError('Actual AdamW required')
-    warmup=int(steps*.05)
-    if h.inspect_scheduler(trainer.scheduler)!={'last_epoch':0,'warmup_milestones':[warmup],'cosine_steps':steps-warmup}:
-        raise RuntimeError('Complete configured learning rate schedule required')
+    schedule = verify_trainer_schedule(trainer, cfg)
     layer_calls=[0]*28;handles=[];query_gradients=[]
     def record_query_gradient(gradient):
         query_gradients.append({'finite':bool(torch.isfinite(gradient).all()),
@@ -128,6 +151,7 @@ def execute(config_path,output):
     losses,updates=run_two_updates(trainer,synchronize=torch.cuda.synchronize)
     for handle in handles:handle.remove()
     report={'rank':rank,'world_size':4,'batch_per_rank':batch,'global_batch':4*batch,'max_steps':steps,
+        'scheduler_total_steps':schedule['scheduler_total_steps'],
         'actual_engine_updates':int(engine.global_steps),'scheduler':h.inspect_scheduler(trainer.scheduler),
         **h.inspect_adam(adam),'losses':losses,'updates':updates,'chunk_layer_calls':layer_calls,'query_gradients':query_gradients,
         'force_gradient_target':'input_encoder' if hasattr(model.dit['force'], 'force_encoder') else 'learned_queries',

@@ -9,7 +9,7 @@ from fastwam.trainer import Wan22Trainer
 from fastwam.utils import misc
 from fastwam.utils.logging_config import setup_logging
 from fastwam.utils.pytorch_utils import set_global_seed
-from fastwam.cosmos.preflight import validate_config,build_probe_datasets
+from fastwam.cosmos.preflight import validate_config,build_probe_datasets,verify_trainer_schedule
 from fastwam.cosmos.binding import verify_preflight
 
 
@@ -41,12 +41,14 @@ def main():
     origin.write_text(json.dumps(receipt,indent=2))
     model=instantiate(cfg.model,device=f'cuda:{torch.cuda.current_device()}')
     ds,val=build_probe_datasets(cfg.data);trainer=Wan22Trainer(model,ds,val,cfg=cfg)
+    receipt.update(verify_trainer_schedule(trainer,cfg))
     engine=trainer.model
     if (engine.train_micro_batch_size_per_gpu(),engine.gradient_accumulation_steps(),engine.train_batch_size())!=(cfg.batch_size,1,4*cfg.batch_size):raise ValueError('Actual engine batch differs')
     if acc.is_main_process:OmegaConf.save(cfg,str(out/'config.yaml'))
     receipt['status']='running';origin.write_text(json.dumps(receipt,indent=2))
     trainer.train()
     if trainer.global_step!=cfg.max_steps:raise RuntimeError('Formal run did not complete configured steps')
+    receipt.update(verify_trainer_schedule(trainer,cfg,step=trainer.global_step))
     receipt.update(status='complete',global_step=trainer.global_step)
     origin.write_text(json.dumps(receipt,indent=2));acc.wait_for_everyone()
     torch.distributed.destroy_process_group()

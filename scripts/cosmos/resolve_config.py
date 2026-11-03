@@ -18,8 +18,10 @@ def main():
     p.add_argument('--normalization', help='Exact RealMan normalization exported for this training cache')
     p.add_argument('--batch-size',type=int,choices=[16,32,64])
     p.add_argument('--max-steps',type=int,choices=[1000,20000,30000])
+    p.add_argument('--scheduler-total-steps',type=int)
+    p.add_argument('--action-representation',choices=['absolute','delta_current_joint7'],default='absolute')
     a=p.parse_args();bank,tm,td=read_text_bank(a.text_cache);del bank
-    fm=validate(a.feature_cache);checked(a.checkpoint,NONACTION_WEIGHT_SHA if a.task == 'cosmos_noaction_joint_4gpu_30k' else WEIGHT_SHA);verify_upstream(Path(a.upstream))
+    fm=validate(a.feature_cache,expected_action_representation=a.action_representation if a.task == 'cosmos_noaction_joint_4gpu_30k' else None);checked(a.checkpoint,NONACTION_WEIGHT_SHA if a.task == 'cosmos_noaction_joint_4gpu_30k' else WEIGHT_SHA);verify_upstream(Path(a.upstream))
     if fm['identity']['text_identity']!=td:raise ValueError('Feature/text identities differ')
     root=Path(__file__).resolve().parents[2]
     with initialize_config_dir(config_dir=str(root/'configs'),version_base=None):
@@ -33,6 +35,11 @@ def main():
     cfg.model.checkpoint=str(Path(a.checkpoint).resolve());cfg.model.upstream=str(Path(a.upstream).resolve())
     cfg.data.train.cache_root=str(Path(a.feature_cache).resolve());cfg.data.train.expected_identity_sha256=fm['identity_sha256']
     if a.task == 'cosmos_noaction_joint_4gpu_30k':
+        OmegaConf.update(cfg,'model.action_representation',a.action_representation,force_add=True)
+        OmegaConf.update(cfg,'data.train.expected_action_representation',a.action_representation,force_add=True)
+        if a.scheduler_total_steps is not None:
+            OmegaConf.update(cfg,'scheduler_total_steps',a.scheduler_total_steps,force_add=True)
+            OmegaConf.update(cfg,'model.training_recipe.scheduler_total_steps',a.scheduler_total_steps,force_add=True)
         cfg.model.expected_data_identity=fm['identity_sha256']
         source=fm['identity'].get('realman_source')
         if source is not None:
@@ -41,6 +48,9 @@ def main():
             if a.normalization is None:
                 raise ValueError('RealMan no-reference training requires --normalization')
             norm=json.loads(Path(a.normalization).read_text())
+            from fastwam.cosmos.joint_action import validate_joint_action_contract
+            validate_joint_action_contract(source,expected=a.action_representation)
+            validate_joint_action_contract(norm,expected=a.action_representation)
             if (norm.get('source_identity_sha256') != cache_identity_sha256(source)
                     or norm.get('statistics') != source['statistics']
                     or norm.get('force_preprocessing') != source.get('force_preprocessing')

@@ -16,6 +16,10 @@ def main():
         parser.add_argument('--' + name, required=True)
     parser.add_argument('--batch-size',type=int,choices=[16,32,64],default=16)
     parser.add_argument('--max-steps',type=int,choices=[1000,20000,30000],default=30000)
+    parser.add_argument('--scheduler-total-steps',type=int)
+    parser.add_argument('--action-representation',choices=['absolute','delta_current_joint7'],default='absolute')
+    parser.add_argument('--expected-episodes',type=int)
+    parser.add_argument('--upstream',default=str(ROOT/'third_party/cosmos-predict2.5'))
     args = parser.parse_args()
     from distributed_fresh import clean_environment
     env = clean_environment(os.environ, ROOT)
@@ -41,7 +45,9 @@ def main():
             or run.exists()):
         raise ValueError('Use fresh work/run directories outside the immutable cache')
     work.mkdir(parents=True, exist_ok=False)
-    source = open_realman_source(args.dataset, args.source_sha)
+    source = open_realman_source(args.dataset, args.source_sha,action_representation=args.action_representation)
+    if args.expected_episodes is not None and len(source.lengths) != args.expected_episodes:
+        raise ValueError('Complete requested episode set required; no holdout subset allowed')
     if source.identity.get('action_space') != 'joint8':
         raise ValueError('The new cached training entrypoint requires joint8 demonstrations')
     source.export_normalization(work/'normalization.json')
@@ -54,6 +60,7 @@ def main():
         prepared=str(prepared), dataset_source_sha=source.source_sha,
         cache_identity=manifest['identity_sha256'], samples=len(source),
         joint_protocol=JOINT_PROTOCOL, branch_reads=BRANCH_READS,
+        action_representation=args.action_representation, source_episode_count=len(source.lengths),
         model_warm_start=False, optimizer_resume=False))
     del source
     # The resolver verifies every shard, text pairing, official weights and
@@ -63,11 +70,13 @@ def main():
             sys.executable, '-u', str(ROOT / 'scripts/cosmos/resolve_config.py'),
             '--task', 'cosmos_noaction_joint_4gpu_30k',
             '--batch-size',str(args.batch_size),'--max-steps',str(args.max_steps),
+            '--action-representation',args.action_representation,
+            *(['--scheduler-total-steps',str(args.scheduler_total_steps)] if args.scheduler_total_steps is not None else []),
             '--normalization', str(work / 'normalization.json'),
             '--text-cache', str(prepared / 'text'),
             '--feature-cache', str(prepared / 'features'),
             '--checkpoint', args.checkpoint,
-            '--upstream', str(ROOT / 'third_party/cosmos-predict2.5'),
+            '--upstream', args.upstream,
             '--output-dir', str(work / 'config-placeholder'),
             '--config-output', str(work / 'resolved.yaml'),
         ], check=True, cwd=ROOT, stdout=log, stderr=subprocess.STDOUT)

@@ -29,6 +29,9 @@ def runtime_config(config, manifest, *, checkpoint, normalization, tokenizer,
         raise ValueError('Normalization differs from the training-bound file')
     from realman_deploy.normalization import DatasetNormalizer
     normalizer = DatasetNormalizer.from_json(normalization)
+    normalizer.validate_action_contract(manifest)
+    if model.get('action_representation', 'absolute') != normalizer.action_representation:
+        raise ValueError('Training config and normalization action representation differ')
     hardware = json.loads(Path(hardware_config).read_text())
     if (manifest.get('action_space') != 'joint8' or model.get('action_space') != 'joint8'
             or normalizer.action_space != 'joint8' or hardware.get('action_space') != 'joint8'):

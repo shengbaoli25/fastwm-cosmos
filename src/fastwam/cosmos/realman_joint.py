@@ -9,6 +9,7 @@ import torch
 from fastwam.cache.latent import cache_identity_sha256, file_sha256
 from fastwam.datasets.lerobot.utils.normalizer import SingleFieldLinearNormalizer
 from .realman import RealManSource, CAMERAS, require
+from .joint_action import joint_action_contract, encode_joint_actions
 
 PROFILE = 'realman-leader-joint8-filtered-v1'
 STATE_COLUMNS = [0, 1, 2, 3, 4, 5, 6, 19]
@@ -51,7 +52,9 @@ def continuous_segments(t):
 
 
 class RealManJointSource(RealManSource):
-    def __init__(self, root, expected_source=None):
+    def __init__(self, root, expected_source=None, *, action_representation='absolute'):
+        self.action_contract = joint_action_contract(action_representation)
+        self.action_representation = action_representation
         self.root = Path(root).resolve()
         files = {p.relative_to(self.root).as_posix(): file_sha256(p)
                  for p in sorted(self.root.rglob('*')) if p.is_file()}
@@ -117,6 +120,11 @@ class RealManJointSource(RealManSource):
         selected = torch.tensor([start+f for _,f,start,_ in self.rows])
         self.stats, self.normalized = {}, {}
         for key,x in self.raw.items():
+            if key == 'action' and self.action_representation == 'delta_current_joint7':
+                mean, std = self._delta_action_statistics()
+                self.stats[key] = dict(mean=mean.tolist(), std=std.tolist())
+                self.action_normalizer = SingleFieldLinearNormalizer(dict(mean=mean, std=std), mode='z-score')
+                continue
             mean = x[selected].double().mean(0).float()
             std = x[selected].double().std(0,correction=0).float()
             require(bool(torch.isfinite(std).all() & (std > 0).all()), 'Degenerate '+key+' statistics')
@@ -131,10 +139,18 @@ class RealManJointSource(RealManSource):
             normalization='stock_FP32_zscore_scale_offset_eps1e-8_clip[-5,5]',
             force_preprocessing=self.force_contract, segments=self.segments,
             temporal_policy='valid_capture_fresh4_applied_warm_force;split_gap20us_reset_reference;min_segment2;clamp_mask',
-            actions='absolute_sent_joint_targets_rad_then_gripper_open',
+            actions=('absolute_sent_joint_targets_rad_then_gripper_open' if action_representation == 'absolute'
+                     else 'sent_joint_targets_minus_current_measured_joint7_then_absolute_gripper'),
             wrench='recorded_calibrated_causal_filtered_world_N_Nm_no_refilter',
             action_offsets=list(range(32)),force_offsets=list(range(1,33)),
             history_offsets=list(range(-31,1)),image_offsets=list(range(0,33,4)))
+        self.identity.update(self.action_contract)
+        self.identity.update(training_selection='all_episodes_no_holdout',
+            source_episode_indices=list(range(len(self.episodes))),
+            split_counts=dict(train=len(self.episodes), val=0, test=0))
+        self.identity['action_statistics_scope'] = ('retained_source_rows' if action_representation == 'absolute'
+            else 'all_retained_anchor_windows_valid_action_positions_excluding_padding')
+        self.identity['action_transform_sha256'] = file_sha256(Path(__file__).with_name('joint_action.py'))
         self.identity_sha256 = cache_identity_sha256(self.identity)
         self.info = info; self._video_episode = None; self._frames = None
 
@@ -142,7 +158,32 @@ class RealManJointSource(RealManSource):
         payload = dict(profile=PROFILE, statistics=self.stats, source_identity_sha256=self.identity_sha256,
                        force_preprocessing=self.force_contract,action_space='joint8',action_units=ACTION_UNITS,
                        state_columns=STATE_COLUMNS)
+        payload.update(self.action_contract)
+        payload['action_statistics_scope'] = self.identity['action_statistics_scope']
         Path(path).write_text(json.dumps(payload,indent=2)+'\n')
+
+    def _delta_action_statistics(self):
+        """Population moments over exactly the unpadded supervised action pairs."""
+        total = torch.zeros(8, dtype=torch.float64)
+        squared = torch.zeros_like(total)
+        count = 0
+        for start in range(0, len(self.rows), 1024):
+            rows = self.rows[start:start+1024]
+            anchors = torch.tensor([base+f for _,f,base,_ in rows])
+            limits = torch.tensor([base+self.bounds[start+j][1] for j,(_,_,base,_) in enumerate(rows)])
+            indices = anchors[:, None] + torch.arange(32)
+            valid = indices < limits[:, None]
+            indices = torch.minimum(indices, limits[:, None]-1)
+            targets = encode_joint_actions(self.raw['action'][indices], self.raw['state'][anchors],
+                                           self.action_representation)[valid].double()
+            total += targets.sum(0)
+            squared += targets.square().sum(0)
+            count += len(targets)
+        require(count > 0, 'No valid delta action statistics targets')
+        mean64 = total / count
+        std = (squared / count - mean64.square()).clamp_min(0).sqrt().float()
+        require(bool(torch.isfinite(std).all() & (std > 0).all()), 'Degenerate delta action statistics')
+        return mean64.float(), std
 
     def __getitem__(self,j):
         ep,f,start,_ = self.rows[j];lo,hi = self.bounds[j]
@@ -150,7 +191,10 @@ class RealManJointSource(RealManSource):
             t = f+torch.tensor(values)
             return start+t.clamp(lo,hi-1),(t < lo)|(t >= hi)
         a,ap = offsets(range(32));h,hp = offsets(range(-31,1));w,wp = offsets(range(1,33));_,ip = offsets(range(0,33,4))
-        return dict(action=self.normalized['action'][a].clone(),
+        action = (self.normalized['action'][a].clone() if self.action_representation == 'absolute'
+                  else self.action_normalizer.forward(encode_joint_actions(
+                      self.raw['action'][a], self.raw['state'][start+f], self.action_representation)))
+        return dict(action=action,
             proprio=torch.cat((self.normalized['state'][a],torch.zeros(32,1)),-1),
             history=torch.cat((self.normalized['state'][h],self.normalized['force'][h]),-1).masked_fill(hp[:,None],0),
             wrench_future=self.normalized['force'][w].clone().masked_fill(wp[:,None],0),
@@ -167,7 +211,10 @@ class RealManJointSource(RealManSource):
         return self._frames[(f+torch.arange(0,33,4)).clamp(lo,hi-1)].permute(1,0,2,3).contiguous()
 
 
-def open_realman_source(root,expected_source=None):
+def open_realman_source(root,expected_source=None,*,action_representation='absolute'):
     metadata = json.loads((Path(root)/'meta/force.json').read_text()) if (Path(root)/'meta/force.json').is_file() else {}
-    source = RealManJointSource if metadata.get('schema') == 'realman_leader_force_gripper_v2' else RealManSource
-    return source(root,expected_source)
+    if metadata.get('schema') == 'realman_leader_force_gripper_v2':
+        return RealManJointSource(root,expected_source,action_representation=action_representation)
+    if action_representation != 'absolute':
+        raise ValueError('Delta joint actions require the measured Joint8 source schema')
+    return RealManSource(root,expected_source)

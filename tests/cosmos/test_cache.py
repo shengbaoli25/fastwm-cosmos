@@ -61,7 +61,9 @@ def test_resume_partial_requires_explicit_opt_in(tmp_path):
 
 @pytest.mark.parametrize('mutation',['wan48','wrong_force_time','wrong_sample','nonfinite','bad_prompt_shape','missing_fp64','rgb','checksum'])
 def test_corrupt_payloads_rejected(tmp_path,mutation):
-    root=tmp_path/'features';m,_=build(root);e=m['shards'][0];p=root/e['path'];q=load_file(str(p))
+    root=tmp_path/'features';m,_=build(root);e=m['shards'][0];p=root/e['path']
+    # Own the tensors before overwriting: Windows cannot truncate a mapped shard.
+    q={k:v.clone() for k,v in load_file(str(p)).items()}
     if mutation=='wan48':q['video_latents']=torch.zeros(2,48,3,14,28,dtype=torch.bfloat16)
     elif mutation=='wrong_force_time':q['force_is_pad']=q['action_is_pad'].clone()
     elif mutation=='wrong_sample':q['sample_index']=torch.tensor([1,0])

@@ -6,6 +6,7 @@ import torch
 from safetensors.torch import load_file,save_file
 from fastwam.cache.latent import file_sha256,cache_identity_sha256
 from .assets import TOKENIZER_SHA
+from .joint_action import validate_joint_action_contract
 
 SCHEMA='cosmos-force28-full-window-cache-v1'
 VIDEO_SHAPE=(16,3,28,56)
@@ -22,7 +23,7 @@ def _atomic(path,obj):
     p=Path(path); t=p.with_suffix('.tmp'); t.write_text(json.dumps(obj,indent=2,ensure_ascii=False,allow_nan=False)+'\n'); t.replace(p)
 
 
-def validate(root,expected=None,*,complete=True,production=True):
+def validate(root,expected=None,*,complete=True,production=True,expected_action_representation=None):
     root=Path(root).resolve(); m=json.loads((root/'manifest.json').read_text()); i=m['identity']
     if i.get('schema')!=SCHEMA or i.get('tokenizer_sha256')!=TOKENIZER_SHA or i.get('video_shape')!=list(VIDEO_SHAPE):
         raise ValueError('Wrong tokenizer/latent contract; Wan48 cache cannot be used')
@@ -30,6 +31,20 @@ def validate(root,expected=None,*,complete=True,production=True):
         raise ValueError('Camera/window encoding differs')
     if m['identity_sha256']!=cache_identity_sha256(i) or expected is not None and expected!=m['identity_sha256']:
         raise ValueError('Cache identity differs')
+    joint = i.get('dataset_profile') == 'realman-leader-joint8-filtered-v1'
+    if joint:
+        source = i.get('realman_source', {})
+        representation = validate_joint_action_contract(source, expected_action_representation)
+        if representation == 'delta_current_joint7' or 'action_representation' in i:
+            validate_joint_action_contract(i, representation, allow_legacy_absolute=False)
+        if representation == 'delta_current_joint7':
+            if (source.get('actions') != 'sent_joint_targets_minus_current_measured_joint7_then_absolute_gripper'
+                    or source.get('action_statistics_scope') != 'all_retained_anchor_windows_valid_action_positions_excluding_padding'
+                    or not isinstance(source.get('action_transform_sha256'), str)
+                    or len(source['action_transform_sha256']) != 64):
+                raise ValueError('Delta action source/statistics provenance differs')
+    elif expected_action_representation not in (None, 'absolute'):
+        raise ValueError('Requested delta joint actions require a Joint8 cache')
     if production:
         profile=i.get('dataset_profile','forcevla-wipe50')
         scopes={'forcevla-wipe50':(50,34808),'realman-1018-test-cup-force-v1':(73,35611)}
@@ -160,8 +175,10 @@ def build_cache(root,*,pixels,numeric,encoder,text_manifest,text_identity,upstre
 
 
 class CosmosCachedDataset(torch.utils.data.Dataset):
-    def __init__(self,cache_root,expected_identity_sha256,expected_text_identity,require_production=True,max_cached_shards=2):
-        self.root=Path(cache_root).resolve(); self.manifest=validate(self.root,expected_identity_sha256,production=require_production)
+    def __init__(self,cache_root,expected_identity_sha256,expected_text_identity,require_production=True,max_cached_shards=2,
+                 expected_action_representation=None):
+        self.root=Path(cache_root).resolve(); self.manifest=validate(self.root,expected_identity_sha256,production=require_production,
+            expected_action_representation=expected_action_representation)
         if self.manifest['identity']['text_identity']!=expected_text_identity: raise ValueError('Text/cache pairing differs')
         if max_cached_shards<1: raise ValueError('Positive shard capacity required')
         self.identity_sha256=self.manifest['identity_sha256'];self.capacity=max_cached_shards;self.loaded=OrderedDict()

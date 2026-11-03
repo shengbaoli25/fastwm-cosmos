@@ -19,6 +19,7 @@ from .utils.fs import ensure_dir
 from .utils.logging_config import get_logger, setup_logging
 from .utils.pytorch_utils import set_global_seed
 from .utils.samplers import ResumableEpochSampler
+from .utils.training_schedule import resolve_scheduler_total_steps
 from .utils.video_io import save_mp4
 from .utils.video_metrics import pil_frames_to_video_tensor, video_psnr, video_ssim
 
@@ -98,13 +99,7 @@ class Wan22Trainer:
         
         self.train_loader = self._build_loader(self.train_dataset, worker_init_fn=worker_init_fn)
         total_train_steps = self._estimate_total_train_steps()
-        self.max_steps = total_train_steps
-        warmup_steps = int(total_train_steps * 0.05)
-        self.scheduler = self._build_scheduler(
-            scheduler_type=cfg.lr_scheduler_type,
-            total_train_steps=total_train_steps,
-            warmup_steps=warmup_steps,
-        )
+        self._initialize_schedule(total_train_steps)
         self.global_step = 0
         self.epoch = 0
         self.batch_in_epoch = 0
@@ -242,6 +237,16 @@ class Wan22Trainer:
             1,
         )
         return max(opt_steps_per_epoch * self.num_epochs, 1)
+
+    def _initialize_schedule(self, total_train_steps: int):
+        self.max_steps = total_train_steps
+        self.scheduler_total_steps = resolve_scheduler_total_steps(
+            total_train_steps, self.cfg.get('scheduler_total_steps'))
+        self.scheduler = self._build_scheduler(
+            scheduler_type=self.cfg.lr_scheduler_type,
+            total_train_steps=self.scheduler_total_steps,
+            warmup_steps=int(self.scheduler_total_steps * 0.05),
+        )
 
     def _build_scheduler(self, scheduler_type, total_train_steps: int, warmup_steps: int = 0):
         scheduler_type = str(scheduler_type).strip().lower()

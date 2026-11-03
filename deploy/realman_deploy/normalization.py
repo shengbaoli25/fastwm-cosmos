@@ -17,9 +17,16 @@ def _f32(value: float) -> float:
 class DatasetNormalizer:
     """Matches the recorded FP32 population z-score and [-5, 5] clip."""
 
-    def __init__(self, stats: dict, force_preprocessing=None, action_space='eef_pose7'):
+    def __init__(self, stats: dict, force_preprocessing=None, action_space='eef_pose7',
+                 action_representation='absolute'):
+        from fastwam.cosmos.joint_action import joint_action_contract
+        contract = joint_action_contract(action_representation)
+        if action_representation != 'absolute' and action_space != 'joint8':
+            raise ValueError('Relative joint actions require the joint8 action space')
         self.stats = stats
         self.action_space = action_space
+        self.action_representation = action_representation
+        self.action_anchor = contract['action_anchor']
         self.action_dim = self.state_dim = action_width(action_space)
         self.force_preprocessing = force_preprocessing
         if force_preprocessing is not None:
@@ -38,10 +45,24 @@ class DatasetNormalizer:
     def from_json(cls, path: str | Path) -> "DatasetNormalizer":
         payload = json.loads(Path(path).read_text())
         space = payload.get('action_space','eef_pose7')
+        representation = payload.get('action_representation', 'absolute')
         if space == 'joint8' and (payload.get('action_units') != ['rad']*7+['openness_0_1']
                                  or payload.get('state_columns') != [0,1,2,3,4,5,6,19]):
             raise ValueError('Joint normalization requires radians, measured joints and final gripper')
-        return cls(payload.get("statistics", payload), payload.get('force_preprocessing'),space)
+        result = cls(payload.get("statistics", payload), payload.get('force_preprocessing'),
+                     space, representation)
+        result.validate_action_contract(payload)
+        return result
+
+    def validate_action_contract(self, metadata: dict) -> None:
+        """Reject absolute/relative or anchoring mismatches before model loading."""
+        from fastwam.cosmos.joint_action import validate_joint_action_contract
+        if self.action_space == 'joint8':
+            validate_joint_action_contract(metadata, expected=self.action_representation)
+        elif (metadata.get('action_representation', 'absolute') != 'absolute'
+                or metadata.get('action_anchor', 'none') != 'none'
+                or any(metadata.get('action_delta_mask', []))):
+            raise ValueError('Legacy end-effector actions must use absolute representation')
 
     def _transform(self, name, values, *, inverse=False):
         item = self.stats[name]
@@ -72,6 +93,27 @@ class DatasetNormalizer:
 
     def decode(self, name: str, values: Sequence) -> list:
         return self._transform(name, values, inverse=True)
+
+    def decode_action(self, values: Sequence, current_state: Sequence | None = None) -> list:
+        """Return absolute commands anchored to the observation of this request.
+
+        Inverse normalization produces physical joint offsets first. Every row
+        uses the same measured joint anchor; offsets are never cumulatively summed.
+        The gripper channel is always an absolute openness target.
+        """
+        decoded = self.decode('action', values)
+        if self.action_representation == 'absolute':
+            return decoded
+        if (current_state is None or len(current_state) != 8
+                or not all(math.isfinite(float(x)) for x in current_state)):
+            raise ValueError('Delta action decoding requires the request measured joint8 state')
+        matrix = isinstance(decoded[0], list)
+        rows = decoded if matrix else [decoded]
+        for row in rows:
+            row[:7] = [float(current_state[i]) + row[i] for i in range(7)]
+            if not all(math.isfinite(x) for x in row):
+                raise ValueError('Anchored action decoding produced non-finite values')
+        return rows if matrix else rows[0]
 
 
 class OnlineHistory:

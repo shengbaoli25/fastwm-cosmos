@@ -9,6 +9,7 @@ import torch
 from safetensors.torch import save_file
 
 from fastwam.cosmos.realman_joint import RealManJointSource,open_realman_source
+from fastwam.cosmos.joint_action import encode_joint_actions,joint_action_contract,validate_joint_action_contract
 from fastwam.cosmos.cache import SCHEMA,VIDEO_SHAPE,FIRST_SHAPE,validate
 from fastwam.cosmos.assets import TOKENIZER_SHA
 from fastwam.cache.latent import file_sha256,cache_identity_sha256
@@ -89,3 +90,76 @@ def test_cache_tracks_retained_original_indices_and_segment_masks(tmp_path):
     q['force_is_pad'][11,0]=False;save_file(q,str(root/'data.safetensors'))
     manifest['shards'][0]['sha256']=file_sha256(root/'data.safetensors');(root/'manifest.json').write_text(json.dumps(manifest))
     with pytest.raises(ValueError,match='Temporal'):validate(root)
+
+
+def test_delta_windows_and_statistics_use_current_measured_anchor_excluding_padding(tmp_path):
+    raw=tmp_path/'raw';dataset(raw)
+    absolute=RealManJointSource(raw)
+    delta=open_realman_source(raw,action_representation='delta_current_joint7')
+    assert delta.rows==absolute.rows and delta.bounds==absolute.bounds
+    assert delta.identity_sha256!=absolute.identity_sha256
+    assert delta.identity['training_selection']=='all_episodes_no_holdout'
+    assert delta.identity['source_episode_indices']==[0]
+    assert delta.identity['split_counts']==dict(train=1,val=0,test=0)
+    assert delta.stats['state']==absolute.stats['state'] and delta.stats['force']==absolute.stats['force']
+    supervised=[]
+    for j,(_,f,start,_) in enumerate(delta.rows):
+        _,hi=delta.bounds[j]
+        targets=delta.raw['action'][start+f:start+min(f+32,hi)].clone()
+        targets[:,:7]-=delta.raw['state'][start+f,:7]
+        supervised.append(targets)
+        got=delta[j]
+        assert torch.equal(got['history'],absolute[j]['history'])
+        assert torch.equal(got['proprio'],absolute[j]['proprio'])
+        expected=delta.action_normalizer.forward(targets)
+        torch.testing.assert_close(got['action'][~got['action_is_pad']],expected,rtol=0,atol=0)
+    population=torch.cat(supervised).double()
+    np.testing.assert_allclose(delta.stats['action']['mean'],population.mean(0).float(),rtol=0,atol=0)
+    np.testing.assert_allclose(delta.stats['action']['std'],population.std(0,correction=0).float(),rtol=1e-6,atol=1e-8)
+    # Window 1 has nonzero first delta: the anchor is measured state, not command 0.
+    anchor=delta.raw['state'][1]
+    represented=encode_joint_actions(delta.raw['action'][1:4],anchor,'delta_current_joint7')
+    np.testing.assert_allclose(represented[:,0],[.01,.03,.05],atol=1e-8)
+    np.testing.assert_array_equal(represented[:,7],delta.raw['action'][1:4,7])
+    exported=tmp_path/'normalization.json';delta.export_normalization(exported)
+    payload=json.loads(exported.read_text())
+    assert validate_joint_action_contract(payload,'delta_current_joint7')=='delta_current_joint7'
+    assert payload['source_identity_sha256']==delta.identity_sha256
+    assert payload['statistics']==delta.stats
+
+
+def _write_joint_cache(root,source):
+    root.mkdir()
+    samples=[]
+    for j in range(len(source)):
+        item=source[j];item.update(video_latents=torch.zeros(VIDEO_SHAPE,dtype=torch.bfloat16),
+            first_frame_latents=torch.zeros(FIRST_SHAPE,dtype=torch.bfloat16));samples.append(item)
+    save_file({k:torch.stack([item[k] for item in samples]) for k in samples[0]},str(root/'data.safetensors'))
+    identity=dict(schema=SCHEMA,tokenizer_sha256=TOKENIZER_SHA,video_shape=list(VIDEO_SHAPE),
+        rgb_shape=[3,9,224,448],camera_order=['cam_main','cam_wrist'],encoding='independent9frame_and_independent1frame',
+        scope='production',dataset_profile=source.identity['profile'],realman_source=source.identity,
+        episode_lengths=source.lengths,numeric_identity=source.identity_sha256,prompts=['cup'])
+    identity.update(source.action_contract)
+    manifest=dict(identity=identity,identity_sha256=cache_identity_sha256(identity),status='complete',
+        completed_samples=len(source),shards=[dict(start=0,stop=len(source),path='data.safetensors',
+        sha256=file_sha256(root/'data.safetensors'))])
+    (root/'manifest.json').write_text(json.dumps(manifest))
+    return manifest
+
+
+def test_cache_rejects_absolute_as_delta_and_inconsistent_delta_contract(tmp_path):
+    raw=tmp_path/'raw';dataset(raw)
+    absolute=RealManJointSource(raw)
+    root=tmp_path/'absolute';_write_joint_cache(root,absolute)
+    validate(root,expected_action_representation='absolute')
+    with pytest.raises(ValueError,match='representation'):
+        validate(root,expected_action_representation='delta_current_joint7')
+    delta=RealManJointSource(raw,action_representation='delta_current_joint7')
+    root=tmp_path/'delta';manifest=_write_joint_cache(root,delta)
+    validate(root,expected_action_representation='delta_current_joint7')
+    # Matching SHA alone must not permit contradictory source/cache semantics.
+    manifest['identity'].update(joint_action_contract('absolute'))
+    manifest['identity_sha256']=cache_identity_sha256(manifest['identity'])
+    (root/'manifest.json').write_text(json.dumps(manifest))
+    with pytest.raises(ValueError,match='representation'):
+        validate(root)

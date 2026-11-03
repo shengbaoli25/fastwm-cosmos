@@ -8,7 +8,7 @@ from omegaconf import OmegaConf
 from fastwam.trainer import Wan22Trainer
 from fastwam.utils import misc
 from fastwam.utils.pytorch_utils import set_global_seed
-from fastwam.cosmos.preflight import validate_config,build_probe_datasets
+from fastwam.cosmos.preflight import validate_config,build_probe_datasets,verify_trainer_schedule
 from fastwam.cosmos.binding import binding,verify_preflight
 from fastwam.cosmos.persistence import resource_identity,training_state_fingerprints
 
@@ -33,6 +33,7 @@ def main():
     prior=next(r for r in source['ranks'] if r['rank']==rank)
     if not prior.get('checkpoint_saved'):raise ValueError('Actual checkpoint missing')
     trainer.load_training_state(prior['state_path'])
+    verify_trainer_schedule(trainer,cfg,step=trainer.global_step)
     actual=training_state_fingerprints(trainer,model)
     report={'rank':rank,'accepted':actual==prior['state_fingerprints'],'actual':actual,'expected':prior['state_fingerprints']}
     (output/f'rank_{rank:03d}.json').write_text(json.dumps(report,indent=2))

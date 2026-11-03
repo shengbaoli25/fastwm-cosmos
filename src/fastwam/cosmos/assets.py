@@ -149,6 +149,11 @@ def load_nonaction_video(upstream, checkpoint, *, device='cuda', dtype=torch.bfl
 def create_noaction_joint_cosmos(*, upstream, checkpoint, text_cache, expected_text_identity, expected_data_identity,
                                 expected_normalization_sha256=None, training_recipe=None, device='cuda', **kwargs):
     from .noaction import NoActionJointModel
+    from .joint_action import joint_action_contract
+    representation = kwargs.get('action_representation', 'absolute')
+    joint_action_contract(representation)
+    if representation != 'absolute' and kwargs.get('action_space', 'joint8') != 'joint8':
+        raise ValueError('Relative joint actions require the joint8 action space')
     bank, _, digest = read_text_bank(text_cache)
     if digest != expected_text_identity:
         raise ValueError('Pinned text cache identity differs')

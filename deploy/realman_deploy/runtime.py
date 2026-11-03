@@ -117,6 +117,8 @@ class DeploymentRuntime:
         normalizer = getattr(policy, 'normalizer', self.normalizer)
         if (normalizer.stats != self.normalizer.stats
                 or normalizer.action_space != self.normalizer.action_space
+                or normalizer.action_representation != self.normalizer.action_representation
+                or normalizer.action_anchor != self.normalizer.action_anchor
                 or normalizer.force_preprocessing != self.normalizer.force_preprocessing):
             raise ValueError('模型与运行时 normalization.json 不一致；请使用同一训练导出文件重启服务')
 
@@ -302,7 +304,7 @@ class DeploymentRuntime:
         # Shape/finite checks precede decoding; no NaN can be hidden by clipping.
         if len(normalized_actions) != 32 or any(len(row) != self.normalizer.action_dim for row in normalized_actions):
             raise ValueError(f"AE output must be Action32x{self.normalizer.action_dim}")
-        predicted = self.normalizer.decode("action", normalized_actions)
+        predicted = self.normalizer.decode_action(normalized_actions, observation.state)
         execution = [row[:-1] + [max(0.0, min(1.0, row[-1]))] for row in predicted]
         logger.info('Gripper policy chunk %s', json.dumps(dict(
             epoch=epoch, source_sequence=observation.sequence, source_stamp=observation.stamp,

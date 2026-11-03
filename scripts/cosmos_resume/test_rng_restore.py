@@ -58,7 +58,10 @@ class RankZeroLogRngTests(unittest.TestCase):
         if fixed:
             wrapper.setup_resume_logging(setup_logging, True)
         else:
-            setup_logging(log_level=logging.INFO, is_main_process=True)
+            # Reproduce the historical unsafe setting explicitly; fresh runs
+            # now disable path hyperlinks in the shared logging defaults.
+            setup_logging(log_level=logging.INFO, is_main_process=True,
+                          rich_handler_kwargs={'enable_link_path': True})
         rich = next(handler for handler in self.root.handlers if isinstance(handler, RichHandler))
         rich.console = Console(file=self.stream, width=180)
         return rich
@@ -94,6 +97,17 @@ class RankZeroLogRngTests(unittest.TestCase):
         self.assertEqual(random.random(), expected_py.random())
         np.testing.assert_array_equal(np.random.rand(7), expected_np.rand(7))
         self.assertTrue(torch.equal(torch.rand(7), torch.rand(7, generator=expected_cpu)))
+
+    def test_shared_logging_default_preserves_restored_rng_without_wrapper(self):
+        setup_logging(log_level=logging.INFO, is_main_process=True)
+        handler = next(h for h in self.root.handlers if isinstance(h, RichHandler))
+        handler.console = Console(file=self.stream, width=180)
+        step = self.native_restore()
+        logging.info('Restored dataloader progress: epoch=99 batch_in_epoch=52')
+        self.assertFalse(handler.enable_link_path)
+        self.assertEqual(self.status(step)['mismatches'], [])
+        self.assertIn('test_rng_restore.py', self.stream.getvalue())
+        self.assertIn('Restored dataloader progress', self.stream.getvalue())
 
     def test_silenced_nonmain_log_does_not_drift(self):
         self.logging(fixed=False)

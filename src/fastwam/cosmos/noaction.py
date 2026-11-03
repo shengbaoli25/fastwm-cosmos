@@ -12,6 +12,7 @@ from torch.utils.checkpoint import checkpoint
 from .model import CosmosForceWM, _ActionOps, temporal_mse
 from .expert import CosmosVideoExpert
 from .state import ForceRuntimeState
+from .joint_action import joint_action_contract, validate_joint_action_contract
 from fastwam.forcewm.diffusion import ForceDiffusionExpert
 from fastwam.models.wan22.action_dit import ActionDiT
 from fastwam.models.wan22.wan_video_dit import sinusoidal_embedding_1d, modulate
@@ -46,13 +47,21 @@ class NoActionJointModel(CosmosForceWM):
     def __init__(self, net, *, manifest, text_bank=None, action_hidden=768, action_ffn=3072,
                  force_hidden=768, force_ffn=2048, force_heads=16, action_seed=42,
                  force_seed=43, memory_seed=44, num_inference_steps=16,
-                 force_shift=1., gradient_checkpointing=True, fps=7.5, action_space='joint8'):
+                 force_shift=1., gradient_checkpointing=True, fps=7.5, action_space='joint8',
+                 action_representation='absolute'):
         nn.Module.__init__(self)
         self.gradient_checkpointing = gradient_checkpointing
         self.num_inference_steps, self.fps = int(num_inference_steps), float(fps)
         if action_space not in ('joint8', 'eef_pose7'):
             raise ValueError('Explicit joint8 or legacy eef_pose7 action space required')
         self.action_space = action_space
+        action_contract = joint_action_contract(action_representation)
+        if any(key in manifest for key in ('action_representation', 'action_anchor', 'action_delta_mask')):
+            validate_joint_action_contract(manifest, expected=action_representation)
+        if action_representation != 'absolute' and action_space != 'joint8':
+            raise ValueError('Relative joint actions require the joint8 action space')
+        self.action_representation = action_representation
+        self.action_anchor = action_contract['action_anchor']
         self.action_dim = self.state_dim = 8 if action_space == 'joint8' else 7
         if self.num_inference_steps < 1:
             raise ValueError('Positive joint sampling steps required')
@@ -82,6 +91,10 @@ class NoActionJointModel(CosmosForceWM):
         self.manifest.update(action_space=action_space, action_dim=self.action_dim,
             state_dim=self.state_dim, history_dim=self.state_dim + 6,
             action_units='7 absolute joint radians + gripper openness' if action_space == 'joint8' else 'xyz metres + Euler radians + gripper openness')
+        # Keep legacy absolute manifest bytes intact for full-state restoration.
+        # Relative checkpoints carry an explicit contract and cannot load as absolute.
+        if action_representation != 'absolute':
+            self.manifest.update(action_contract)
         self.dit = nn.ModuleDict(dict(video=video, action=action, force=force, action_source_time=source_time,
                                      runtime=ForceRuntimeState(memory_seed, self.manifest)))
         self.register_buffer('text_bank', text_bank, persistent=False)

@@ -67,6 +67,9 @@ def setup_logging(
             "rich_tracebacks": True,
             "show_level": True,
             "show_path": True,
+            # Rich hyperlink IDs draw from Python's global RNG. Keep path text
+            # without advancing the restored training RNG on rank-zero logs.
+            "enable_link_path": False,
             "show_time": True,
         }
         if rich_handler_kwargs:

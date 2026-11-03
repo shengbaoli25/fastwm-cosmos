@@ -73,3 +73,30 @@ def test_export_rejects_mismatched_training_artifacts(tmp_path,mismatch):
     elif mismatch=='architecture':config['model']['force_hidden']=1280
     else:config['model']['expected_data_identity']='c'*64
     with pytest.raises(ValueError):export.runtime_config(config,manifest,**paths)
+
+
+def test_delta_export_binds_complete_representation_contract(tmp_path):
+    from fastwam.cosmos.joint_action import joint_action_contract
+    config, manifest, paths = fixture(tmp_path)
+    representation = 'delta_current_joint7'
+    contract = joint_action_contract(representation)
+    normalization = json.loads(paths['normalization'].read_text())
+    normalization.update(contract)
+    paths['normalization'].write_text(json.dumps(normalization))
+    sha = export.file_sha256(paths['normalization'])
+    config['model'].update(expected_normalization_sha256=sha, action_representation=representation)
+    manifest.update(contract, normalization_sha256=sha)
+    manifest['extra_config']['action_representation'] = representation
+    runtime = export.runtime_config(config, manifest, **paths)
+    assert runtime['model_kwargs']['action_representation'] == representation
+    manifest['action_anchor'] = 'previous_action'
+    with pytest.raises(ValueError, match='anchor'):
+        export.runtime_config(config, manifest, **paths)
+
+
+def test_export_rejects_action_contract_even_if_normalization_hash_matches(tmp_path):
+    from fastwam.cosmos.joint_action import joint_action_contract
+    config, manifest, paths = fixture(tmp_path)
+    manifest.update(joint_action_contract('delta_current_joint7'))
+    with pytest.raises(ValueError, match='representation'):
+        export.runtime_config(config, manifest, **paths)

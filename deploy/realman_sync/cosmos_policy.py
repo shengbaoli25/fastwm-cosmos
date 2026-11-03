@@ -16,6 +16,9 @@ class CosmosPolicy:
                                  width=int(config.get("camera_width", 640)),
                                  height=int(config.get("camera_height", 480)),
                                  action_space="joint8", action_horizon=32, control_hz=30,
+                                 model_action_representation=self.policy.normalizer.action_representation,
+                                 model_action_anchor=self.policy.normalizer.action_anchor,
+                                 output_action_representation="absolute",
                                  history_length=32, video_context_frames=1, video_context_stride=1,
                                  force_preprocessing=self.policy.normalizer.force_preprocessing,
                                  backend="cosmos")
@@ -35,7 +38,7 @@ class CosmosPolicy:
         normalized = self.policy.infer(obs, None, measured.tensors())
         if len(normalized) != 32:
             raise ValueError("Cosmos output requires 32 actions")
-        decoded = normalizer.decode("action", normalized)
+        decoded = normalizer.decode_action(normalized, obs.state)
         # Identical to the existing deploy runtime: only gripper is clipped.
         return [row[:-1] + [max(0.0, min(1.0, row[-1]))] for row in decoded]
 
