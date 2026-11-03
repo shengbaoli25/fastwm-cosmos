@@ -22,10 +22,53 @@ class ToyPolicy(torch.nn.Module):
         action = torch.nn.Module()
         action.action_encoder = torch.nn.Linear(8, 4)
         action.head = torch.nn.Linear(4, 8)
+        # Official FastWAM registers these aliases before mot/dit. Parent-level
+        # named_parameters() therefore emits expert.* names and deduplicates mot.
+        self.video_expert = torch.nn.Linear(4, 4)
+        self.action_expert = action
         self.mot = torch.nn.Module()
-        self.mot.mixtures = torch.nn.ModuleDict({"action": action, "video": torch.nn.Linear(4, 4)})
+        self.mot.mixtures = torch.nn.ModuleDict({"video": self.video_expert, "action": action})
+        self.dit = self.mot
         self.proprio_encoder = torch.nn.Linear(8, 4)
         self.ablation_binding = {"dataset_identity": "fixture-only", "training_recipe": {"max_steps": 3}}
+
+
+def test_shared_expert_aliases_are_audited_under_saved_checkpoint_names(tmp_path):
+    model = ToyPolicy()
+    names = dict(model.named_parameters())
+    assert "action_expert.action_encoder.weight" in names
+    assert "video_expert.weight" in names
+    assert not any(name.startswith("mot.") for name in names)
+    samples = audit.policy_samples(model)
+    assert {key: value["name"] for key, value in samples.items()} == {
+        "action_input": "mot.mixtures.action.action_encoder.weight",
+        "action_output": "mot.mixtures.action.head.weight",
+        "video_backbone": "mot.mixtures.video.weight",
+        "proprio": "proprio_encoder.weight",
+    }
+    with torch.no_grad():
+        model.action_expert.head.weight.add_(0.25)
+    changed = audit.policy_samples(model)
+    assert changed["action_output"]["sha256"] != samples["action_output"]["sha256"]
+    path = tmp_path / "aliased_policy.pt"
+    torch.save({"mot": model.mot.state_dict(), "proprio_encoder": model.proprio_encoder.state_dict(),
+                "ablation": model.ablation_binding, "step": 2}, path)
+    verify.verify_saved_weights(path, model.ablation_binding, 2, changed)
+    with pytest.raises(ValueError, match="Actual saved weight bytes"):
+        verify.verify_saved_weights(path, model.ablation_binding, 2, samples)
+
+
+@pytest.mark.parametrize("category,path", [
+    ("action_input", "action_expert.action_encoder"),
+    ("action_output", "action_expert.head"),
+    ("video_backbone", "video_expert"),
+    ("proprio", "proprio_encoder"),
+])
+def test_frozen_audited_category_is_still_rejected(category, path):
+    model = ToyPolicy()
+    model.get_submodule(path).requires_grad_(False)
+    with pytest.raises(ValueError, match=category):
+        audit.policy_samples(model)
 
 
 def trainer_fixture(tmp_path, *, change_parameters=True):

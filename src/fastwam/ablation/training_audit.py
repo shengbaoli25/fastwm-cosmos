@@ -67,12 +67,20 @@ def policy_samples(model):
         "video_backbone": lambda key: ".mixtures.video." in key,
         "proprio": lambda key: key.startswith("proprio_encoder."),
     }
-    for name, parameter in model.named_parameters():
-        if not parameter.requires_grad or parameter.ndim < 2:
+    # Official FastWAM registers video_expert/action_expert before their shared
+    # mot.mixtures aliases. Parent named_parameters() deduplicates those aliases
+    # and therefore never emits mot.*. Enumerate the actual checkpoint roots so
+    # the same trainable tensors are audited under their saved payload names.
+    for root_name in ("mot", "proprio_encoder"):
+        module = getattr(model, root_name, None)
+        if module is None:
             continue
-        for label, matches in selectors.items():
-            if label not in selected and matches(name):
-                selected[label] = {"name": name, **tensor_fingerprint(parameter)}
+        for name, parameter in module.named_parameters(prefix=root_name):
+            if not parameter.requires_grad or parameter.ndim < 2:
+                continue
+            for label, matches in selectors.items():
+                if label not in selected and matches(name):
+                    selected[label] = {"name": name, **tensor_fingerprint(parameter)}
     if set(selected) != set(selectors):
         raise ValueError(f"Missing audited trainable parameter categories: {set(selectors) - set(selected)}")
     return selected

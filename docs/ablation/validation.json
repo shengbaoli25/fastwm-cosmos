@@ -1,15 +1,85 @@
 {
   "schema": "rm71d78-fastwam-branch-validation-v1",
-  "date": "2026-11-02",
+  "date": "2026-11-03",
   "branch": "codex/ablation-rm71d78-fastwam",
   "base_commit": "057f78767f52f358b229f4a05b097c0f1455fa3d",
   "implementation_source_commit": "50080ad",
-  "scope": "Independent FastWAM branch only; test results rerun in this worktree",
+  "scope": "Local CPU validation of the minimal FastWAM audit alias fix. No remote deployment, retry or GPU validation of this fix was performed.",
   "working_directory": "<repository-root>",
   "supported_backends": [
     "fastwam"
   ],
   "checks": {
+    "audit_alias_regression": {
+      "command": "python -B -c \"append existing server site-packages; pytest tests/ablation/test_training_audit.py -q\"",
+      "passed": 14,
+      "failed": 0,
+      "skipped": 0,
+      "seconds": 3.85,
+      "exit_code": 0,
+      "coverage": [
+        "Official video_expert/action_expert -> mot -> dit shared-module registration order reproduces missing canonical names under parent named_parameters",
+        "Canonical checkpoint-root samples track the original aliased Parameter objects",
+        "Actual torch.save archive/mmap samples match updated runtime values and reject stale fingerprints",
+        "All four frozen parameter categories remain rejected",
+        "Existing sampled update, exact restored-state and four-rank receipt gates remain enforced"
+      ]
+    },
+    "pre_fix_reproduction": {
+      "test": "test_shared_expert_aliases_are_audited_under_saved_checkpoint_names",
+      "result": "Failed on unchanged previous audit with exactly action_input/action_output/video_backbone missing, matching the supplied four-rank failure"
+    },
+    "broader_suite_attempt": {
+      "command": "python -B -c \"append existing server site-packages; pytest tests/ablation deploy/tests/test_sync_server.py -q\"",
+      "exit_code": 1,
+      "passed": 57,
+      "failed": 1,
+      "subtests_passed": 12,
+      "seconds": 28.29,
+      "failure": "Existing test_factory_forwards_native_precision_and_scheduler_arguments cannot import Transformers: it requires huggingface-hub>=0.26.0,<1.0, but this local mixed validation environment reports huggingface-hub==2.4.0",
+      "audit_tests_passed": true,
+      "environment_not_modified": true
+    },
+    "compile": {
+      "command": "Compile the two changed Python files without executing them",
+      "exit_code": 0
+    },
+    "diff_check": {
+      "command": "git diff --check",
+      "exit_code": 0
+    },
+    "independent_review": {
+      "agent": "inspect_existing_server",
+      "result": "No confirmed blocker; canonical roots match _save_bound_checkpoint, original Parameter identities and all four strict category/update/restore gates are preserved"
+    }
+  },
+  "requested_training_recipe": {
+    "accelerator": "4 x NVIDIA H200",
+    "num_processes": 4,
+    "per_gpu_batch_size": 64,
+    "gradient_accumulation_steps": 1,
+    "global_batch_size": 256,
+    "max_optimizer_steps": 30000,
+    "save_every": 5000,
+    "mixed_precision": "bf16",
+    "deepspeed_zero_stage": 1
+  },
+  "training_launched": false,
+  "linux_bootstrap_executed": false,
+  "official_asset_metadata_verified": true,
+  "official_core_source_equal": {
+    "src/fastwam/models/wan22/action_dit.py": "631fdf598fbe06a95a41c1a27acd9de16f2187f3a2009e10690197527d18283b",
+    "src/fastwam/models/wan22/mot.py": "2383e4cfa00efa9cde889493e0b6c861bc7b17d24d731f5ff38d3ebf8ab7f541"
+  },
+  "large_weights_downloaded": false,
+  "real_78_episode_dataset_verified_on_this_host": false,
+  "real_checkpoint_load_verified": false,
+  "gpu_training_verified": false,
+  "gpu_inference_verified": false,
+  "robot_closed_loop_verified": false,
+  "limitation": "Code, CPU and synthetic HTTP checks do not establish successful training, real-checkpoint latency or task success.",
+  "previous_revision": "f37b610d55c819c2dd4b7d3ae5f431d164ce2c65",
+  "previous_checks": {
     "ablation_tests": {
       "command": "PYTHONPATH=src:deploy python -m pytest tests/ablation deploy/tests/test_sync_server.py -q",
       "python_executable": "Existing Python 3.12 / Torch 2.7.1 environment with validation and base Python site-packages appended to sys.path",
@@ -59,29 +129,12 @@
       "strict_gate_unchanged": true
     }
   },
-  "requested_training_recipe": {
-    "accelerator": "4 x NVIDIA H200",
-    "num_processes": 4,
-    "per_gpu_batch_size": 64,
-    "gradient_accumulation_steps": 1,
-    "global_batch_size": 256,
-    "max_optimizer_steps": 30000,
-    "save_every": 5000,
-    "mixed_precision": "bf16",
-    "deepspeed_zero_stage": 1
-  },
-  "training_launched": false,
-  "linux_bootstrap_executed": false,
-  "official_asset_metadata_verified": true,
-  "official_core_source_equal": {
-    "src/fastwam/models/wan22/action_dit.py": "631fdf598fbe06a95a41c1a27acd9de16f2187f3a2009e10690197527d18283b",
-    "src/fastwam/models/wan22/mot.py": "2383e4cfa00efa9cde889493e0b6c861bc7b17d24d731f5ff38d3ebf8ab7f541"
-  },
-  "large_weights_downloaded": false,
-  "real_78_episode_dataset_verified_on_this_host": false,
-  "real_checkpoint_load_verified": false,
-  "gpu_training_verified": false,
-  "gpu_inference_verified": false,
-  "robot_closed_loop_verified": false,
-  "limitation": "Code, CPU and synthetic HTTP checks do not establish successful training, real-checkpoint latency or task success."
+  "audit_alias_fix": {
+    "reason": "PyTorch parent named_parameters deduplicates shared experts registered before model.mot; ZeRO1 did not remove these model parameters",
+    "change": "Traverse actual mot/proprio_encoder checkpoint roots with canonical prefixes",
+    "core_model_changed": false,
+    "training_recipe_changed": false,
+    "gate_weakened": false,
+    "gpu_retested": false
+  }
 }
