@@ -22,8 +22,8 @@ fewer/different GPUs and does not silently lower batch size after OOM.
 
 ## Compatibility changes
 
-The official source has two issues relevant to this robot. Changes are applied
-to an in-memory copy of the pinned module, guarded by its normalized-LF SHA256
+The robot channel adaptation and cached-prefix correction are applied to an
+in-memory copy of the pinned module, guarded by its normalized-LF SHA256
 `15ac88d43012fce1fe64b0b59c74f08c704b0aefe58fb3c7dad63f386b697aad`:
 
 1. The original state slice `[:7]` and force slice `[7:13]` encode a seven-value
@@ -38,6 +38,28 @@ to an in-memory copy of the pinned module, guarded by its normalized-LF SHA256
 
 No source files in the upstream checkout are edited. The adapter refuses an
 unreviewed commit, a modified tracked source tree or a different model source.
+
+Single-request serving also needs an inference batch adapter. On 2026-11-03 the
+real smoke checkpoint reached HTTP inference but failed in the official LIMoE
+reshape: its three image slots (including the masked slot), 48 prompt tokens and
+one force token produce 817 tokens. At batch one the official grouping returns
+817 groups, which cannot be reshaped across four experts. The successful global
+training batch of 256 does not have this divisibility problem.
+
+`load_predictor` now wraps only the policy's sampler boundary: it repeats the
+already preprocessed observation to internal batch four, calls the unchanged
+official JIT sampler once and selects sample zero. All image/force/prompt masks
+are repeated together. The external request and result remain one observation
+and 32x8 absolute joint8 actions. No averaging, prompt padding changes, new force
+tokens, expert changes, training changes or checkpoint conversion are applied.
+For this fixed sequence, the official batch-four layout has 3,268 groups of one
+token, with minimum expert capacity four; the duplicates do not compete within
+a routing group. This is compatibility with the official batched sampler, not
+a claim of numerical equivalence to the original nonfunctional batch-one call.
+It performs four internal model samples, so latency and allocator memory must
+be measured again by the real-checkpoint HTTP gate. No performance estimate is
+reported as a measurement, and the formal run must remain blocked until that
+gate passes.
 
 Inputs are the shared export's `observation.state[8]`, `observation.force[6]`,
 two images (`global`, `wrist`) and the task prompt. The force values are already
@@ -214,8 +236,12 @@ the external training binding. Two runs with identical normalization therefore
 cannot silently exchange checkpoints or switch LoRA/full configurations.
 Serving does not need the training dataset or the base pi0 weights.
 
-Tests validate channel order, gripper preservation, image conventions, finite
-values, action shape, source drift rejection and the three source edits. They
-do not establish real weight loading, GPU forward/backward, optimization,
-checkpoint resume, memory use or inference latency. Those receipts remain to be
-collected on the actual data/weights; no training was started in this delivery.
+CPU tests validate channel order, gripper preservation, image conventions,
+finite values, action shape, source drift rejection, the three source edits,
+sampler batch repetition/selection and the pinned expert layout. The layout
+test uses NumPy shims and toy experts and does not validate JAX or trained model
+outputs. The initial local validation record is retained as historical evidence;
+the batch-four fix has its own [CPU validation record](validation-batch4-20261103.json). The actual smoke training
+and restore receipts remain separate from the failed HTTP receipt. After this
+fix, real-checkpoint HTTP inference, latency and memory still require a new
+successful worker receipt before formal training.

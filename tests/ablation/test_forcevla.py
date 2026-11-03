@@ -10,7 +10,118 @@ import types
 import numpy as np
 import pytest
 
-from fastwam.ablation.forcevla import Joint8Inputs, Joint8Outputs, patch_model_source, run
+from fastwam.ablation.forcevla import Joint8Inputs, Joint8Outputs, _batch4_sampler, patch_model_source, run
+
+
+@pytest.fixture
+def numpy_jax_tree(monkeypatch):
+    """Array/tree test shim, explicitly not a JAX/GPU execution claim."""
+    def tree_map(function, value):
+        if value is None:
+            return None
+        if dataclasses.is_dataclass(value):
+            return dataclasses.replace(value, **{
+                field.name: tree_map(function, getattr(value, field.name))
+                for field in dataclasses.fields(value)
+            })
+        if isinstance(value, dict):
+            return {key: tree_map(function, item) for key, item in value.items()}
+        return function(value)
+
+    jax = types.ModuleType("jax")
+    jax.tree = types.SimpleNamespace(map=tree_map)
+    jax.numpy = np
+    monkeypatch.setitem(sys.modules, "jax", jax)
+    monkeypatch.setitem(sys.modules, "jax.numpy", np)
+    return tree_map
+
+
+def test_served_observation_repeats_only_at_sampler_boundary(numpy_jax_tree):
+    @dataclasses.dataclass
+    class Observation:
+        state: np.ndarray
+        images: dict
+        image_masks: dict
+        tokenized_prompt: np.ndarray
+        tokenized_prompt_mask: np.ndarray
+        token_ar_mask: object = None
+
+    observation = Observation(
+        np.arange(32, dtype=np.float32)[None],
+        {"global": np.zeros((1, 3, 4, 3), np.float32),
+         "wrist": np.ones((1, 3, 4, 3), np.float32)},
+        {"global": np.array([True]), "wrist": np.array([False])},
+        np.arange(48, dtype=np.int32)[None], np.ones((1, 48), bool),
+    )
+    before = numpy_jax_tree(lambda x: x.copy(), observation)
+    rng = object()
+    calls = []
+
+    def official_sampler(key, batch, **kwargs):
+        assert key is rng and kwargs == {"num_steps": 10}
+        assert batch.token_ar_mask is None
+        for field in dataclasses.fields(observation):
+            original, repeated = getattr(before, field.name), getattr(batch, field.name)
+            if isinstance(original, dict):
+                for name, value in original.items():
+                    np.testing.assert_array_equal(repeated[name], np.repeat(value, 4, axis=0))
+            elif original is not None:
+                np.testing.assert_array_equal(repeated, np.repeat(original, 4, axis=0))
+        calls.append(batch)
+        # Distinct outputs prove the adapter selects sample zero, not an average.
+        return np.broadcast_to(np.arange(4)[:, None, None], (4, 32, 32)).copy()
+
+    result = _batch4_sampler(official_sampler)(rng, observation, num_steps=10)
+    assert len(calls) == 1 and result.shape == (1, 32, 32)
+    np.testing.assert_array_equal(result, 0)
+    np.testing.assert_array_equal(observation.state, before.state)
+    assert observation.images["global"].shape[0] == 1
+
+
+def test_sampler_rejects_non_single_request_and_wrong_output(numpy_jax_tree):
+    def never_called(*args, **kwargs):
+        pytest.fail("Invalid input reached the official sampler")
+
+    with pytest.raises(ValueError, match="exactly one"):
+        _batch4_sampler(never_called)(None, {"state": np.zeros((2, 32))})
+    with pytest.raises(ValueError, match="exactly one"):
+        _batch4_sampler(never_called)(None, {"state": np.zeros((1, 32)), "mask": np.array(True)})
+    with pytest.raises(ValueError, match="internal sampler"):
+        _batch4_sampler(lambda *a, **k: np.zeros((1, 32, 32)))(None, {"state": np.zeros((1, 32))})
+
+
+@pytest.mark.skipif(not os.environ.get("FORCEVLA_SOURCE_ROOT"), reason="optional pinned source audit")
+def test_official_moe_layout_reproduces_batch_one_failure_and_accepts_batch_four():
+    """Execute official layout functions with toy experts and NumPy, not a model."""
+    path = Path(os.environ["FORCEVLA_SOURCE_ROOT"]) / "src/openpi/models/limoe_simple.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    groups = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "_num_groups")
+    layer = next(n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == "MoeLayer")
+    dispatch = next(n for n in layer.body if isinstance(n, ast.FunctionDef) and n.name == "_call_experts")
+
+    def vmap_with_axes(function, **kwargs):
+        return lambda experts, inputs: np.stack([function(experts[e], inputs[e]) for e in range(4)])
+
+    scope = {"Array": np.ndarray, "jnp": np,
+             "jax": types.SimpleNamespace(lax=types.SimpleNamespace(convert_element_type=np.asarray)),
+             "flax_partitioning": types.SimpleNamespace(
+                 with_sharding_constraint=lambda value, *args: value, vmap_with_axes=vmap_with_axes)}
+    exec(compile(ast.Module(body=[groups, dispatch], type_ignores=[]), str(path), "exec"), scope)
+    experts = [lambda x, enable_dropout=False, e=e, **kwargs: x * (e + 1) + e for e in range(4)]
+    model = types.SimpleNamespace(dtype=np.float32, num_model_partitions=None, split_params=False, expert=experts)
+    for batch in (1, 4, 256):
+        count = scope["_num_groups"](batch * (3 * 256 + 48 + 1), 16, 4)
+        inputs = np.arange(count * 4 * 4 * 3, dtype=np.float32).reshape(count, 4, 4, 3)
+        if batch == 1:
+            assert count == 817
+            with pytest.raises(ValueError, match="reshape"):
+                scope["_call_experts"](model, inputs, False)
+            continue
+        if batch == 4:
+            assert count == 3268  # One token per group; no cross-request capacity competition.
+        result = scope["_call_experts"](model, inputs, False)
+        expected = np.stack([experts[e](inputs[:, e]) for e in range(4)], axis=1)
+        np.testing.assert_array_equal(result, expected)
 
 
 def sample():
@@ -95,7 +206,7 @@ def test_pinned_official_source_compiles_and_fixes_cached_prefix_and_joint8():
 
 
 @pytest.fixture
-def fake_official_runtime(tmp_path, monkeypatch):
+def fake_official_runtime(tmp_path, monkeypatch, numpy_jax_tree):
     """Stub only the unavailable JAX backend; keep filesystem/hash checks real."""
     from fastwam.ablation import forcevla
     from fastwam.ablation.contracts import file_sha256
@@ -144,12 +255,22 @@ def fake_official_runtime(tmp_path, monkeypatch):
         data_config = train_config.data.create(None, train_config.model)
         calls.append((train_config, checkpoint, data_config, sample_kwargs))
 
+        def sample_actions(rng, observation, **kwargs):
+            assert observation["state"].shape == (4, 32)
+            assert kwargs == sample_kwargs
+            return np.zeros((4, 32, 32), np.float32)
+
+        policy = types.SimpleNamespace(_sample_actions=sample_actions)
+
         def infer(observation):
             prepared = Joint8Inputs()(observation)
             np.testing.assert_array_equal(prepared["state"][8:14], observation["force"])
-            return {"actions": np.zeros((32, 8), np.float32)}
+            batched = {"state": prepared["state"][None]}
+            actions = policy._sample_actions(None, batched, **sample_kwargs)
+            return Joint8Outputs()({"actions": actions[0]})
 
-        return types.SimpleNamespace(infer=infer)
+        policy.infer = infer
+        return policy
 
     install_module("openpi.policies")
     install_module("openpi.policies.policy_config", create_trained_policy=create_policy)

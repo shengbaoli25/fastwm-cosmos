@@ -1,0 +1,46 @@
+{
+  "schema": "rm71d78-forcevla-inference-fix-validation-v1",
+  "date": "2026-11-03",
+  "timezone": "Asia/Shanghai",
+  "branch": "codex/ablation-rm71d78-forcevla",
+  "base_revision": "d6a10421caef13c6a7e7287f41e204214b20c396",
+  "upstream_revision": "79de88fdd0651d957a2b5212cae8995159c5ad65",
+  "scope": "Local Windows CPU tests and source audit of inference-only batch compatibility",
+  "test_command": "FORCEVLA_SOURCE_ROOT=<pinned-source> python -m pytest tests/ablation deploy/tests/test_sync_server.py -q",
+  "environment_note": "Existing Torch interpreter with shared validation and bundled runtime site-packages appended; no package installation or real JAX execution in this validation",
+  "tests": {
+    "passed": 45,
+    "subtests_passed": 9,
+    "failed": 0,
+    "skipped": 0,
+    "elapsed_seconds": 11.08
+  },
+  "checks": {
+    "single_observation_all_leaves_repeat_four": true,
+    "sampler_called_once_rng_and_kwargs_preserved": true,
+    "sample_zero_selected_without_averaging": true,
+    "invalid_batch_and_internal_output_rejected": true,
+    "pinned_official_layout_batch_one_failure_reproduced": true,
+    "pinned_official_layout_batch_four_and_256_passed_with_numpy_toy_experts": true,
+    "all_module_ast_outside_batch4_sampler_and_load_predictor_unchanged": true,
+    "compileall": true,
+    "git_diff_check": true,
+    "default_plan_4h200_b64_global256_fsdp4_30000_unchanged": true
+  },
+  "serving_contract": {
+    "external_batch_size": 1,
+    "internal_sampling_batch_size": 4,
+    "output_shape": [32, 8],
+    "official_training_or_routing_changed": false,
+    "checkpoint_conversion_required": false
+  },
+  "not_verified_by_this_receipt": [
+    "Actual JAX sampling with the trained checkpoint after this fix",
+    "HTTP gate success after this fix",
+    "GPU allocator memory and inference latency after this fix",
+    "Formal 30000-step training or physical robot success"
+  ],
+  "formal_training_requires_new_real_checkpoint_http_gate": true,
+  "training_started_by_local_validation": false,
+  "robot_connected": false
+}

@@ -272,6 +272,32 @@ def build_train_config(config: dict, *, resume: bool = False, for_stats: bool = 
     return upstream_config.TrainConfig(**values)
 
 
+def _batch4_sampler(sample_actions):
+    """Adapt one served observation to the pinned four-expert routing layout.
+
+    The official 817-token prefix/force sequence cannot be reshaped into four
+    expert groups at batch one. Repeat the already transformed observation,
+    call the unchanged official sampler once, and retain its first sample.
+    This wrapper is installed only by load_predictor, never by training.
+    """
+    import jax
+    import jax.numpy as jnp
+
+    def sample(rng, observation, **kwargs):
+        def repeat(value):
+            if value.ndim < 1 or value.shape[0] != 1:
+                raise ValueError("ForceVLA serving expects exactly one observation")
+            return jnp.repeat(value, 4, axis=0)
+
+        batched = jax.tree.map(repeat, observation)
+        actions = sample_actions(rng, batched, **kwargs)
+        if actions.shape != (4, 32, 32):
+            raise ValueError("ForceVLA internal sampler must return [4,32,32]")
+        return actions[:1]
+
+    return sample
+
+
 def load_predictor(config: dict):
     """Load a real Orbax training checkpoint and return raw joint8 predictions."""
     from fastwam.ablation.contracts import file_sha256
@@ -301,6 +327,7 @@ def load_predictor(config: dict):
     if steps < 1:
         raise ValueError("num_inference_steps must be positive")
     policy = policy_config.create_trained_policy(train_config, checkpoint, sample_kwargs={"num_steps": steps})
+    policy._sample_actions = _batch4_sampler(policy._sample_actions)
 
     def predict(sample: dict) -> np.ndarray:
         inputs = {"state": sample["state"], "force": sample["force"],

@@ -5,10 +5,13 @@
 提供固定官方模型、同源数据准备、训练/恢复入口、checkpoint 身份绑定，以及兼容现有 RealMan
 客户端的 HTTP server。继承的原训练入口和模型行为保持不变。
 
-**没有启动训练，没有下载大权重。** 本地验证覆盖代码、固定源码适配、合成 78 集转换、
-Hugging Face 图像读取和注入测试预测器的真实 HTTP 调用。真实 78 集数据全量审核、官方权重
-加载、GPU 前反向/参数更新、optimizer 恢复及真实 checkpoint 性能验证尚未执行。
-当前分支的验证记录见 [validation.json](validation.json)，不能视为模型训练通过。
+初始本地交付的验证记录见 [validation.json](validation.json)，覆盖代码、固定源码适配、
+合成 78 集转换、Hugging Face 图像读取和注入测试预测器的 HTTP 调用。
+2026-11-03 的真实 GPU smoke 已完成训练保存与恢复，但首次 HTTP 推理因官方 LIMoE 的
+batch1 分组整除约束失败，正式训练被 gate 阻止。本次仅修复服务采样边界：内部重复为 batch4，
+保留首项返回，对外仍是单请求 joint8；训练方法、路由和 checkpoint 均不变。
+修复后必须重新取得真实 checkpoint 的 HTTP 验证及显存、延迟结果，CPU 测试不代替此 gate。
+本次修复的本地记录见 [batch4 验证](validation-batch4-20261103.json)。
 
 完整模型说明、固定版本环境安装和配置参数见 [ForceVLA 指南](forcevla.md)。
 源码与初始化来源见 [upstream-lock.json](../../configs/ablation/upstream-lock.json)。
@@ -84,7 +87,7 @@ bash scripts/ablation/launch_forcevla_h200.sh /work/envs/forcevla/bin/python /wo
 `--operation train --stop-after-steps 2`，再以同一个未改动配置执行 `--operation resume`，
 验证恢复 optimizer 后完成第三次更新。调用期提前结束不改变冻结配置、学习率或正式30k目标。
 检查有限 loss/梯度、真实参数更新、保存和恢复后再启动独立正式运行目录。
-本次未执行此 GPU 预检，不把 plan 或 CPU 测试当作训练结果。
+GPU 预检的结果以对应运行的独立 receipt 为准，不把 plan 或 CPU 测试当作训练结果。
 统计绑定保存为 `norm_stats.binding.json`；冻结训练记录为 `run_root/forcevla_training_config.json`。
 每个 checkpoint 的 `assets/ablation_training_binding.json` 随 Orbax 原子保存，恢复与部署都核对
 内嵌记录；仅 step 0 的 run 会拒绝恢复，避免上游静默重新训练。完整恢复需要 `train_state`，
@@ -114,6 +117,8 @@ server 不连接机械臂。客户端跨主机时，将 `--host` 改为服务机
 模型处理当前双目 RGB、joint8 和六轴力，输出 32×8 已反归一化的绝对 joint8。
 关节角不裁剪，夹爪裁剪至 `[0,1]`；客户端继续负责动作执行、软限位和时序检查。
 相机 resize、embedding 和模型归一化均在 server。
+官方采样器内部使用重复 batch4，以满足固定四专家 LIMoE 的分组约束；不改变外部请求数或
+动作格式。额外计算会影响延迟和显存，须报告真实测量值，详见 [兼容说明](forcevla.md#compatibility-changes)。
 
 运行 server 不需要训练数据或 pi0_base 初始权重。部署记录使用绝对路径；跨主机改变资产路径
 时，需在同时可访问数据与模型资产的准备环境中重新导出，完成后服务仅需部署资产和固定上游源码。
