@@ -30,6 +30,8 @@ def transient_failure(error):
         seen.add(id(error))
         chain.append(error)
         error = getattr(error, '__cause__', None)
+    if any(getattr(item, 'recoverable', None) is False for item in chain):
+        return False
     if any(any(word in str(item) for word in _HARD) for item in chain):
         return False
     for item in chain:

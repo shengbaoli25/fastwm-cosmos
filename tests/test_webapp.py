@@ -130,8 +130,13 @@ class Client:
         self.instances.append(self)
 
     _request = SynchronousClient._request
+    _check_inference_drift = SynchronousClient._check_inference_drift
+    last_settle_metrics = None
 
-    def _execute(self, actions):
+    def snapshot_for_inference(self, *args, **kwargs):
+        return self.collector.snapshot_after(*args, **kwargs)
+
+    def _execute(self, actions, *, source_observation=None):
         self.hardware.arm()
         for action in actions[:self.options.execute_steps]:
             if self.stop_event.is_set():

@@ -17,7 +17,7 @@
   const text = (id, value) => { const element = byId(id); const output = String(value ?? "—"); if (element.textContent !== output) element.textContent = output; };
   const errorText = (id, value) => { const element = byId(id); element.hidden = !value; element.textContent = value || ""; };
   const fresh = () => state.lastSuccess > 0 && !state.statusError && performance.now() - state.lastSuccess < 1800;
-  const labels = { disconnected: "设备未连接", offline: "离线", idle: "待机", starting: "正在启动", connecting: "正在连接", monitoring: "监测中", collecting: "采集中", observing: "采集中", inferring: "推理中", requesting: "请求中", executing: "动作执行中", stopping: "正在停止", stopped: "已停止", error: "需要处理", ready: "已就绪", paused: "已暂停", blocked: "等待执行条件", waiting_sensors: "等待传感器" };
+  const labels = { disconnected: "设备未连接", offline: "离线", idle: "待机", starting: "正在启动", connecting: "正在连接", monitoring: "监测中", collecting: "采集中", observing: "采集中", inferring: "推理中", requesting: "请求中", executing: "动作执行中", settling: "等待关节停稳", stopping: "正在停止", stopped: "已停止", error: "需要处理", ready: "已就绪", paused: "已暂停", blocked: "等待执行条件", waiting_sensors: "等待传感器" };
   const phaseName = (value) => labels[value] || value || "待机";
   const pill = (id, label, tone = "muted") => { const element = byId(id); element.textContent = label; element.className = `pill ${tone}`; };
 

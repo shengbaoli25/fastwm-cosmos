@@ -236,7 +236,7 @@ class SyncClientTests(unittest.TestCase):
             time.sleep(.04)
         hardware.command = slow
         with self.assertRaisesRegex(RuntimeError, "overrun"):
-            client._execute([observation.state] * 32)
+            client._execute([observation.state] * 32, source_observation=observation)
         self.assertEqual(len(hardware.commands), 1)
         hardware.slow_stop()
         hardware.close()

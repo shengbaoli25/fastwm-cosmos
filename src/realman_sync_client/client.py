@@ -5,6 +5,7 @@ from collections import deque
 from dataclasses import dataclass
 import logging
 import math
+import json
 import threading
 import time
 from . import clock
@@ -13,6 +14,18 @@ import uuid
 from .wire import PROTOCOL, encode_observation, validate_response
 
 logger = logging.getLogger(__name__)
+
+
+class ObservationDriftError(RuntimeError):
+    """The inference source no longer describes the arm; require a new run."""
+
+    recoverable = False
+
+
+class MotionNotSettledError(RuntimeError):
+    """Physical settling could not be confirmed; require a new run."""
+
+    recoverable = False
 
 
 def _positive(value, name):
@@ -71,7 +84,8 @@ def observation_row(observation, metadata):
 
 class ObservationCollector:
     """Continuously sample measured history, including while HTTP is blocked."""
-    def __init__(self, hardware, metadata, *, max_age_s=.12, startup_timeout_s=10.0):
+    def __init__(self, hardware, metadata, *, max_age_s=.12, startup_timeout_s=10.0,
+                 stability_window_s=.2):
         self.hardware = hardware
         self.metadata = metadata
         self.period_s = 1.0 / metadata["control_hz"]
@@ -79,6 +93,10 @@ class ObservationCollector:
         self.startup_timeout_s = _positive(startup_timeout_s, "startup_timeout_s")
         self.condition = threading.Condition()
         self.history = deque(maxlen=metadata["history_length"])
+        # Keep the model's history length unchanged, even for a longer physical
+        # settling window. Entries are the same immutable measured observations.
+        self.stability_history = deque(maxlen=max(metadata["history_length"],
+            math.ceil(_positive(stability_window_s, "stability_window_s") / self.period_s) + 2))
         self.context_window = 1 + (metadata["video_context_frames"] - 1) * metadata["video_context_stride"]
         self.video = deque(maxlen=self.context_window)
         self.error = None
@@ -115,7 +133,9 @@ class ObservationCollector:
             if observation.force_meta.get("epoch") != previous.force_meta.get("epoch"):
                 self.history.clear()
                 self.video.clear()
+                self.stability_history.clear()
         self.history.append(observation)
+        self.stability_history.append(observation)
         self.video.append(observation)
         self.started = True
 
@@ -214,6 +234,11 @@ class ClientOptions:
     max_result_age_s: float = 120.0
     sensor_timeout_s: float = 10.0
     max_observation_age_s: float = .12
+    settle_window_s: float = .2
+    settle_tolerance_deg: float = .1
+    settle_velocity_deg_s: float = .5
+    settle_timeout_s: float = 5.0
+    max_inference_drift_deg: float = .5
 
     def __post_init__(self):
         if type(self.execute_steps) is not int or not 1 <= self.execute_steps <= 32:
@@ -221,6 +246,11 @@ class ClientOptions:
         _positive(self.max_result_age_s, "max_result_age_s")
         _positive(self.sensor_timeout_s, "sensor_timeout_s")
         _positive(self.max_observation_age_s, "max_observation_age_s")
+        for name in ("settle_window_s", "settle_tolerance_deg", "settle_velocity_deg_s",
+                     "settle_timeout_s", "max_inference_drift_deg"):
+            _positive(getattr(self, name), name)
+        if self.settle_window_s > 5.0:
+            raise ValueError("settle_window_s must not exceed 5 seconds")
 
 
 class SynchronousClient:
@@ -233,8 +263,88 @@ class SynchronousClient:
         self.session_id = str(uuid.uuid4())
         self.completed_cycles = 0
         self.stop_event = threading.Event()
+        self._source_observation = None
+        self.last_settle_metrics = None
+        self.last_execution_guard = None
         self.collector = ObservationCollector(hardware, metadata,
-            max_age_s=self.options.max_observation_age_s, startup_timeout_s=self.options.sensor_timeout_s)
+            max_age_s=self.options.max_observation_age_s, startup_timeout_s=self.options.sensor_timeout_s,
+            stability_window_s=self.options.settle_window_s)
+
+    def snapshot_for_inference(self, after, sequence, *, timeout_s=None):
+        """Require a complete measured stationary window after the stop ACK.
+
+        This confirms physical settling independently of whether the controller
+        reached the final target. No targets or synthetic history are produced.
+        """
+        started = clock.now()
+        # Sensor startup has its own budget. Only a complete, fresh model
+        # history starts the physical-settling deadline. An explicit timeout
+        # additionally caps the entire operation (useful to bounded callers).
+        overall_deadline = None if timeout_s is None else started + _positive(timeout_s, "timeout_s")
+        startup_deadline = started + self.options.sensor_timeout_s
+        settling_deadline = None
+        collector = self.collector
+        self.last_settle_metrics = None
+        with collector.condition:
+            while True:
+                if self.stop_event.is_set():
+                    raise InterruptedError("client stop requested while waiting for physical settling")
+                deadline = startup_deadline if settling_deadline is None else settling_deadline
+                if overall_deadline is not None:
+                    deadline = min(deadline, overall_deadline)
+                remaining = deadline - clock.now()
+                if remaining <= 0:
+                    if settling_deadline is None:
+                        raise TimeoutError("timed out waiting for fresh 30 Hz observation history before settling")
+                    logger.error("Physical settling failed %s", json.dumps(dict(
+                        after=after, timeout_s=self.options.settle_timeout_s,
+                        last_measurement=self.last_settle_metrics),
+                        allow_nan=False))
+                    raise MotionNotSettledError(
+                        "physical settling timed out; no inference or motion was started; explicit restart required")
+                if collector.error is not None:
+                    raise RuntimeError(f"sensor collection failed: {collector.error}") from collector.error
+                if (len(collector.history) == self.metadata["history_length"]
+                        and len(collector.video) == collector.context_window):
+                    collector.check()
+                    latest = collector.history[-1]
+                    if latest.stamp > after and latest.sequence > sequence:
+                        if settling_deadline is None:
+                            settling_deadline = clock.now() + self.options.settle_timeout_s
+                        # Include the sample immediately preceding the cutoff so
+                        # the measured window covers at least the full duration.
+                        cutoff = latest.stamp - self.options.settle_window_s
+                        rows = tuple(collector.stability_history)
+                        begin = next((i for i in range(len(rows) - 1, -1, -1)
+                                      if rows[i].stamp <= cutoff), None)
+                        if begin is not None:
+                            window = rows[begin:]
+                            if window[0].stamp > after and len(window) >= 2:
+                                spans = [b.stamp - a.stamp for a, b in zip(window, window[1:])]
+                                if any(dt <= 0 or dt > collector.period_s * 1.5
+                                       for dt in spans):
+                                    raise RuntimeError("30 Hz physical settling history has a gap")
+                                q = [tuple(math.degrees(x) for x in row.state[:7]) for row in window]
+                                peak = [max(row[j] for row in q) - min(row[j] for row in q)
+                                        for j in range(7)]
+                                velocity = [max(abs(b[j] - a[j]) / dt
+                                                for a, b, dt in zip(q, q[1:], spans))
+                                            for j in range(7)]
+                                metrics = dict(source_sequence=latest.sequence,
+                                    observation_stamp=latest.stamp, after=after,
+                                    window_s=window[-1].stamp-window[0].stamp,
+                                    samples=len(window), peak_to_peak_deg=peak,
+                                    max_velocity_deg_s=velocity,
+                                    tolerance_deg=self.options.settle_tolerance_deg,
+                                    velocity_limit_deg_s=self.options.settle_velocity_deg_s,
+                                    wait_ms=(clock.now()-started)*1000)
+                                self.last_settle_metrics = metrics
+                                if (max(peak) <= self.options.settle_tolerance_deg
+                                        and max(velocity) <= self.options.settle_velocity_deg_s):
+                                    logger.info("Physical settling %s", json.dumps(metrics, allow_nan=False))
+                                    video = tuple(collector.video)[::self.metadata["video_context_stride"]]
+                                    return latest, tuple(collector.history), video
+                collector.condition.wait(min(.05, remaining))
 
     def _request(self, observation, history, video):
         request = dict(protocol=PROTOCOL, session_id=self.session_id, request_id=str(uuid.uuid4()),
@@ -246,6 +356,7 @@ class SynchronousClient:
             # Keep both wire entries but avoid encoding its two RGB views twice.
             request["video_context"] = [request["observation"] if item is observation
                                         else observation_row(item, self.metadata) for item in video]
+        self._source_observation = observation
         return request
 
     def _wait_control(self, duration):
@@ -253,17 +364,61 @@ class SynchronousClient:
         if not clock.wait_until(deadline, self.stop_event, check=self.collector.check):
             raise InterruptedError("client stop requested")
 
-    def _execute(self, actions):
+    def _check_inference_drift(self, observation, first_action, *, phase):
+        if self.stop_event.is_set():
+            raise InterruptedError("client stop requested")
+        if observation is None or observation.action_space != "joint8":
+            raise ValueError("joint8 inference source observation is required before execution")
+        measured, stamp = self.hardware.joint_feedback()
+        measured = tuple(measured)
+        if (len(measured) != 7 or any(isinstance(x, bool) or not isinstance(x, (int, float))
+                                     or not math.isfinite(x) for x in measured)):
+            raise ValueError("joint_feedback must contain seven finite measured radians")
+        now = clock.now()
+        if (isinstance(stamp, bool) or not isinstance(stamp, (int, float))
+                or not math.isfinite(stamp)
+                or not 0 <= now-stamp <= self.options.max_observation_age_s):
+            raise RuntimeError("joint feedback is stale before action dispatch")
+        drift = [abs(math.degrees(new-old)) for new, old in zip(measured, observation.state[:7])]
+        metrics = dict(source_sequence=observation.sequence, observation_stamp=observation.stamp,
+            phase=phase, feedback_stamp=stamp, feedback_age_ms=(now-stamp)*1000,
+            q_obs_deg=[math.degrees(x) for x in observation.state[:7]],
+            q_exec_deg=[math.degrees(x) for x in measured],
+            first_target_deg=[math.degrees(x) for x in first_action[:7]],
+            drift_deg=drift, max_drift_deg=max(drift),
+            drift_limit_deg=self.options.max_inference_drift_deg,
+            accepted=max(drift) <= self.options.max_inference_drift_deg,
+            settling=self.last_settle_metrics)
+        self.last_execution_guard = metrics
+        logger.info("Inference motion guard %s", json.dumps(metrics, allow_nan=False))
+        if not metrics["accepted"]:
+            raise ObservationDriftError(
+                f"inference observation drifted {max(drift):.3f} deg "
+                f"(limit {self.options.max_inference_drift_deg:.3f} deg); "
+                "action discarded; explicit restart required")
+        if self.stop_event.is_set():
+            raise InterruptedError("client stop requested")
+        return measured
+
+    def _execute(self, actions, *, source_observation=None):
+        if self.stop_event.is_set():
+            raise InterruptedError("client stop requested")
+        if not actions:
+            raise ValueError("cannot execute an empty action chunk")
         self.collector.check()
-        with self.collector.condition:
-            current = self.collector.history[-1]
-        validate_hardware_chunk(self.hardware, actions, current.state)
+        source = source_observation if source_observation is not None else self._source_observation
+        measured = self._check_inference_drift(source, actions[0], phase="before_arm")
+        validate_hardware_chunk(self.hardware, actions, measured)
+        if self.stop_event.is_set():
+            raise InterruptedError("client stop requested")
         self.hardware.arm()
         period = 1.0 / self.metadata["control_hz"]
-        for action in actions[:self.options.execute_steps]:
+        for index, action in enumerate(actions[:self.options.execute_steps]):
             self.collector.check()
             if self.stop_event.is_set():
                 raise InterruptedError("client stop requested")
+            if index == 0:
+                self._check_inference_drift(source, action, phase="before_first_command")
             started = clock.now()
             self.hardware.command(action)
             remaining = period - (clock.now() - started)
@@ -285,10 +440,13 @@ class SynchronousClient:
             fresh_after = clock.now()
             self.collector.start()
             while not self.stop_event.is_set() and (cycles == 0 or self.completed_cycles < cycles):
-                observation, history, video = self.collector.snapshot_after(fresh_after, last_sequence,
-                    timeout_s=self.options.sensor_timeout_s)
+                observation, history, video = self.snapshot_for_inference(fresh_after, last_sequence)
+                if self.stop_event.is_set():
+                    raise InterruptedError("client stop requested")
                 request = self._request(observation, history, video)
                 self.collector.check()
+                if self.stop_event.is_set():
+                    raise InterruptedError("client stop requested")
                 started = clock.now()
                 response = self.transport.infer(request)
                 self.collector.check()
@@ -300,7 +458,7 @@ class SynchronousClient:
                 if self.stop_event.is_set():
                     raise InterruptedError("client stop requested")
                 inference_s = clock.now() - started
-                fresh_after = self._execute(actions)
+                fresh_after = self._execute(actions, source_observation=observation)
                 last_sequence = observation.sequence
                 self.completed_cycles += 1
                 logger.info("cycle=%d sequence=%d infer_s=%.3f executed=%d",

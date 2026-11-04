@@ -45,6 +45,12 @@ class MockHardware:
         return Observation(anchor, sequence, state, (0.0,) * 6, self.frames, meta,
                            force_meta, "joint8")
 
+    def joint_feedback(self):
+        with self.lock:
+            if self.closed:
+                raise RuntimeError('mock hardware is closed')
+            return self.state[:7], clock.now()
+
     def arm(self):
         if self.closed:
             raise RuntimeError("mock hardware is closed")

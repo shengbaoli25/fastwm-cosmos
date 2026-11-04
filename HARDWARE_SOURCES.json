@@ -25,8 +25,8 @@
     },
     "src/realman_sync_client/hardware.py": {
       "source_sha256": "c3dcc2125b2e6ff64e644109009cf739ce0a0b50ee213ef666638d22b9849f6c",
-      "sha256": "b6480f7792e4fa0aa58f89454948b1ab2296ce4ff3f51f770523a494b70a2473",
-      "reason": "Shared Windows QPC; adapter dispatch guard immediately before native motion calls; explicit opt-in manual-open torque-hold release through the sole RTU worker; Fixed-anchor causal camera selection with a shared <=10ms IPC wait capped by the next 30Hz grid; nonblocking preflight reuses alignment; original skew/freshness limits retained; motion tracing separates measured tracking error from adjacent command delta"
+      "sha256": "a638879e696ef71c3043e81ba94ea280a4d558cf724c99e65fd2786edad1256d",
+      "reason": "Shared Windows QPC; adapter dispatch guard immediately before native motion calls; explicit opt-in manual-open torque-hold release through the sole RTU worker; Fixed-anchor causal camera selection with a shared <=10ms IPC wait capped by the next 30Hz grid; nonblocking preflight reuses alignment; original skew/freshness limits retained; motion tracing separates measured tracking error from adjacent command delta; read-only fresh joint feedback for request-to-dispatch drift verification"
     },
     "src/realman_sync_client/gripper.py": {
       "source_sha256": "0e977c37ff703045a2cb7029bc3361284530af02b4187412b967af3536668ba2",

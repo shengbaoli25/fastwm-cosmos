@@ -528,6 +528,13 @@ class RealManHardwareAdapter:
                 raise ValueError(f"目标姿态偏离启动姿态过大 ({orientation:.3f} rad)")
         return limited
 
+    def joint_feedback(self):
+        """Read fresh measured joints directly, without waiting for a camera frame."""
+        if self.closed or self.feedback is None:
+            raise RuntimeError('RM75 joint feedback is unavailable')
+        q, _, _, stamp = self.feedback.snapshot(float(self.config['feedback_max_age_s']))
+        return tuple(math.radians(value) for value in q), stamp
+
     def command(self, action: tuple[float, ...]) -> None:
         if self.config['action_space'] == 'joint8':
             return self._command_joint(action)

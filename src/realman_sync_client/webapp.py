@@ -18,6 +18,7 @@ from urllib.parse import urlsplit
 
 from . import clock
 from .client import SynchronousClient, ClientOptions, validate_actions, validate_metadata
+from .cli import add_motion_arguments, motion_options
 from .http import InferenceHTTPClient
 from .mock import MockHardware
 from .recovery import transient_failure
@@ -42,10 +43,11 @@ class Dashboard:
     RECOVERY_TIMEOUT_S = 30.
 
     def __init__(self, transport, *, mode='realman', hardware_config=None, hardware_factory=None,
-                 auto_infer=True, execute_steps=32):
+                 auto_infer=True, execute_steps=32, motion_settings=None):
         self.transport, self.mode = transport, mode
         self.hardware_config, self.hardware_factory = hardware_config, hardware_factory
         self.execute_steps = execute_steps
+        self.client_options = ClientOptions(execute_steps=execute_steps, **(motion_settings or {}))
         self.lock = threading.RLock()
         self.stop_event = threading.Event()
         self.want_connect, self.auto_infer, self.execute = True, auto_infer, False
@@ -597,13 +599,23 @@ class Dashboard:
                     continue
                 if self.client is None:
                     self.client = SynchronousClient(self.transport, self.hardware, self.metadata,
-                        options=ClientOptions(execute_steps=self.execute_steps))
+                        options=self.client_options)
                     self.client.collector.start()
                 try:
                     with self.lock:
                         generation = self.generation
+                        execute_requested = self.execute
+                        self.client.stop_event.clear()
                     cycle_started = clock.now()
-                    obs, history, video = self.client.collector.snapshot_after(fresh_after, last_sequence, timeout_s=2.0)
+                    if execute_requested:
+                        # The native ACK only confirms receipt. Collect a full
+                        # measured stability window after this stop before infer.
+                        self.phase = self.inference['phase'] = 'settling'
+                        self.hardware.slow_stop()
+                        fresh_after = clock.now()
+                        obs, history, video = self.client.snapshot_for_inference(fresh_after, last_sequence)
+                    else:
+                        obs, history, video = self.client.collector.snapshot_after(fresh_after, last_sequence, timeout_s=2.0)
                     request_started = clock.now()
                     request = self.client._request(obs, history, video)
                     request_built = clock.now()
@@ -642,7 +654,7 @@ class Dashboard:
                     if execute:
                         self.phase = self.inference['phase'] = 'executing'
                         execution_started = clock.now()
-                        fresh_after = self.client._execute(actions)
+                        fresh_after = self.client._execute(actions, source_observation=obs)
                         execution_ms = (clock.now()-execution_started)*1000
                     else:
                         execution_ms = 0.
@@ -844,6 +856,7 @@ def main(argv=None):
     parser.add_argument('--no-auto-infer', action='store_true')
     parser.add_argument('--log-file', type=Path, help='Local rotating UTF-8 runtime log')
     parser.add_argument('--execute-steps', type=int, default=32)
+    add_motion_arguments(parser)
     args = parser.parse_args(argv)
     if args.mode == 'realman' and not args.hardware_config:
         parser.error('realman mode requires --hardware-config')
@@ -859,7 +872,8 @@ def main(argv=None):
     token = args.token_file.read_text(encoding='utf-8').strip() if args.token_file else None
     transport = InferenceHTTPClient(args.server, timeout_s=30, token=token)
     dashboard = Dashboard(transport, mode=args.mode, hardware_config=args.hardware_config,
-                          auto_infer=not args.no_auto_infer, execute_steps=args.execute_steps)
+                          auto_infer=not args.no_auto_infer, execute_steps=args.execute_steps,
+                          motion_settings=motion_options(args))
     server = DashboardServer(('127.0.0.1',args.port), dashboard)
     signal.signal(signal.SIGTERM, lambda *_: (_ for _ in ()).throw(KeyboardInterrupt()))
     dashboard.start()

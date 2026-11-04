@@ -12,6 +12,25 @@ from .http import InferenceHTTPClient
 from .mock import MockHardware
 
 
+def add_motion_arguments(parser):
+    parser.add_argument('--settle-window-s', type=float, default=.2,
+                        help='continuous measured stability window before inference (seconds)')
+    parser.add_argument('--settle-tolerance-deg', type=float, default=.1,
+                        help='maximum per-joint range over the stability window (degrees)')
+    parser.add_argument('--settle-velocity-deg-s', type=float, default=.5,
+                        help='maximum measured per-joint speed in the stability window (degrees/s)')
+    parser.add_argument('--settle-timeout-s', type=float, default=5.,
+                        help='pause if measured joints do not settle within this timeout')
+    parser.add_argument('--max-inference-drift-deg', type=float, default=.5,
+                        help='reject actions if joints moved this far since the request observation')
+
+
+def motion_options(args):
+    return {key: getattr(args, key) for key in (
+        'settle_window_s', 'settle_tolerance_deg', 'settle_velocity_deg_s',
+        'settle_timeout_s', 'max_inference_drift_deg')}
+
+
 def parser():
     result = argparse.ArgumentParser(description=__doc__)
     result.add_argument("--server", default="http://127.0.0.1:8766")
@@ -25,6 +44,7 @@ def parser():
     result.add_argument("--max-result-age", type=float, default=120.0, help="reject result older than this local observation age")
     result.add_argument("--sensor-timeout", type=float, default=10.0)
     result.add_argument("--log-level", choices=("DEBUG", "INFO", "WARNING"), default="INFO")
+    add_motion_arguments(result)
     return result
 
 
@@ -47,7 +67,8 @@ def main(argv=None):
         execute_steps = metadata["action_horizon"] if args.execute_steps is None else args.execute_steps
         if not 1 <= execute_steps <= metadata["action_horizon"]:
             raise ValueError("execute_steps must be within the server action horizon")
-        options = ClientOptions(execute_steps, args.max_result_age, args.sensor_timeout)
+        options = ClientOptions(execute_steps, args.max_result_age, args.sensor_timeout,
+                                **motion_options(args))
         if args.hardware == "mock":
             expected = metadata.get("force_preprocessing")
             force_id = metadata.get("force_preprocessing_id") or (
