@@ -1,6 +1,6 @@
 {
   "schema": "rm71d78-jepa-force-latent-recipe-v1",
-  "default_variant": "vitb",
+  "default_variant": "vitl",
   "variants": {
     "vitb": {"width": 768, "depth": 12, "heads": 12, "filename": "vjepa2_1_vitb_dist_vitG_384.pt"},
     "vitl": {"width": 1024, "depth": 24, "heads": 16, "filename": "vjepa2_1_vitl_dist_vitG_384.pt"}
