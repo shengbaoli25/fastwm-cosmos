@@ -56,14 +56,15 @@ def rng_neutral_training_logging(runtime):
 
 def execution_profile(cfg):
     profile = {"num_processes": int(cfg.get("ablation_num_processes", 4)),
-               "per_gpu_batch_size": int(cfg.get("batch_size", 64)),
+               "per_gpu_batch_size": int(cfg.get("batch_size", 32)),
                "gradient_accumulation_steps": int(cfg.get("gradient_accumulation_steps", 1)),
                "max_steps": int(cfg.get("max_steps", 30000)), "gpu_model": "H200"}
-    if (profile["num_processes"], profile["per_gpu_batch_size"], profile["gradient_accumulation_steps"]) != (4, 64, 1):
-        raise ValueError("This run requires four H200 GPUs with real per-GPU batch 64 and accumulation 1")
+    if (profile["num_processes"] != 4 or profile["per_gpu_batch_size"] not in (32, 64)
+            or profile["gradient_accumulation_steps"] != 1):
+        raise ValueError("This run requires four H200 GPUs with real per-GPU batch 32 or 64 and accumulation 1")
     if profile["max_steps"] < 1:
         raise ValueError("max_steps must be positive; use a separate short smoke config before the 30000-step run")
-    profile["global_batch_size"] = 256
+    profile["global_batch_size"] = profile["num_processes"] * profile["per_gpu_batch_size"]
     return profile
 
 

@@ -62,15 +62,20 @@ HTTP `.body` 缓存根目录，只有完全匹配的字节才会复制。也可�
 各 pip 大阶段默认总预算 900 秒（`FASTWAM_PIP_TIMEOUT`），另有每连接 30 秒、最多 2 次重试；
 每 30 秒心跳明确标识为运行状态，不冒充下载进度。超时终止本阶段并返回非零，不继续训练。
 
-本次训练配置为 4 张 H200，每卡真实 microbatch 64、累积 1，全局 batch 256。
+当前训练配置为 4 张 H200，每卡真实 microbatch 32、累积 1，全局 batch 128。
+入口保留显式配置 batch64/global256 的兼容性，只允许这两个 batch 档位；不会自动降低 batch。
 入口选择现有 ZeRO1 启动配置，未指定 `--num-processes` 时采用配置中的 4 个进程。
 训练前检查实际可见 GPU 为四张 H200；Accelerate 准备完成后，读取 DeepSpeed engine 的实际
-microbatch/global batch/累积值并断言为 64/256/1。记录分别保存为 `training-hardware.json`、
+microbatch/global batch/累积值并逐项核对当前配置（默认 32/128/1）。记录分别保存为 `training-hardware.json`、
 `training-execution.json`；后者还记录恢复起始 step 与本次循环目标。
 
 Wan2.2 视频专家约 5B，加上动作专家与训练状态，全参数训练应准备大显存 CUDA GPU；
-目标平台为 4×H200。这里没有测得该 batch64 配置的峰值显存或吞吐，必须以实际任务运行结果验证；
-入口不会自动缩小 microbatch 或改用梯度累积。最大步数默认 30000、每 5000 步保存一次。现有 trainer 在
+目标平台为 4×H200。2026-11-04 的真实 batch64 两步 smoke 在 rank0 遇到 CUDA OOM：
+当时进程占用约 139.79 GiB、GPU 仅剩 12 MiB，额外申请 222 MiB 失败；没有通过两步保存、
+第三步恢复和 HTTP 验收。用户授权后将新实验默认改为 batch32；这尚不证明其峰值显存、吞吐或
+完整训练可用，必须重新完成同 batch32 的全部 smoke 验收。该改动不修改模型、损失、VAE、
+CUDA graph 或 optimizer，也不以梯度累积恢复到原全局 batch256。
+最大步数默认 30000、每 5000 步保存一次。现有 trainer 在
 `max_steps` 非空时采用按 optimizer step 计数的 while 循环，数据耗尽后进入下一 epoch；
 因此 `num_epochs=1000` 不会提前截断这 30000 步，仅在移除 `max_steps` 后用于估算训练预算。
 
@@ -122,7 +127,7 @@ bash scripts/ablation/launch_fastwam_h200.sh /work/envs/fastwam/bin/python /work
   --resume /work/fastwam-run/checkpoints/state/step_005000
 ```
 
-正式 30k 前，用独立目录验证相同四卡/每卡 64 的两步保存、第三步恢复；训练目标从开始就设为 3，
+正式 30k 前，用独立目录验证相同四卡/每卡 32 的两步保存、第三步恢复；训练目标从开始就设为 3，
 仅对第一次调用显式提前停止。下面的命令可直接使用填好路径的正式配置：
 
 ```bash
@@ -136,7 +141,7 @@ bash scripts/ablation/launch_fastwam_h200.sh /work/envs/fastwam/bin/python /work
 `--stop-after-steps` 只在 trainer 已构造 scheduler/恢复状态后设置当前训练循环的停止点；配置、
 scheduler 总长度和 checkpoint recipe 仍为原目标 3。第一次由原 trainer 完整保存 step_000002，
 第二次恢复 optimizer/scheduler/RNG/读取位置后完成 step_000003。核验真实有限 loss/梯度、参数变化、
-完整 state 文件和恢复起始 step=2，再启动独立正式目录。这里没有实际执行这些 GPU 命令。
+完整 state 文件和恢复起始 step=2，再启动独立正式目录。新的 batch32 GPU 命令尚未实际执行。
 
 `--smoke-audit` 只允许独立 3 步配置上的 `0→2` 与 `2→3`。它观察真正的
 `Accelerator.backward`：Accelerate 1.12 在该调用内执行 DeepSpeed optimizer update，随后读取
@@ -161,9 +166,10 @@ python scripts/ablation/verify_fastwam_smoke.py --smoke-config /work/fastwam-smo
 验收器检查全部四个 rank，比较保存/恢复前后真实状态，实际反序列化训练权重归档并核对保存的
 policy 样本字节；它不以 exit0 或文件存在作为通过条件。最终写入
 `smoke-audit/resumed3-verified.json`。平台包装器还用 `nvidia-smi` 每秒记录完整准备/训练过程显存。
-这些是待 H200 执行的检查，目前只通过离线测试，尚无真实 GPU 验收结果。
+验收按当前配置核对 hardware 和每个 rank 的实际 microbatch/global batch/累积值；batch32 与
+batch64 的保存或恢复证据不能交叉使用。batch64 的真实运行因 OOM 失败；batch32 尚待真实 GPU 验收。
 
-`--set key=value` 可覆盖训练预算等字段；当前启动器固定要求 4×H200、每卡 64、累积 1。完整 resume 使用 Accelerate 保存的 optimizer、scheduler、
+`--set key=value` 可覆盖训练预算等字段；当前启动器固定要求 4×H200、每卡 32 或 64、累积 1，默认每卡 32。完整 resume 使用 Accelerate 保存的 optimizer、scheduler、
 RNG 与数据读取进度；传入单独权重文件不被视为 resume。首次运行可配置步数、batch、seed 等；
 随后完整 resume 必须保持原训练语义，包括 GPU 数、batch、累积、seed、精度、优化器参数和步数。
 修改这些参数应建立独立实验，而不是声称完全续训。代码在进入训练前核验数据文件、统计、
@@ -202,4 +208,5 @@ server/client 处理。推理不导入 trainer，也不会初始化 distributed�
 目前已在 Windows Torch 2.7.1 环境导入官方 FastWAM 核心，并用微型嵌入 PNG 的 LeRobot v2.1
 数据实际实例化原版 RobotVideoDataset，验证双相机布局、32步动作、episode 边界 padding、
 部署与原版归一化逐位一致。另有配置、8D head 迁移白名单和严格 checkpoint 身份测试。
-没有下载大权重、启动训练、运行真实 checkpoint 推理或机器人闭环。完整 GPU 验收须在资产就绪后完成。
+官方资产已用于 batch64 的真实 GPU 尝试，但该次 smoke 因 OOM 未完成，不能报告成功训练、
+checkpoint 恢复、HTTP 推理或机器人闭环。batch32 的完整 GPU 验收仍待执行。

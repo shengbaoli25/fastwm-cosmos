@@ -13,13 +13,17 @@ from fastwam.ablation.contracts import file_sha256, identity_sha256, load_datase
 from fastwam.ablation.training_audit import SCHEMA, assert_restored, tensor_fingerprint
 
 
-def validate_receipt(receipt, rank, start, end, binding_hash):
+def validate_receipt(receipt, rank, start, end, binding_hash, *, expected_batch=None):
+    # Keep standalone callers checking historical B64 receipts compatible.
+    # verify_run always supplies the batch from its current reviewed config.
+    if expected_batch is None:
+        expected_batch = {"num_processes": 4, "per_gpu_batch_size": 64,
+                          "gradient_accumulation_steps": 1, "global_batch_size": 256}
     if (receipt.get("schema") != SCHEMA or receipt.get("completed") is not True
             or receipt.get("rank") != rank or receipt.get("binding_sha256") != binding_hash
             or (receipt.get("start_step"), receipt.get("end_step")) != (start, end)
             or receipt.get("restored_checkpoint_verified") != bool(start)
-            or receipt.get("prepared_batch") != {"num_processes": 4, "per_gpu_batch_size": 64,
-                                                   "gradient_accumulation_steps": 1, "global_batch_size": 256}
+            or receipt.get("prepared_batch") != expected_batch
             or not receipt.get("changed_policy_samples")):
         raise ValueError("Missing, incomplete or mismatched real smoke receipt")
     for state, step in ((receipt["initial"], start), (receipt["final"], end)):
@@ -86,7 +90,10 @@ def verify_saved_weights(path, binding, expected_step, expected_samples):
 
 
 def verify_run(smoke, phase):
-    from fastwam.ablation.fastwam import build_binding, semantic_recipe
+    from fastwam.ablation.fastwam import build_binding, execution_profile, semantic_recipe
+    profile = execution_profile(smoke)
+    expected_batch = {key: profile[key] for key in
+                      ("num_processes", "per_gpu_batch_size", "gradient_accumulation_steps", "global_batch_size")}
     run = Path(smoke.output_dir)
     binding = json.loads((run / "fastwam_binding.json").read_text())
     manifest = load_dataset_manifest(smoke.dataset_root, verify_files=False)
@@ -100,16 +107,16 @@ def verify_run(smoke, phase):
                   training_recipe=semantic_recipe(smoke), deployment_binding=binding)
     binding_hash = identity_sha256(binding)
     hardware = json.loads((run / "training-hardware.json").read_text())
-    if ((hardware["num_processes"], hardware["per_gpu_batch_size"], hardware["global_batch_size"], hardware["gradient_accumulation_steps"]) != (4, 64, 256, 1)
+    if (any(hardware.get(key) != value for key, value in expected_batch.items())
             or len(hardware["device_names"]) != 4 or not all("H200" in name.upper() for name in hardware["device_names"])):
-        raise ValueError("Smoke did not run with four H200 GPUs and physical batch 64")
+        raise ValueError(f"Smoke did not run with four H200 GPUs and the configured physical batch: {expected_batch}")
     evidence = []
     reference_final = None
     final_step = 2 if phase == "saved2" else 3
     for rank in range(4):
         first_path = run / "smoke-audit" / f"from_000000-to_000002.rank_{rank:03d}.json"
         first = json.loads(first_path.read_text())
-        validate_receipt(first, rank, 0, 2, binding_hash)
+        validate_receipt(first, rank, 0, 2, binding_hash, expected_batch=expected_batch)
         saved_path = run / "checkpoints/state/step_000002" / f"smoke-audit-rank-{rank:03d}.json"
         saved = json.loads(saved_path.read_text())
         if saved["schema"] != SCHEMA or saved["rank"] != rank or saved["binding_sha256"] != binding_hash:
@@ -120,7 +127,7 @@ def verify_run(smoke, phase):
         if phase == "resumed3":
             resumed_path = run / "smoke-audit" / f"from_000002-to_000003.rank_{rank:03d}.json"
             latest = json.loads(resumed_path.read_text())
-            validate_receipt(latest, rank, 2, 3, binding_hash)
+            validate_receipt(latest, rank, 2, 3, binding_hash, expected_batch=expected_batch)
             assert_restored(latest["initial"], saved["state"])
             final_path = run / "checkpoints/state/step_000003" / f"smoke-audit-rank-{rank:03d}.json"
             final_saved = json.loads(final_path.read_text())

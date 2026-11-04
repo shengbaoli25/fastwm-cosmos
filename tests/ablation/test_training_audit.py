@@ -71,13 +71,13 @@ def test_frozen_audited_category_is_still_rejected(category, path):
         audit.policy_samples(model)
 
 
-def trainer_fixture(tmp_path, *, change_parameters=True):
+def trainer_fixture(tmp_path, *, change_parameters=True, batch_size=64):
     model = ToyPolicy()
     optimizer = torch.optim.AdamW(model.parameters(), lr=0.001)
     trainer = SimpleNamespace(global_step=0, epoch=0, batch_in_epoch=0)
     engine = SimpleNamespace(optimizer=optimizer, global_steps=0, get_global_grad_norm=lambda: 1.5,
-                             train_micro_batch_size_per_gpu=lambda: 64, gradient_accumulation_steps=lambda: 1,
-                             train_batch_size=lambda: 256)
+                             train_micro_batch_size_per_gpu=lambda: batch_size, gradient_accumulation_steps=lambda: 1,
+                             train_batch_size=lambda: 4 * batch_size)
     accelerator = SimpleNamespace(process_index=0, device="cpu", step=0, num_processes=4, optimizer_step_was_skipped=False,
                                   unwrap_model=lambda _engine: model, wait_for_everyone=lambda: None)
     def backward(_loss):
@@ -119,24 +119,36 @@ def run_fixture(trainer, cfg, limit):
                 trainer.save_checkpoint()
 
 
-def test_audit_records_real_call_boundaries_and_matches_resumed_state(tmp_path):
-    trainer, _ = trainer_fixture(tmp_path)
-    cfg = SimpleNamespace(max_steps=3, output_dir=str(tmp_path), resume=None)
+@pytest.mark.parametrize("batch_size", [32, 64])
+def test_audit_records_real_call_boundaries_and_matches_resumed_state(tmp_path, batch_size):
+    trainer, _ = trainer_fixture(tmp_path, batch_size=batch_size)
+    cfg = SimpleNamespace(max_steps=3, output_dir=str(tmp_path), resume=None, batch_size=batch_size)
+    expected = {"num_processes": 4, "per_gpu_batch_size": batch_size,
+                "gradient_accumulation_steps": 1, "global_batch_size": 4 * batch_size}
     run_fixture(trainer, cfg, 2)
     first = json.loads((tmp_path / "smoke-audit/from_000000-to_000002.rank_000.json").read_text())
-    verify.validate_receipt(first, 0, 0, 2, first["binding_sha256"])
+    verify.validate_receipt(first, 0, 0, 2, first["binding_sha256"], expected_batch=expected)
+    if batch_size == 64:
+        verify.validate_receipt(first, 0, 0, 2, first["binding_sha256"])
+    else:
+        with pytest.raises(ValueError, match="mismatched real smoke receipt"):
+            verify.validate_receipt(first, 0, 0, 2, first["binding_sha256"])
     cfg.resume = str(tmp_path / "checkpoints/state/step_000002")
     trainer.train_sampler.resume_batch_offset = 2
     run_fixture(trainer, cfg, 3)
     second = json.loads((tmp_path / "smoke-audit/from_000002-to_000003.rank_000.json").read_text())
-    verify.validate_receipt(second, 0, 2, 3, first["binding_sha256"])
+    verify.validate_receipt(second, 0, 2, 3, first["binding_sha256"], expected_batch=expected)
+    other = {**expected, "per_gpu_batch_size": 96 - batch_size, "global_batch_size": 4 * (96 - batch_size)}
+    for receipt, start, end in ((first, 0, 2), (second, 2, 3)):
+        with pytest.raises(ValueError, match="mismatched real smoke receipt"):
+            verify.validate_receipt(receipt, 0, start, end, first["binding_sha256"], expected_batch=other)
     assert second["restored_checkpoint_verified"] is True
     assert second["initial"] == first["final"]
 
 
 def test_missing_actual_parameter_change_rejected(tmp_path):
     trainer, _ = trainer_fixture(tmp_path, change_parameters=False)
-    cfg = SimpleNamespace(max_steps=3, output_dir=str(tmp_path), resume=None)
+    cfg = SimpleNamespace(max_steps=3, output_dir=str(tmp_path), resume=None, batch_size=64)
     with pytest.raises(ValueError, match="No sampled FP32 master"):
         run_fixture(trainer, cfg, 2)
     assert not (tmp_path / "smoke-audit/from_000000-to_000002.rank_000.json").exists()
@@ -153,7 +165,7 @@ def test_restored_state_difference_rejected(field):
 
 def test_verifier_rejects_nonfinite_gradient_even_with_completed_receipt(tmp_path):
     trainer, _ = trainer_fixture(tmp_path)
-    run_fixture(trainer, SimpleNamespace(max_steps=3, output_dir=str(tmp_path), resume=None), 2)
+    run_fixture(trainer, SimpleNamespace(max_steps=3, output_dir=str(tmp_path), resume=None, batch_size=64), 2)
     receipt = json.loads((tmp_path / "smoke-audit/from_000000-to_000002.rank_000.json").read_text())
     receipt["steps"][0]["global_grad_norm"] = float("nan")
     with pytest.raises(ValueError, match="gradient"):
@@ -174,17 +186,18 @@ def test_actual_saved_weight_bytes_are_read_and_compared(tmp_path):
         verify.verify_saved_weights(path, model.ablation_binding, 2, samples)
 
 
-def test_complete_four_rank_gate_rejects_changed_resume_evidence(tmp_path):
-    trainer, model = trainer_fixture(tmp_path)
+@pytest.mark.parametrize("batch_size", [32, 64])
+def test_complete_four_rank_gate_rejects_changed_resume_evidence(tmp_path, batch_size):
+    trainer, model = trainer_fixture(tmp_path, batch_size=batch_size)
     stats = tmp_path / "stats.json"
     stats.write_text("{}")
     model.ablation_binding["normalization_sha256"] = audit.hashlib.sha256(b"{}").hexdigest()
-    cfg = SimpleNamespace(max_steps=3, output_dir=str(tmp_path), resume=None,
+    cfg = SimpleNamespace(max_steps=3, output_dir=str(tmp_path), resume=None, batch_size=batch_size,
                           dataset_root=str(tmp_path), normalization_path=str(stats), asset_root=str(tmp_path),
                           text_embedding_cache_dir=str(tmp_path))
     (tmp_path / "fastwam_binding.json").write_text(json.dumps(model.ablation_binding))
-    (tmp_path / "training-hardware.json").write_text(json.dumps({"num_processes": 4, "per_gpu_batch_size": 64,
-        "global_batch_size": 256, "gradient_accumulation_steps": 1, "device_names": ["H200 test fixture"] * 4}))
+    (tmp_path / "training-hardware.json").write_text(json.dumps({"num_processes": 4, "per_gpu_batch_size": batch_size,
+        "global_batch_size": 4 * batch_size, "gradient_accumulation_steps": 1, "device_names": ["H200 test fixture"] * 4}))
     def saved_fixtures(start, end):
         receipt_path = tmp_path / f"smoke-audit/from_{start:06d}-to_{end:06d}.rank_000.json"
         sidecar_path = tmp_path / f"checkpoints/state/step_{end:06d}/smoke-audit-rank-000.json"
@@ -206,6 +219,11 @@ def test_complete_four_rank_gate_rejects_changed_resume_evidence(tmp_path):
             patch("fastwam.ablation.fastwam.semantic_recipe", return_value={"fixture": True}), \
             patch("fastwam.ablation.fastwam.build_binding", return_value=model.ablation_binding):
         assert verify.verify_run(cfg, "saved2")["formal_training_permitted"] is False
+        # Even with data/asset binding mocked, hardware must match this config.
+        cfg.batch_size = 96 - batch_size
+        with pytest.raises(ValueError, match="configured physical batch"):
+            verify.verify_run(cfg, "saved2")
+        cfg.batch_size = batch_size
     cfg.resume = str(tmp_path / "checkpoints/state/step_000002")
     trainer.train_sampler.resume_batch_offset = 2
     run_fixture(trainer, cfg, 3)
@@ -214,6 +232,19 @@ def test_complete_four_rank_gate_rejects_changed_resume_evidence(tmp_path):
             patch("fastwam.ablation.fastwam.semantic_recipe", return_value={"fixture": True}), \
             patch("fastwam.ablation.fastwam.build_binding", return_value=model.ablation_binding):
         assert verify.verify_run(cfg, "resumed3")["formal_training_permitted"] is True
+        # Check both saved and resumed receipts against the reviewed batch, not
+        # the historical validate_receipt default. Reject the opposite batch
+        # even when current hardware and every other evidence field agree.
+        for start, end in ((0, 2), (2, 3)):
+            batch_path = tmp_path / f"smoke-audit/from_{start:06d}-to_{end:06d}.rank_003.json"
+            original = batch_path.read_text()
+            wrong_batch = json.loads(original)
+            wrong_batch["prepared_batch"].update(per_gpu_batch_size=96 - batch_size,
+                                                   global_batch_size=4 * (96 - batch_size))
+            batch_path.write_text(json.dumps(wrong_batch))
+            with pytest.raises(ValueError, match="mismatched real smoke receipt"):
+                verify.verify_run(cfg, "resumed3")
+            batch_path.write_text(original)
         corrupted_path = tmp_path / "smoke-audit/from_000002-to_000003.rank_003.json"
         corrupted = json.loads(corrupted_path.read_text())
         corrupted["initial"]["scheduler"]["last_epoch"] = 0

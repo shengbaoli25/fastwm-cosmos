@@ -95,7 +95,8 @@ class FastWAMContracts(unittest.TestCase):
         cfg = make_training_config(root / "configs/ablation/fastwam.yaml", values)
         self.assertEqual(cfg.model.action_dit_config.action_dim, 8)
         self.assertEqual(cfg.max_steps, 30000)
-        self.assertEqual(cfg.batch_size, 64)
+        self.assertEqual(cfg.batch_size, 32)
+        self.assertEqual(execution_profile(cfg)["global_batch_size"], 128)
         self.assertEqual(cfg.ablation_num_processes, 4)
         self.assertEqual(cfg.gradient_accumulation_steps, 1)
         self.assertEqual(cfg.save_every, 5000)
@@ -111,7 +112,7 @@ class FastWAMContracts(unittest.TestCase):
         self.assertNotEqual(semantic_recipe(cfg), recipe)
 
     @unittest.skipUnless(HAS_OMEGA, "OmegaConf required")
-    def test_launcher_preserves_four_gpu_batch64_recipe_without_cli_override(self):
+    def test_launcher_preserves_four_gpu_batch32_recipe_without_cli_override(self):
         import runpy
         from types import SimpleNamespace
         from unittest.mock import patch
@@ -137,7 +138,8 @@ class FastWAMContracts(unittest.TestCase):
             self.assertEqual(command[command.index("--num_processes") + 1], "4")
             saved = OmegaConf.load(output / "launch_config.yaml")
             self.assertEqual((saved.batch_size, saved.ablation_num_processes, saved.gradient_accumulation_steps,
-                              saved.max_steps), (64, 4, 1, 30000))
+                              saved.max_steps), (32, 4, 1, 30000))
+            self.assertEqual(saved.model.training_recipe.training.batch_size, 32)
             self.assertEqual(saved.model.training_recipe.training.ablation_num_processes, 4)
             smoke_output = temporary / "smoke"
             with patch("fastwam.ablation.fastwam.build_binding", return_value={"synthetic_test": True}), \
@@ -154,9 +156,14 @@ class FastWAMContracts(unittest.TestCase):
             self.assertEqual(saved.model.training_recipe.training.max_steps, 3)
 
     def test_requested_batch_cannot_be_replaced_by_accumulation(self):
-        self.assertEqual(execution_profile({})["global_batch_size"], 256)
+        self.assertEqual(execution_profile({})["global_batch_size"], 128)
+        self.assertEqual(execution_profile({"batch_size": 64})["global_batch_size"], 256)
         self.assertEqual(execution_profile({"max_steps": 3})["max_steps"], 3)
-        for changed in ({"batch_size": 16, "gradient_accumulation_steps": 4}, {"ablation_num_processes": 1},
+        for changed in ({"batch_size": 16}, {"batch_size": 128},
+                        {"batch_size": 32, "gradient_accumulation_steps": 2},
+                        {"batch_size": 64, "gradient_accumulation_steps": 2},
+                        {"batch_size": 16, "gradient_accumulation_steps": 4}, {"ablation_num_processes": 1},
+                        {"ablation_num_processes": 8},
                         {"max_steps": 0}):
             with self.subTest(changed=changed), self.assertRaises(ValueError):
                 execution_profile(changed)
@@ -173,9 +180,9 @@ class FastWAMContracts(unittest.TestCase):
                     self.global_step = restored_step
                     self.scheduler_total_steps = 3  # Created before bounded train().
                     self.accelerator = SimpleNamespace(num_processes=4, is_main_process=True)
-                    self.model = SimpleNamespace(train_micro_batch_size_per_gpu=lambda: 64,
+                    self.model = SimpleNamespace(train_micro_batch_size_per_gpu=lambda: 32,
                                                  gradient_accumulation_steps=lambda: 1,
-                                                 train_batch_size=lambda: 256)
+                                                 train_batch_size=lambda: 128)
 
                 def train(self):
                     assert self.scheduler_total_steps == 3
@@ -191,8 +198,10 @@ class FastWAMContracts(unittest.TestCase):
             self.assertEqual(restored.global_step, 3)
             receipt = json.loads((Path(directory) / "training-execution.json").read_text())
             self.assertEqual(receipt["restored_global_step"], 2)
-            self.assertEqual(receipt["per_gpu_batch_size"], 64)
-            restored.model.train_micro_batch_size_per_gpu = lambda: 16
+            self.assertEqual(receipt["per_gpu_batch_size"], 32)
+            self.assertEqual(receipt["global_batch_size"], 128)
+            restored.model.train_micro_batch_size_per_gpu = lambda: 64
+            restored.model.train_batch_size = lambda: 256
             with self.assertRaisesRegex(RuntimeError, "physical batch"):
                 verify_prepared_batch(restored, cfg)
 

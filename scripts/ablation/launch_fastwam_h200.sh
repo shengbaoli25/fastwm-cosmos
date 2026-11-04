@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Calls the existing Accelerate/DeepSpeed launcher: four ranks, real microbatch 64.
+# Calls the existing Accelerate/DeepSpeed launcher: four ranks, configured real microbatch 32 or 64.
 set -euo pipefail
 if [[ $# -lt 2 ]]; then
   printf '%s\n' 'Usage: bash scripts/ablation/launch_fastwam_h200.sh /absolute/env/bin/python /absolute/config.yaml [check-hardware|train|resume] [CLI arguments]' >&2
