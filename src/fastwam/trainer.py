@@ -324,6 +324,11 @@ class Wan22Trainer:
         if proprio_encoder is not None:
             proprio_encoder.train()
             proprio_encoder.requires_grad_(True)
+        configure = getattr(model, "configure_trainable_parameters", None)
+        if configure is not None:
+            # PEFT modules inside DiT must restore their frozen backbone after
+            # the stock train-mode reset, before optimizer creation or reuse.
+            configure()
 
     @staticmethod
     def _to_batched_eval_sample(sample):
@@ -702,6 +707,8 @@ class Wan22Trainer:
                 train_model = self.model if hasattr(self.model, "training_loss") else self.accelerator.unwrap_model(self.model)
 
                 with self.accelerator.autocast():
+                    if hasattr(train_model, "set_auxiliary_step"):
+                        train_model.set_auxiliary_step(self.global_step)
                     loss, loss_dict = train_model.training_loss(sample)
                 self.accelerator.backward(loss)
 

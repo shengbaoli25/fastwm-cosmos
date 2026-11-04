@@ -1,0 +1,38 @@
+{
+  "schema": "rm71d78-jepa-force-latent-recipe-v1",
+  "default_variant": "vitb",
+  "variants": {
+    "vitb": {"width": 768, "depth": 12, "heads": 12, "filename": "vjepa2_1_vitb_dist_vitG_384.pt"},
+    "vitl": {"width": 1024, "depth": 24, "heads": 16, "filename": "vjepa2_1_vitl_dist_vitG_384.pt"}
+  },
+  "shared": {
+    "source_episodes": 78,
+    "split_counts": {"train": 78, "val": 0, "test": 0},
+    "action_representation": "delta_current_joint7",
+    "batch_per_rank": 64,
+    "world_size": 4,
+    "global_batch": 256,
+    "max_steps": 30000,
+    "scheduler_total_steps": 50000,
+    "warmup_steps": 2500,
+    "learning_rate": 0.0001,
+    "weight_decay": 0.01,
+    "appearance_consistency_weight": 0.0,
+    "external_teacher_required": false,
+    "observation_offsets": [-4, 0],
+    "observation_resolution": [224, 224],
+    "lora": {"last_blocks": 4, "targets": ["q", "v"], "rank": 8, "alpha": 8.0}
+  },
+  "model_additions": {
+    "reader_width": 256,
+    "query_count": 8,
+    "reader_depth": 2,
+    "reader_heads": 4,
+    "injection_layers": [7, 14, 21, 28],
+    "latent_loss_weight": 1.0,
+    "latent_warmup_steps": 2500,
+    "wrench_loss_weight": 0.1,
+    "jepa_seed": 47,
+    "allow_preencoded_patches": false
+  }
+}

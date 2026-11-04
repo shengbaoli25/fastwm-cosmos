@@ -152,11 +152,23 @@ class NoActionJointModel(CosmosForceWM):
         history = torch.where(hvalid[..., None], history, 0)
         return observed, history, (ok, ov, hk, hv)
 
-    def _dynamic_layer(self, i, video, force, action, prepared, fm, am, text, text_mask, freq, hvalid, static, text_cache=None):
+    def _action_force_context(self, action, tv, tf, ta, conditions):
+        """Optional observation/action-derived memory; never an input to V/F."""
+        return None
+
+    def _action_force_kv(self, i, force, fm, fk, fv, action_force_context):
+        """Action may receive a private Force K/V copy; the base mask is unchanged."""
+        return fk, fv
+
+    def _auxiliary_training_loss(self, sample, auxiliary):
+        return 0., {}
+
+    def _dynamic_layer(self, i, video, force, action, prepared, fm, am, text, text_mask, freq, hvalid, static, text_cache=None, action_force_context=None):
         ok, ov, hk, hv = static
         vq, vk, vv, vs = self.video.block_qkv(i, video, prepared)
         block = self.dit['force'].blocks[i]
         fq, fk, fv, fs = block.qkv(force, fm)
+        action_fk, action_fv = self._action_force_kv(i, force, fm, fk, fv, action_force_context)
         ae = self.dit['action']; ab = ae.blocks[i]
         aq, ak, av, residual, gate, shift, scale, mg, _ = self.ops._build_expert_attention_io(ae, ab, action, freq, am)
         aq, ak, av = (self._split(x) for x in (aq, ak, av))
@@ -167,7 +179,9 @@ class NoActionJointModel(CosmosForceWM):
                            hvalid, torch.ones(len(force), fk.shape[2], device=force.device, dtype=torch.bool)), 1)
         force = block(attend(fq, k, v, valid), fs)
         av_valid = torch.cat((valid, torch.ones(len(action), ak.shape[2], device=action.device, dtype=torch.bool)), 1)
-        mixed = attend(aq, torch.cat((k, ak), 2), torch.cat((v, av), 2), av_valid).transpose(1, 2).flatten(2)
+        action_k = torch.cat((ok, vk, hk, action_fk, ak), 2)
+        action_v = torch.cat((ov, vv, hv, action_fv, av), 2)
+        mixed = attend(aq, action_k, action_v, av_valid).transpose(1, 2).flatten(2)
         if text_cache is None:
             action = self.ops._apply_expert_post_block_tensor(ab, residual, mixed, gate, shift, scale, mg, text, text_mask)
         else:
@@ -200,7 +214,7 @@ class NoActionJointModel(CosmosForceWM):
             texts.append((vkv, akv))
         return dict(layers=tuple(caches), text=tuple(texts))
 
-    def joint_denoise_core(self, video, force, action, tv, tf, ta, conditions, static_cache=None):
+    def joint_denoise_core(self, video, force, action, tv, tf, ta, conditions, static_cache=None, return_auxiliary=False):
         raw, context, cmask, history, hvalid = conditions
         full = self._video_prepare(video, tv, raw)
         op = frame_slice(full, 0, 1); vp = frame_slice(full, 1, full['grid'][0])
@@ -209,23 +223,31 @@ class NoActionJointModel(CosmosForceWM):
         at, _, am, text, text_mask, freq = self.dit['action'].prepare(action, ta, context, cmask)
         source_time = torch.cat((sinusoidal_embedding_1d(256, tv), sinusoidal_embedding_1d(256, tf)), -1)
         am = am + self.dit['action_source_time'](source_time).unflatten(-1, (6, self.dit['action'].hidden_dim))
+        action_force_context = self._action_force_context(action, tv, tf, ta, conditions)
         if static_cache is not None and (torch.is_grad_enabled() or len(static_cache["layers"]) != self.depth):
             raise ValueError('Request-local inference cache with matching depth required')
         for i in range(self.depth):
+            if i == self.depth - 1:
+                final_force_input = ft
             def layer(o, h, v, f, a, i=i):
                 if static_cache is None:
                     o, h, kv = self._static_layer(i, o, h, op, hvalid)
                 else:
                     kv = static_cache["layers"][i]
                 v, f, a = self._dynamic_layer(i, v, f, a, vp, fm, am, text, text_mask, freq, hvalid, kv,
-                    None if static_cache is None else static_cache["text"][i])
+                    None if static_cache is None else static_cache["text"][i], action_force_context)
                 return o, h, v, f, a
             args = (observed, history, vt, ft, at)
             observed, history, vt, ft, at = (checkpoint(layer, *args, use_reentrant=False)
                 if self.gradient_checkpointing and torch.is_grad_enabled() else layer(*args))
         future_velocity = self.video.finish(vt, vp)
         vv = torch.cat((torch.zeros_like(video[:, :, :1]), future_velocity), 2)
-        return vv, self.dit['force'].head(ft), self.dit['action'].post(at)
+        result = (vv, self.dit['force'].head(ft), self.dit['action'].post(at))
+        if return_auxiliary:
+            return (*result, dict(action_force_context=action_force_context,
+                                 force_pre_qkv=final_force_input, force_final_features=ft,
+                                 conditions=conditions))
+        return result
 
     def training_loss(self, sample):
         clean = sample['video_latents'].to(self.device, self.torch_dtype)
@@ -244,7 +266,7 @@ class NoActionJointModel(CosmosForceWM):
         v = self.v_scheduler.add_noise(clean, vn, tv); v[:, :, :1] = first
         f = self.f_scheduler.add_noise(force, fn, tf)
         a = self.a_scheduler.add_noise(action, an, ta)
-        pv, pf, pa = self.joint_denoise_core(v, f, a, tv, tf, ta, conditions)
+        pv, pf, pa, auxiliary = self.joint_denoise_core(v, f, a, tv, tf, ta, conditions, return_auxiliary=True)
         imagepad = sample['image_is_pad'].to(self.device, torch.bool)
         vvalid = ~imagepad[:, 1:].reshape(len(clean), 2, 4).all(-1)
         lv = temporal_mse(pv[:, :, 1:].transpose(1, 2).flatten(2),
@@ -253,7 +275,9 @@ class NoActionJointModel(CosmosForceWM):
             ~sample['action_is_pad'].to(self.device, torch.bool), self.a_scheduler, ta)
         delta = torch.where(fvalid, pf.float() - self.f_scheduler.training_target(force, fn, tf).float(), 0)
         lf = ((delta.square().sum((1, 2)) / fvalid.sum((1, 2)).clamp_min(1)) * self.f_scheduler.training_weight(tf)).mean()
-        return lv + lf + la, dict(loss_video_fm=float(lv.detach()), loss_force_fm=float(lf.detach()), loss_action_fm=float(la.detach()))
+        extra_loss, extra_metrics = self._auxiliary_training_loss(sample, auxiliary)
+        return lv + lf + la + extra_loss, dict(loss_video_fm=float(lv.detach()), loss_force_fm=float(lf.detach()),
+                                             loss_action_fm=float(la.detach()), **extra_metrics)
 
     @torch.no_grad()
     def infer_joint(self, sample, *, num_inference_steps=None, seed=42, video_seed=44, force_seed=43, use_cache=True):

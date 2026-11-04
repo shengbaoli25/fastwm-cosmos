@@ -28,6 +28,8 @@ def run_two_updates(trainer, *, synchronize, clock=time.monotonic):
             train_model = (trainer.model if hasattr(trainer.model, "training_loss")
                            else accelerator.unwrap_model(trainer.model))
             with accelerator.autocast():
+                if hasattr(train_model, "set_auxiliary_step"):
+                    train_model.set_auxiliary_step(trainer.global_step)
                 loss, components = train_model.training_loss(sample)
             if not bool(torch.isfinite(loss.detach()).all()):
                 raise FloatingPointError("Nonfinite Cosmos cached training loss")

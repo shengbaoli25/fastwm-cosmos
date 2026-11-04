@@ -147,7 +147,8 @@ def load_nonaction_video(upstream, checkpoint, *, device='cuda', dtype=torch.bfl
 
 
 def create_noaction_joint_cosmos(*, upstream, checkpoint, text_cache, expected_text_identity, expected_data_identity,
-                                expected_normalization_sha256=None, training_recipe=None, device='cuda', **kwargs):
+                                expected_normalization_sha256=None, training_recipe=None, device='cuda',
+                                _model_class=None, _model_kwargs=None, **kwargs):
     from .noaction import NoActionJointModel
     from .joint_action import joint_action_contract
     representation = kwargs.get('action_representation', 'absolute')
@@ -170,4 +171,6 @@ def create_noaction_joint_cosmos(*, upstream, checkpoint, text_cache, expected_t
         normalization_sha256=expected_normalization_sha256,
         tokenizer_sha256=TOKENIZER_SHA, text_identity=digest,
         extra_config=kwargs, recipe=recipe)
-    return NoActionJointModel(net, manifest=manifest, text_bank=bank, **kwargs).to(device=device, dtype=torch.bfloat16)
+    model_class = NoActionJointModel if _model_class is None else _model_class
+    return model_class(net, manifest=manifest, text_bank=bank, **kwargs,
+                       **(_model_kwargs or {})).to(device=device, dtype=torch.bfloat16)

@@ -1,0 +1,37 @@
+[
+  {
+    "vendored_name": "REVISION",
+    "path": "REVISION",
+    "source_sha256": "ce98cb7e08f05e632b9190476c6ebf0e4ea1f1b0b9406323bb8edb069ef392ae"
+  },
+  {
+    "vendored_name": "patch_embed.py",
+    "path": "app/vjepa_2_1/models/utils/patch_embed.py",
+    "source_sha256": "7ff3c3828ae25f792a41e2f049251eac76b5845741b076811f7a64586acd382b"
+  },
+  {
+    "vendored_name": "vision_transformer.py",
+    "path": "app/vjepa_2_1/models/vision_transformer.py",
+    "source_sha256": "1d9630b553711d757697b4d7bf0fb216c879d8a858d55cdc04439d29a939d058"
+  },
+  {
+    "vendored_name": "modules.py",
+    "path": "app/vjepa_2_1/models/utils/modules.py",
+    "source_sha256": "b3d9ca21946a0a8b13c18087ddbe2264129c19c40a5b780d438a062074b9a259"
+  },
+  {
+    "vendored_name": "tensors.py",
+    "path": "src/utils/tensors.py",
+    "source_sha256": "e3163f3d9c456ffa201a0541ce3e8aedb8789732da4577e804719a74ceeb509d"
+  },
+  {
+    "vendored_name": "LICENSE",
+    "path": "LICENSE",
+    "source_sha256": "98d5cea9c8ead20362a25feca7268effc2dd31baabdfe45c20d09020ab41e7b4"
+  },
+  {
+    "vendored_name": "masks.py",
+    "path": "src/masks/utils.py",
+    "source_sha256": "4b89835fd20b500978d30f5238fe726f329c62a9ccecb25405326ec1ff22d491"
+  }
+]

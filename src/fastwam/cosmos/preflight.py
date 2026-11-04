@@ -8,10 +8,13 @@ import time
 from fastwam.utils.training_schedule import resolve_scheduler_total_steps
 
 ROOT=Path(__file__).resolve().parents[3]
+JEPA_TARGET = 'fastwam.cosmos.jepa_force_latent.create_jepa_force_latent_cosmos'
+JEPA_DATASET = 'fastwam.cosmos.jepa_training_data.JepaForceTrainingDataset'
 
 
 def validate_config(cfg):
-    noaction = cfg['model']['_target_'] == 'fastwam.cosmos.assets.create_noaction_joint_cosmos'
+    jepa = cfg['model']['_target_'] == JEPA_TARGET
+    noaction = jepa or cfg['model']['_target_'] == 'fastwam.cosmos.assets.create_noaction_joint_cosmos'
     batch,steps = cfg.get('batch_size'),cfg.get('max_steps')
     if noaction and (batch not in (16,32,64) or steps not in (1000,20000,30000)):
         raise ValueError('Joint8 requires an authorized batch16/32/64 and 1000/20000/30000 schedule')
@@ -24,6 +27,9 @@ def validate_config(cfg):
     if cfg['data'].get('val') is not None:
         raise ValueError('The inherited recipe has no separate validation split')
     m=cfg['model'];d=cfg['data']['train']
+    if jepa:
+        validate_jepa_config(cfg)
+        d = d['base_config']
     horizon = resolve_scheduler_total_steps(steps, cfg.get('scheduler_total_steps'))
     if horizon != steps and (not noaction or horizon != 50000):
         raise ValueError('Only the no-reference model may preserve the original 50000-step scheduler')
@@ -36,7 +42,7 @@ def validate_config(cfg):
         recipe_horizon = m.get('training_recipe', {}).get('scheduler_total_steps')
         if recipe_horizon is not None and recipe_horizon != horizon:
             raise ValueError('Model training_recipe scheduler horizon differs from the trainer')
-    if m['_target_'] == 'fastwam.cosmos.assets.create_noaction_joint_cosmos':
+    if noaction:
         required = dict(action_hidden=768, action_ffn=3072, force_hidden=768, force_ffn=2048,
                         force_heads=16, force_shift=1., num_inference_steps=16,
                         action_seed=42, force_seed=43, memory_seed=44, action_space='joint8')
@@ -60,6 +66,93 @@ def validate_config(cfg):
             or m.get('control_seed')!=45
             or (m['action_seed'],m['force_seed'],m['memory_seed'])!=(42,43,44)):
         raise ValueError('Bound production Cosmos28/AE28/Force28 configuration required')
+
+
+def validate_jepa_config(cfg):
+    """Bind the two from-scratch observation-side experiments to one recipe."""
+    m, d = cfg['model'], cfg['data']['train']
+    if (cfg.get('batch_size') != 64 or cfg.get('max_steps') != 30000
+            or cfg.get('scheduler_total_steps') != 50000):
+        raise ValueError('JEPA runs require per-rank B64, 30000 updates and 50000-step scheduler')
+    required = dict(reader_width=256, query_count=8, reader_depth=2, reader_heads=4,
+                    latent_loss_weight=1., wrench_loss_weight=.1,
+                    latent_warmup_steps=2500, jepa_seed=47)
+    if (any(m.get(k) != v for k, v in required.items())
+            or tuple(m.get('injection_layers', ())) != (7, 14, 21, 28)
+            or m.get('allow_preencoded_patches', False)
+            or any(k in m for k in ('teacher_checkpoint', 'teacher_identity', 'initial_checkpoint',
+                                    'force_latent_cache_root', 'expected_force_latent_identity'))):
+        raise ValueError('Exact online-current-Force JEPA reader/loss recipe required; no teacher checkpoint')
+    observation = m.get('observation_encoder')
+    if not isinstance(observation, dict):
+        raise ValueError('Bound online JEPA observation encoder configuration required')
+    allowed = {'variant', 'checkpoint', 'expected_sha256', 'checkpoint_suffix'}
+    digest = observation.get('expected_sha256', '')
+    if (set(observation) != allowed or observation.get('variant') not in ('vitb', 'vitl')
+            or not isinstance(observation.get('checkpoint'), str) or not observation['checkpoint']
+            or not isinstance(digest, str) or len(digest) != 64
+            or any(c not in '0123456789abcdef' for c in digest)
+            or observation.get('checkpoint_suffix') is not True):
+        raise ValueError('Pinned ViT-B/L EMA checkpoint with final-four Q/V rank8 LoRA required')
+    if (d.get('_target_') != JEPA_DATASET or d.get('_recursive_') is not False
+            or not isinstance(d.get('base_config'), dict)
+            or not isinstance(d.get('observation_cache_root'), str) or not d['observation_cache_root']
+            or len(d.get('expected_observation_identity', '')) != 64
+            or any(k in d for k in ('force_latent_cache_root', 'expected_force_latent_identity', 'teacher_checkpoint'))):
+        raise ValueError('Verified observed-only JEPA RGB wrapper over baseline cache required')
+    base = d['base_config']
+    if base.get('expected_text_identity') != m.get('expected_text_identity'):
+        raise ValueError('JEPA baseline cache and model text identities differ')
+
+
+class JepaGradientProbe:
+    """Collect real backward evidence before ZeRO clears per-step gradients."""
+    def __init__(self, model):
+        import torch
+        from .jepa_observation import variant_spec
+        self.encoder = model.dit['jepa_observation']
+        spec = variant_spec(self.encoder.variant)
+        self.expected = {f'encoder.blocks.{i}.attn.qkv.lora_{part}_{factor}'
+                         for i in range(spec['depth'] - 4, spec['depth'])
+                         for part in ('q', 'v') for factor in ('a', 'b')}
+        self.parameters = dict(self.encoder.named_parameters())
+        actual = {name for name, p in self.parameters.items() if p.requires_grad}
+        expected_count = 4 * 4 * 8 * spec['width']
+        if (actual != self.expected or sum(self.parameters[n].numel() for n in actual) != expected_count
+                or any(module.training for module in self.encoder.encoder.modules())):
+            raise RuntimeError('Actual JEPA must keep base frozen/eval and only final-four Q/V rank8 trainable')
+        self.gradients = {name: [] for name in sorted(self.expected)}
+        self.handles = []
+        for name in sorted(self.expected):
+            def record(gradient, name=name):
+                self.gradients[name].append(dict(finite=bool(torch.isfinite(gradient).all()),
+                                                 nonzero=bool(gradient.detach().abs().sum() > 0)))
+                return gradient
+            self.handles.append(self.parameters[name].register_hook(record))
+        self.expected_count = expected_count
+
+    def finish(self):
+        for handle in self.handles:
+            handle.remove()
+        base = [p for name, p in self.parameters.items() if name not in self.expected]
+        frozen = all(not p.requires_grad for p in base)
+        no_base_gradients = all(p.grad is None for p in base)
+        seen = all(len(records) >= 2 for records in self.gradients.values())
+        finite = all(records and all(r['finite'] for r in records) for records in self.gradients.values())
+        # LoRA B is initialized at zero: its A gradient is initially zero and
+        # must become nonzero after the first Adam update changes B.
+        nonzero = all(any(r['nonzero'] for r in records) for records in self.gradients.values())
+        result = dict(variant=self.encoder.variant, base_parameters_frozen=frozen,
+                      base_parameter_count=sum(p.numel() for p in base),
+                      frozen_base_gradients_absent=no_base_gradients,
+                      base_eval=not any(m.training for m in self.encoder.encoder.modules()),
+                      lora_trainable_count=sum(self.parameters[n].numel() for n in self.expected),
+                      expected_lora_trainable_count=self.expected_count,
+                      lora_gradient_records=self.gradients,
+                      all_lora_seen_across_updates=seen, all_lora_gradients_finite=finite,
+                      all_lora_received_nonzero_gradient=nonzero)
+        result['accepted'] = bool(frozen and no_base_gradients and result['base_eval'] and seen and finite and nonzero)
+        return result
 
 
 
@@ -124,6 +217,10 @@ def execute(config_path,output):
     train_ds,val_ds=build_probe_datasets(cfg.data)
     from .cache import validate
     dataset_receipt=validate(train_ds.root,train_ds.identity_sha256)
+    if hasattr(train_ds, 'observation_identity_sha256'):
+        dataset_receipt = dict(dataset_receipt,
+            jepa_observation_identity_sha256=train_ds.observation_identity_sha256,
+            jepa_observation=train_ds.obs_manifest)
     trainer=Wan22Trainer(model,train_ds,val_ds,cfg=cfg)
     engine=trainer.model
     zero=trainer.accelerator.state.deepspeed_plugin.deepspeed_config['zero_optimization']
@@ -135,6 +232,7 @@ def execute(config_path,output):
     h=helpers();adam=h.unwrap_optimizer(trainer.optimizer)
     if not isinstance(adam,torch.optim.AdamW):raise RuntimeError('Actual AdamW required')
     schedule = verify_trainer_schedule(trainer, cfg)
+    jepa_probe = JepaGradientProbe(model) if 'jepa_observation' in model.dit else None
     layer_calls=[0]*28;handles=[];query_gradients=[]
     def record_query_gradient(gradient):
         query_gradients.append({'finite':bool(torch.isfinite(gradient).all()),
@@ -150,6 +248,7 @@ def execute(config_path,output):
     from .probe_updates import run_two_updates
     losses,updates=run_two_updates(trainer,synchronize=torch.cuda.synchronize)
     for handle in handles:handle.remove()
+    jepa_gradients = jepa_probe.finish() if jepa_probe is not None else None
     report={'rank':rank,'world_size':4,'batch_per_rank':batch,'global_batch':4*batch,'max_steps':steps,
         'scheduler_total_steps':schedule['scheduler_total_steps'],
         'actual_engine_updates':int(engine.global_steps),'scheduler':h.inspect_scheduler(trainer.scheduler),
@@ -160,12 +259,14 @@ def execute(config_path,output):
         'peak_reserved_gib':torch.cuda.max_memory_reserved()/2**30,
         'gpu':torch.cuda.get_device_name(),'architecture_counts':{k:sum(p.numel() for p in v.parameters()) for k,v in model.dit.items()},
         'dataset':dataset_receipt,'official_initialization':model.manifest,
+        'jepa_observation_gradient_contract':jepa_gradients,
         'memory_rng_state':model.dit['runtime'].get_state().tolist(),
         'formal_training_started':False,'checkpoint_saved':False,'distributed_resume_verified':False}
     accepted=(report['actual_engine_updates']==2 and report['adam_state_steps']
         and all(x==2 for x in report['adam_state_steps']) and report['all_parameters_finite']
         and report['adam_master_and_moments_finite'] and min(layer_calls)>=2
         and len(query_gradients)==2 and all(g['finite'] and g['all_queries_nonzero'] for g in query_gradients)
+        and (jepa_gradients is None or jepa_gradients['accepted'])
         and all(not u['optimizer_step_was_skipped'] for u in updates))
     from .persistence import resource_identity,training_state_fingerprints
     report['resource']=resource_identity()
