@@ -110,7 +110,7 @@ def test_resume_keeps_absolute_epoch_and_exact_remaining_indices():
     assert all(epoch == 8 for _,epoch in resumed)
 
 
-def test_epoch_reaches_prefetched_and_persistent_workers(workers):
+def check_epoch_reaches_prefetched_and_persistent_workers(workers):
     data = EpochDataset()
     indices = sampler(data)
     loader = DataLoader(data,batch_size=4,sampler=indices,num_workers=workers,
@@ -120,6 +120,14 @@ def test_epoch_reaches_prefetched_and_persistent_workers(workers):
         batches = list(loader)
         assert torch.cat([x['epoch'] for x in batches]).tolist() == [epoch]*len(data)
         assert len(set(torch.cat([x['index'] for x in batches]).tolist())) == len(data)
+
+
+def test_epoch_reaches_single_process_loader():
+    check_epoch_reaches_prefetched_and_persistent_workers(0)
+
+
+def test_epoch_reaches_prefetched_and_persistent_workers():
+    check_epoch_reaches_prefetched_and_persistent_workers(2)
 
 
 def test_unchanged_dataset_still_receives_integer_indices():
@@ -146,12 +154,8 @@ def test_plan_does_not_import_torch_or_touch_remote_paths():
 def load_tests(loader, tests, pattern):
     suite = unittest.TestSuite()
     for name, function in globals().items():
-        if name.startswith('test_') and name != 'test_epoch_reaches_prefetched_and_persistent_workers':
+        if name.startswith('test_'):
             suite.addTest(unittest.FunctionTestCase(function))
-    for workers in (0,2):
-        suite.addTest(unittest.FunctionTestCase(
-            lambda workers=workers: test_epoch_reaches_prefetched_and_persistent_workers(workers),
-            description=f'epoch propagation with {workers} workers'))
     return suite
 
 
