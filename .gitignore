@@ -252,6 +252,8 @@ onelogger.log
 *.py[cod]
 !requirements-cosmos.txt
 !requirements-test-cosmos.txt
+!requirements-reference-cpu.txt
+.venv-reference-cpu/
 
 # Reviewed, bounded experiment artifacts (no checkpoints or prepared tensors).
 !docs/cosmos/experiments/joint8-step10000-20261021/results/
