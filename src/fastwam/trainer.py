@@ -124,6 +124,7 @@ class Wan22Trainer:
                 shuffle=False,
                 sampler=self.train_sampler,
                 num_workers=0,
+                collate_fn=getattr(self.train_dataset, 'collate_fn', None),
             )
             warmup_sample = next(iter(warmup_loader))
             with self.accelerator.autocast():
@@ -200,6 +201,7 @@ class Wan22Trainer:
             num_workers=self.num_workers,
             pin_memory=torch.cuda.is_available(),
             worker_init_fn=worker_init_fn,
+            collate_fn=getattr(dataset, 'collate_fn', None),
         )
 
     def _assert_dataset_length_consistent(self, dataset, dataset_name: str):

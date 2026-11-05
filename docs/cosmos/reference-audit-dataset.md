@@ -1,35 +1,40 @@
-# 参考轨迹数据集与审计网络接入合同
+# 完整参考轨迹、观测审计网络与 WAM 联合训练
 
 ## 1. 当前完成到哪里
 
 本分支基于 `codex/cosmos-rm71d78-videoisolated-delta30k` 的
-`931ae1b6048944f44696d2677695fa53a1690a78`。当前增加的是 **CPU 数据准备与验证层**：
+`931ae1b6048944f44696d2677695fa53a1690a78`。本分支已经实现以下代码路径：
 
 1. 从完整 episode 的真实测量轨迹生成稀疏、可追溯的 reference bank。
 2. 在取样时生成变长、非均匀、带几何扰动和缺失的参考输入，并自动产生对齐监督。
 3. 检查 reference bank 与原 Cosmos Joint8 cache 的来源、连续段和 episode/frame 对应关系。
+4. `ReferenceCachedDataset` 与变长 collate，把完整参考和监督分开连接到原缓存样本。
+5. `ObservationReferenceAuditor` 仅根据当前/因果观测推断参考进度，并产生 32 个可微局部条件 token。
+6. `ReferenceJointModel` 把条件只加入 Action Expert，使用原 FM 损失与自动对齐 CE 联合训练。
+7. 启智四卡训练入口、资产核验和更新/保存/恢复检查入口，默认单卡 batch 64、30,000 步。
 
-**本提交没有实现审计网络、reference-aware WAM、联合训练 Dataset wrapper/collate 或新的训练入口。**
-原 `NoActionJointModel` 的 `reference_mode='none'`，会拒绝 `reference`、
-`action_reference` 等未来动作/参考条件。把新数据字段直接塞给旧训练命令不会启用此方案。
-因此本文只提供已经可执行的 CPU 命令，不提供冒充已接入的训练命令。
+原 `NoActionJointModel` 保持 `reference_mode='none'`，基线文件不改；新模型通过独立 factory
+`fastwam.cosmos.reference_model.create_reference_joint_cosmos` 启用参考分支。
+不能只把新字段塞给旧 factory 就认为已经使用了参考。
 
-本次处理不修改原始数据、既有缓存或基线模型文件，不调用 GPU。启智上的模型接入和训练属于后续工作。
+代码实现与训练证据分开记录：本文不声称远端 PyTorch 测试、四卡检查或正式训练已经通过/开始。
+已有 CPU bank 与来源绑定结果见第 7 节；运行后的配置、日志与 checkpoint 才是训练状态的依据。
+原始数据与既有缓存不被改写；参考 bank 可在本地 CPU 制作，模型训练在启智执行。
 
 ## 2. 算法目标与职责边界
 
-拟接入的数据流为：
+已实现的数据流为：
 
 ```text
 完整参考 R（训练：GT 派生；部署：VLM 提供）
                + 当前/因果历史观测 O_t
                           ↓
                 observation-only auditor
-                判断当前应读取哪些参考点
+             预测进度分布 + 学习前瞻范围
                           ↓
-              可微参考读取 → 局部参考 token
+              完整变长 M → 32 个软读取 token
                           ↓
-           原 WAM 的 Action Expert 条件分支
+          条件 adapter → 只加到 AE 输入 token
                           ↓
                   原格式的动作块 A_t
 ```
@@ -74,7 +79,7 @@ GT 派生参考与 GT 动作监督分开保存，增强只作用于前者。
 现有 Joint8 cache 的 state 取原始列 `[0,1,2,3,4,5,6,19]`，即关节角＋夹爪，**不是 TCP pose**。
 新 bank 另存每个有效观测时刻的 `observation_tcp [N_valid,8]`。
 `ReferenceBank.sample()` 只返回与该样本时刻匹配的一行 `current_tcp [8]`，不把整个未来测量序列暴露给模型。
-后续可由它构造相对当前 TCP 的参考表征，无需假定旧 state 已含 TCP，也不在本阶段用不明约定的 FK 替代测量值。
+审计网络由它构造相对当前 TCP 的参考表征，无需假定旧 state 已含 TCP，也不用未验证的 FK 替代测量值。
 
 动作标签继续使用既有 `delta_current_joint7` 加绝对夹爪开度；参考的 8 维与动作的 8 维含义不同，不可直接相减。
 
@@ -167,12 +172,12 @@ Dataset 内部连接或 loss/审计，不得拼进 auditor/WAM 输入。不要�
 同一 episode、同一 epoch、同一配置中的不同 anchor 会看到完全相同的参考计划；新 epoch 才换一个版本。
 这避免同一执行窗口中的参考突然跳变，也保证给定种子的可复现性。
 
-未来 Dataset wrapper 必须把 epoch 显式传给 `sample()`，并把 seed、epoch、增强配置写入 checkpoint/run metadata。
-`DataLoader(persistent_workers=True)` 时，在主进程修改普通 `dataset.epoch` 不会自动更新 worker 内的副本；
-应通过共享 epoch 状态、sampler 传递的 epoch 信息或重建 worker 实现同步。当前 reader 不提供自动传播机制。
-多卡下不应无意把 worker ID/rank 加进此种子，导致同一 episode/epoch 在不同 worker 中变成不同计划。
+`ReferenceCachedDataset.accepts_epoch_indices=True`，sampler 将 `(sample_index, epoch)` 随每个取样请求
+显式送到 worker；wrapper 再把 epoch 传给 bank。这样在 `persistent_workers=True` 和预取时，也不会依赖
+主进程中未同步的普通 `dataset.epoch`。参考 seed 与增强参数保存在 resolved config；原 sampler 的恢复状态
+继续确定 epoch 和取样位置。种子不包含 worker ID/rank，同一 episode/epoch 在各 worker 中使用同一参考计划。
 
-## 5. 与既有 cache 连接及后续联合训练
+## 5. 与既有 cache 连接及联合训练实现
 
 ### 5.1 连接和 batch 合同
 
@@ -183,36 +188,66 @@ Dataset 内部连接或 loss/审计，不得拼进 auditor/WAM 输入。不要�
 当前绑定核对的旧时间合同为：动作 offsets `0..31`，力 offsets `1..32`，历史 offsets `-31..0`，
 图像 offsets `0,4,...,32`。这里未来视频/力属于原 WAM 的预测目标，**不因此成为 auditor 的当前观测输入**。
 
-后续 collate 必须独立对参考长度做 padding，而不是裁为动作块长度。建议输出：
+`reference_collate()` 只对参考的 M 维做 padding，不截成动作块长度。实际输出分成两个字典：
 
 ```text
-reference_pose            [B, M_max, 8]
-reference_padding_valid   [B, M_max]    # 真实槽位 / padding
-reference_valid           [B, M_max]    # 真实槽位且未被增强 mask
-alignment_target          [B, M_max]    # padding 与不可见槽位均为 0
-alignment_enabled         [B]
+reference_inputs:
+  reference_pose            [B, M_max, 8]
+  reference_valid           [B, M_max]    # 真实槽位且未被增强 mask
+  reference_channel_valid   [B, M_max, 3]
+  reference_order           [B, M_max]    # 各参考独立的归一化顺序
+  reference_break_before    [B, M_max]
+  reference_present         [B]
+  current_tcp               [B, 8]
+reference_supervision:                  # 只送 loss
+  alignment_target          [B, M_max]    # padding 与不可见槽位均为 0
+  alignment_enabled         [B]
 ```
 
-两种 mask 分开保存便于诊断；最终参考几何 attention 只读有效槽位。被隐藏点的占位值是零位置、单位四元数、零夹爪，
-不能把它当成真实 pose。全参考不可见时必须使用显式 NULL token 或绕过参考分支，
-不能对全 `-inf` 的 logits 执行 softmax。alignment CE 只在启用样本和合法支持集计算，避免 `0 * -inf` 产生 NaN。
-若当前段完全隐藏、其他段仍可见，模型不能读取监督段号；如何学习 abstain/NULL 仍需接入时明确设计和验证。
+当前接口把 padding 与增强 mask 都表示成 `reference_valid=False`，attention 不读取其几何。
+不可见点的占位值在模型投影前再次清零，避免 padding 或 NaN 污染有效点。全参考不可见时启用显式 NULL key，
+并将 AE 的参考条件置零，连 adapter bias 也一起消除。alignment CE 只在启用样本上计算，避开 `0 * -inf`。
+若当前连续段全部隐藏而其他段仍可见，本实现关闭该样本 CE，但不会使用 GT 段号帮助推断，也没有额外监督
+“当前段不可见”的 abstain 分类器；这是仍需评估的情况。
 
-### 5.2 拟实施的可微联合训练路径
+### 5.2 当前网络如何读取完整参考
 
-以下是接入计划，不是本提交已经运行的网络：
+审计器默认宽度 128、4 个 attention head、2 层 Transformer，使用独立于未来扩散状态的当前观测分支：
 
-1. 编码干净的当前/因果历史观测和增强参考，输出对可见参考点的读取分布 `p_t`。
-2. 根据 **预测** `p_t` 进行可微局部读取，例如对参考 latent 做软窗口加权并生成少量有序局部 token。
-   不在训练 forward 中用 GT 对齐标签硬切窗口；直接 argmax/top-k 切片会切断动作损失到 auditor 的梯度，需另外处理。
-   姿态先编码为 latent 再融合，不直接无约束平均四元数坐标。
-3. 局部 token 通过新的条件 adapter/cross-attention 只送入 Action Expert；保持既有动作块和 flow matching target。
-4. 联合目标以 `L = L_action_FM + λv L_video_FM + λf L_force_FM + λalign L_alignment` 为起点。
-   `L_alignment` 用自动 provenance 软标签训练读取；`L_action_FM` 必须能经参考读取、adapter 反传到 auditor，
-   这样学习的是有助于准确动作的参考选择，而不是只有独立进度分类器。权重、冻结策略和稳定性需要后续实验决定。
+1. **观测查询。** 独立编码的 `first_frame_latents [B,16,1,H,W]` 空间池化到 4×4；与当前 proprio、
+   单行 TCP、32 步因果 state/force 历史及其有效性 mask 一起编码为 observation query。
+   不读取未来 `video_latents`、未来力、带噪动作、预测动作或 GT 进度。
+2. **完整参考编码。** 每点使用原始 xyz/quaternion/gripper、相对当前 TCP 的位置/旋转、参考自身顺序、
+   段边界和 mask 特征。参考 M 保持不变；两层 Transformer 编码后，与观测 query 计算对齐分布 `p_i`。
+3. **预测软地址。** 设参考自身顺序为 `u_i`，预测进度为 `s = Σ p_i u_i`；观测分支同时预测
+   `h = 0.01 + 0.24 sigmoid(span_head(obs))`。第 k 个局部地址为
+   `c_k = clamp(s + h·k/31, 0, 1)`，k=0…31。h 是参考归一化顺序上的前瞻范围，不是 GT 未来 32 帧的索引跨度。
+4. **32 个可微局部读数。** 每个地址用 Gaussian 权重读取参考 latent，带宽 `max(h/4, 0.01)`；
+   另用对齐分布在各连续段上的概率质量作为软先验。读取的是 latent，不直接平均四元数坐标。
+   未来读取不再次叠加尖锐的当前 anchor logits，避免对齐收敛后 32 个槽位全部挤在当前点上。
+5. **只条件化 AE。** 32 个局部 latent 与地址/前瞻/槽位顺序编码后，通过 MLP adapter 投影到 AE 宽度，
+   加入 AE 的 32 个初始 action token。Video/Force 的 context、attention 可见性和输入准备保持不变。
 
-审计编码必须只取观测信息：不能把含未来目标、带噪未来视频/力 token 或预测动作的 joint hidden state 直接称为
-“obs-only”特征。可另建观测编码器或使用明确隔离的 observed context。贡献 3 的后层 WM 特征监控器另行处理。
+完整参考没有预先重采样到 32；32 只固定下层条件宽度和既有动作块长度。GT 对齐标签从未参与硬切窗口、
+地址计算或教师强制。前向一次计算 auditor，然后执行原 joint denoising，不先预测动作再审计。
+
+### 5.3 联合损失、训练与推理边界
+
+当前损失为：
+
+```text
+L = L_video_FM + L_force_FM + L_action_FM + 0.1 L_alignment_CE
+```
+
+原三路 FM 的时钟、噪声、目标、loss mask 和权重保持不变。自动 provenance 软标签只用于 CE；
+原未来视频、力和动作真值继续用于原 FM。`reference_supervision` 不进入 auditor，推理时不需要提供。
+动作 FM 可以通过 AE 输入 adapter → 软读取 → 进度 attention 与 span head 反传，因而能够联合优化参考选择。
+审计器与 adapter 都注册在 `model.dit`，包含在原 trainer 的 optimizer 和完整 checkpoint 中。
+静态推理缓存仅含原 O/H/text；训练时不复用 detach 的 inference cache。
+
+新增测试覆盖变长到固定 32、mask/NULL、标签隔离、仅 AE 受参考影响、action-only 梯度、checkpointing、
+缓存推理与恢复一致性。测试代码存在不等于远端检查已经通过；执行结果必须看对应测试日志。
+后层 WM 特征监控、失败回退与重新调用上层 VLM 的模块不在本实现内。
 
 原 V/F/A 专家之间的 attention 可见性保持不变，行是 Query，列是 Key/Value：
 
@@ -263,6 +298,57 @@ $env:PYTHONPATH = (Join-Path (Get-Location) 'src')
 & $cpuPython -m unittest discover -s tests/cosmos -p 'test_reference*cpu.py' -v
 ```
 
+网络测试需要已有 PyTorch/native Cosmos 训练环境，不能用上面的轻量 NumPy 环境冒充执行：
+
+```bash
+PYTHONPATH=src python -m pytest tests/cosmos/test_reference_model.py -q
+```
+
+### 6.1 启智训练入口与配方
+
+以下命令在新分支仓库根目录执行。launcher 默认使用启智原训练 Python；可通过 `NATIVE_PYTHON`
+指定同一已配置环境。`--plan` 只显示路径和配方，不读取资产、不申请 GPU：
+
+```bash
+bash scripts/cosmos/launch_reference_audit.sh --plan
+```
+
+先在启智 CPU 环境核验现有 78-episode cache、text、normalization、官方权重与 reference bank：
+
+```bash
+bash scripts/cosmos/launch_reference_audit.sh --resolve-only \
+  --work /inspire/ssd/project/long-range-embodied-collaborative-intelligence/ky26340/rm71d-reference-audit-20261105/resolved/cpu-review-01 \
+  --run-root /inspire/ssd/project/long-range-embodied-collaborative-intelligence/ky26340/rm71d-reference-audit-20261105/training/cpu-review-01
+```
+
+work/run-root 必须是尚不存在且相互独立的目录；重复验证时换新名字。此命令生成 resolved config 和核验收据，
+不运行 GPU forward。随后在启智已分配的**单节点 4×H200 正式训练任务**中执行：
+
+```bash
+bash scripts/cosmos/launch_reference_audit.sh --execute --batch-size 64 --max-steps 30000
+```
+
+`--execute` 要求平台提供 `TRAIN_JOB_ID`，用该 ID 创建独立 work/run 目录；先执行四 rank 两次 Adam 更新、
+保存和独立恢复检查，再启动正式训练。这是入口行为，不代表检查结果已得到。默认复用指定 delta30k prepared
+目录中的数值/视频 latent/text cache，不重新 VAE 编码；模型使用固定 SHA 的官方 non-action 视频基础权重，
+AE、Force 和 auditor 新建，不从旧 30k policy/optimizer 续训。
+
+| 配方 | 值 |
+| --- | --- |
+| GPU / ranks | 4×H200 / 4 |
+| batch per rank / accumulation / global batch | 64 / 1 / 256 |
+| 正式 optimizer updates | 30,000 |
+| 学习率调度总长度 / warmup | 50,000 / 2,500，沿用原调度定义 |
+| 每次动作 / 局部参考条件 | 32×Joint8 / 32 个 latent token |
+| 完整参考长度 | 每 episode/epoch 随增强变化，batch 内仅 padding |
+| 对齐 CE 权重 / 整参考 dropout | 0.1 / 0.1 |
+| 数据划分 | all 78 episodes train，无 held-out |
+
+默认 reference bank 路径是
+`/inspire/ssd/project/long-range-embodied-collaborative-intelligence/ky26340/rm71d-reference-audit-20261105/reference-bank/rm71d78-v1`；
+同步位置不同时用 `--reference-bank` 指定，内容 identity 仍须匹配。`--prepared`、`--checkpoint`、
+`--upstream` 可指定资产路径；入口核验 pinned 身份，不只检查文件存在。
+
 ## 7. 本次实际结果与证据边界
 
 完整数值以生成产物为准：
@@ -289,18 +375,26 @@ Reference bank identity 为 `7d0a0a108d8d338633439358548cd7e8a32b275c74420444c0c
 完整 raw inventory SHA 不同，原因是本地额外保留了 78 个 `force_streams/episode_*.jsonl`；
 绑定报告中其余文件无修改或远端独有项。无需删除这些日志或改写原始文件来制造全 SHA 相等。
 
-`bound` 不等于已训练可用：当前报告明确为
+上述 CPU `bound` 收据不等于已训练可用：其报告明确为
 `cache_tensor_payloads_verified=False`、`model_integration_verified=False`、
 `training_readiness_evaluated=False`。没有据此验证缓存张量本体、GPU forward/backward、机器人 rollout 或成功率。
 
-## 8. 数据划分与启智后续工作
+## 8. 数据划分与仍需验证的假设
 
 当前 bank 与旧 cache 都是 **all 78 episodes train，val/test 为空**。这使它能复用旧缓存身份，
 但不能提供 held-out 泛化结论。`--split-json` 可记录新 train/val/test membership，
 不会自动重算旧 normalization，也不能消除已有 all78 checkpoint 看过验证 episode 的事实。
 本次绑定器要求原 all78 membership；未来做正式独立评测，需重建相应缓存/统计并明确模型预训练暴露范围。
 
-本地 CPU 负责原始身份审计、reference bank、增强测试与 provenance 绑定；不占用本机 GPU。
-启智可先用 CPU 校验同步后的 bank/receipt，随后在原训练环境中完成 Dataset wrapper、变长 collate、obs-only auditor、
-Action Expert 条件入口与联合 loss。先检查 mask、NULL fallback、无标签泄漏和梯度可达，再做训练。
-此后还需要真实 VLM 参考分布和真实接触任务评估，才能判断训练时的合成参考能否迁移、模型是否确实根据感知细化动作。
+本地 CPU 负责原始身份审计、reference bank、增强测试与 provenance 绑定；模型接口、joint loss 与训练入口已实现。
+启智实际运行仍需验证完整缓存张量、BF16 forward/backward、梯度到达、四卡保存/恢复、显存与吞吐。
+30,000 步是否完成只能由训练日志和 checkpoint 证明。
+
+本设计还有明确的研究假设：
+
+- 进度使用 `E[reference_order]`。当后验在重复动作或多个连续段上呈多峰时，均值可能落在两峰之间，
+  软段先验不等于已经解决歧义，也不是硬性保证不跨段。需要针对重复路径、遮挡和局部全缺失评测。
+- 只用 GT 派生的合成参考训练，没有真实 GPT/VLM 参考分布，迁移效果尚不能由数据增强保证。
+- 加噪、稀疏化与 dropout 提供抗复制训练条件，不能单独证明模型不依赖参考；需有无参考、错误参考、
+  参考偏差分级，以及视觉/力消融来检查细化是否来自观测。
+- 没有恢复、回退、失败监控或上层重规划的真实数据和实机验证；该分支不声称完整闭环恢复框架已经验证。
