@@ -2,3 +2,5 @@
 loguru==0.7.3
 nvidia-ml-py==13.610.43
 attrs>=25.3.0
+# Official JEPA encoder imports timm's drop_path; match the verified encoder tests.
+timm==1.0.15
