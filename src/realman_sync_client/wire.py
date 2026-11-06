@@ -13,6 +13,27 @@ PROTOCOL = "realman-sync-v1"
 MAX_BODY_BYTES = 64 * 1024 * 1024
 
 
+def temporal_tolerances(metadata):
+    """Server-owned runtime acceptance envelope; trained payload stays intact.
+
+    Absence means the original strict contract. Request bodies cannot select
+    their own limits. Causal ordering and identity checks always remain active.
+    """
+    limits = dict(force_max_age_s=.03, camera_max_age_s=.12, camera_pair_skew_s=.05)
+    if "temporal_tolerances" not in metadata:
+        return limits
+    configured = metadata["temporal_tolerances"]
+    if not isinstance(configured, dict) or set(configured) - set(limits):
+        raise ValueError("Invalid temporal_tolerances declaration")
+    ceilings = dict(force_max_age_s=.1, camera_max_age_s=.5, camera_pair_skew_s=.2)
+    for key, value in configured.items():
+        value = finite(value, key)
+        if not 0 < value <= ceilings[key]:
+            raise ValueError(f"{key} must be in (0, {ceilings[key]}]")
+        limits[key] = value
+    return limits
+
+
 def finite(value, name):
     if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
         raise ValueError(f"{name} must be a finite number")
@@ -62,7 +83,7 @@ def _sample(sample, metadata):
             raise ValueError("Force preprocessing differs from trained model")
         integer(force_meta.get("epoch"), "force epoch")
         source = finite(force_meta.get("source_time"), "force source_time")
-        if not -1e-8 <= stamp - source <= 0.030001:
+        if not -1e-8 <= stamp - source <= temporal_tolerances(metadata)["force_max_age_s"] + 1e-6:
             raise ValueError("Force source is stale or from the future")
     return dict(sequence=sequence, stamp=stamp, state=state, force=force, force_meta=force_meta)
 
@@ -79,6 +100,7 @@ def encode_observation(observation):
 
 
 def decode_observation(observation, metadata):
+    timing = temporal_tolerances(metadata)
     result = _sample(observation, metadata)
     if observation.get("action_space") != metadata["action_space"]:
         raise ValueError("Observation action_space differs from server")
@@ -118,10 +140,11 @@ def decode_observation(observation, metadata):
         if "received" in meta:
             stamp = finite(meta["received"], "camera received")
             anchor = result["force_meta"].get("source_time", result["stamp"])
-            if not -1e-8 <= anchor - stamp <= .120001 or abs(stamp - anchor) > .050001:
+            if (not -1e-8 <= anchor - stamp <= timing["camera_max_age_s"] + 1e-6
+                    or abs(stamp - anchor) > timing["camera_pair_skew_s"] + 1e-6):
                 raise ValueError("Camera and robot timestamps are misaligned")
             received.append(stamp)
-    if received and max(received) - min(received) > .050001:
+    if received and max(received) - min(received) > timing["camera_pair_skew_s"] + 1e-6:
         raise ValueError("Camera pair timestamps are misaligned")
     result.update(action_space=metadata["action_space"], frames=decoded, frame_meta=frame_meta)
     return result

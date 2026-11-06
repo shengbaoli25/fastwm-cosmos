@@ -170,6 +170,81 @@ class RecoveredWorker:
 
 
 class WebHardwareTests(unittest.TestCase):
+    def test_extended_observation_budget_never_relaxes_motion_or_hides_expiry(self):
+        hardware, worker = self.manual_hardware(enabled=True)
+        hardware.config['gripper_feedback_max_age_s'] = 1.5
+        worker.state.update(received=10., measurement_started=9.94)
+        worker.history.clear()
+        worker.history.append((10., .42))
+        worker.history_started.append((10., 9.94))
+        # A recent enable response cannot refresh the older actual position.
+        worker.enabled_received = 11.14
+        hardware.feedback = Mock()
+        hardware.feedback.diagnostics.side_effect = lambda: (
+            dict(values=[0.]*7, ready=True, error=None), dict(values=[0.]*6, ready=True, error=None))
+        hardware.cameras = [Mock(), Mock()]
+        status = dict(connected=True, joint_limits_ready=True, robot_ready=True,
+            force_ready=True, cameras_ready=True, camera_order=['global', 'wrist'],
+            force_preprocessing={'id': 'test-contract'})
+        with patch.object(web.clock, 'now', return_value=11.14), \
+                patch.object(web.RealManHardwareAdapter, 'command') as joint_command:
+            state = worker.status(1.5)
+            self.assertEqual(state['age_ms'], 1200.)
+            self.assertTrue(state['measurement_ready'])
+            self.assertIsNone(state['measurement_error'])
+            self.assertFalse(state['ready'])
+            self.assertFalse(state['control_feedback_ready'])
+            self.assertEqual(worker.snapshot(11.1, 1.5), .42)
+            self.assertEqual(hardware._local_ready(dict(status, gripper=state), for_execution=False),
+                             (True, None))
+            with self.assertRaisesRegex(RuntimeError, '运动反馈未就绪'):
+                hardware.command([0.]*7+[.4])
+            with self.assertRaises(RuntimeError):
+                worker.command(.8)
+            joint_command.assert_not_called()
+            self.assertTrue(hardware.diagnostics()['state']['ready'])
+            self.assertIsNone(hardware.gripper_diagnostics()['measurement_error'])
+        with patch.object(web.clock, 'now', return_value=11.51):
+            state = worker.status(1.5)
+            self.assertFalse(state['measurement_ready'])
+            self.assertIn('观测反馈过期', state['measurement_error'])
+            self.assertIn('1500 ms', state['measurement_error'])
+            self.assertEqual(hardware._local_ready(dict(status, gripper=state), for_execution=False),
+                             (False, state['measurement_error']))
+            self.assertEqual(hardware.diagnostics()['state']['error'], state['measurement_error'])
+            self.assertEqual(hardware.gripper_diagnostics()['measurement_error'], state['measurement_error'])
+            with self.assertRaisesRegex(RuntimeError, '观测反馈过期'):
+                worker.snapshot(11.5, 1.5)
+
+    def test_extended_observation_budget_still_rejects_alarm_and_future_measurement(self):
+        worker = web._CheckedGripper(config())
+        worker.state = dict(initialized=True, enabled=True, ready=True, alarm=32,
+                            opening=.42, received=10., measurement_started=9.94, error=None)
+        worker.history.append((10., .42))
+        worker.history_started.append((10., 9.94))
+        with patch.object(web.clock, 'now', return_value=11.14):
+            self.assertEqual(worker.status(1.5)['measurement_error'], '夹爪报警 0x0020')
+            with self.assertRaisesRegex(RuntimeError, '夹爪报警'):
+                worker.snapshot(11.1, 1.5)
+            worker.state['alarm'] = 0
+            # Even the longer observation budget cannot make a response known
+            # before its actual arrival at 10.0.
+            with self.assertRaisesRegex(RuntimeError, '锚点之前'):
+                worker.snapshot(9.98, 1.5)
+
+    def test_fresh_reply_cannot_renew_older_selected_observation(self):
+        worker = web._CheckedGripper(config())
+        worker.state = dict(initialized=True, enabled=True, ready=True, alarm=0,
+                            opening=.8, received=11.6, measurement_started=11.5, error=None)
+        worker.history.extend([(10., .42), (11.6, .8)])
+        worker.history_started.extend([(10., 9.94), (11.6, 11.5)])
+        worker.enabled_received = 11.5
+        with patch.object(web.clock, 'now', return_value=11.7):
+            self.assertTrue(worker.status(1.5)['measurement_ready'])
+            with self.assertRaisesRegex(RuntimeError, '观测反馈过期'):
+                worker.snapshot(11.4, 1.5)
+            self.assertEqual(worker.snapshot(11.6, 1.5), .8)
+
     def test_recent_measurement_is_observable_during_transport_loss_but_motion_is_blocked(self):
         worker = web._CheckedGripper(config())
         worker.state = dict(initialized=True, enabled=True, ready=True, alarm=0,
@@ -732,6 +807,11 @@ class WebHardwareTests(unittest.TestCase):
         with patch.object(worker, '_read', side_effect=lambda sdk, factory, address, count: values[address]), \
                 patch.object(worker, '_write', side_effect=AssertionError('unexpected write')):
             self.assertEqual(worker._setup(FakeGripperSDK(), object()), (0, 1000, .75))
+            worker.mapping_min, worker.mapping_max = 0, 1000
+            self.assertEqual(worker._verify_readonly_reconnect(FakeGripperSDK(), object()), (0, 1000, .75))
+            worker.mapping_max = 1200
+            with self.assertRaisesRegex(RuntimeError, '映射不匹配'):
+                worker._verify_readonly_reconnect(FakeGripperSDK(), object())
 
     def test_gripper_rejects_missing_power_bus_or_parameters_without_repair(self):
         worker = web._CheckedGripper(config())

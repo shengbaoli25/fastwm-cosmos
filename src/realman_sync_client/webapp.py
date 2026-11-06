@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 from collections import deque
 from copy import deepcopy
+from dataclasses import replace
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from io import BytesIO
 import json
@@ -23,6 +24,8 @@ from .http import InferenceHTTPClient
 from .mock import MockHardware
 from .recovery import transient_failure
 from .reset_pose import load_reset_pose
+from .timing_profiles import hardware_settings, motion_settings as timing_motion_settings, profile_status, validate_profile
+from .wire import temporal_tolerances
 
 LOG = logging.getLogger(__name__)
 WEB_ROOT = Path(__file__).with_name('web')
@@ -48,6 +51,13 @@ class Dashboard:
         self.hardware_config, self.hardware_factory = hardware_config, hardware_factory
         self.execute_steps = execute_steps
         self.client_options = ClientOptions(execute_steps=execute_steps, **(motion_settings or {}))
+        self.timing_profile = 'strict'
+        if isinstance(hardware_config, (str, Path)) and Path(hardware_config).is_file():
+            saved_config = json.loads(Path(hardware_config).read_text(encoding='utf-8'))
+            self.timing_profile = validate_profile(saved_config.get('timing_profile', 'strict'))
+            if 'timing_profile' in saved_config:
+                self.client_options = replace(self.client_options, **timing_motion_settings(self.timing_profile))
+        self._timing_action, self._timing_busy, self._timing_error = None, False, None
         self.lock = threading.RLock()
         self.stop_event = threading.Event()
         self.want_connect, self.auto_infer, self.execute = True, auto_infer, False
@@ -195,6 +205,11 @@ class Dashboard:
             resume = self.execute
             if resume and self._execution_recovery_token is None:
                 return False
+            restart_required = getattr(self.hardware, 'recovery_requires_execution_restart', None)
+            if resume and restart_required and restart_required(self._execution_recovery_token):
+                resume = False
+                self._execution_recovery_token = None
+                self.event('warning', '夹爪连接已重建：仅自动恢复推理；动作执行需要重新开始')
             self.generation += 1
             self._recovery_generation = self.generation
             if self._recovery_deadline is None:
@@ -219,6 +234,12 @@ class Dashboard:
                 self._cancel_recovery()
                 return True
             resume = self.recovery['resume_execution']
+            restart_required = getattr(self.hardware, 'recovery_requires_execution_restart', None)
+            if resume and restart_required and restart_required(self._execution_recovery_token):
+                resume = False
+                self._execution_recovery_token = None
+                self.recovery['resume_execution'] = False
+                self.event('warning', '夹爪连接已重建：仅自动恢复推理；动作执行需要重新开始')
             now = clock.now()
             if now >= self._recovery_deadline:
                 self._pause_failure(RuntimeError('自动恢复等待超过 30 秒，保持停止：'+self.recovery['reason']))
@@ -261,7 +282,39 @@ class Dashboard:
         self.thread = threading.Thread(target=self._run, name='web-sync-inference', daemon=True)
         self.thread.start()
 
-    def control(self, action, *, sampling_profile=None):
+    def timing_status(self):
+        result = profile_status(self.timing_profile,
+            busy=bool(self._timing_action or self._timing_busy), error=self._timing_error)
+        result['supported'] = isinstance(self.hardware_config, (str, Path))
+        caps = temporal_tolerances(self.metadata or {})
+        result['profiles'] = [entry for entry in result['profiles'] if all(
+            hardware_settings(entry['id'])[key] <= caps[server_key]+1e-9
+            for key, server_key in (('force_source_max_age_s', 'force_max_age_s'),
+                ('camera_max_age_s', 'camera_max_age_s'), ('camera_pair_skew_s', 'camera_pair_skew_s')))]
+        return result
+
+    def control(self, action, *, sampling_profile=None, timing_profile=None):
+        with self.lock:
+            if (self._timing_action or self._timing_busy) and action not in {
+                    'execute_stop', 'inference_stop', 'disconnect', 'emergency_stop'}:
+                raise ValueError('请等待时序档位切换完成')
+            if action == 'timing_set':
+                selected = validate_profile(timing_profile)
+                status = self.timing_status()
+                if not status['supported'] or selected not in {p['id'] for p in status['profiles']}:
+                    raise ValueError('当前 Server/Client 不支持此时序档位')
+                if self.execute or getattr(self.hardware, 'armed', False):
+                    raise ValueError('请先停止动作执行再切换时序档位')
+                if self._reset_preparing or self._hardware_action or self._hardware_busy or self._sampling_action or self._sampling_busy:
+                    raise ValueError('请等待当前操作完成')
+                self._cancel_recovery()
+                self.generation += 1
+                self.auto_infer = self.execute = False
+                self.want_connect = True
+                if self.client:
+                    self.client.stop_event.set()
+                self._timing_action, self._timing_error = selected, None
+                return {'message': '时序档位切换已排队；暂停推理并重新连接硬件，完成后可重新开始实验'}
         if action == 'reset_pose':
             return self._queue_reset_pose()
         allowed = {'connect', 'disconnect', 'inference_start', 'inference_stop',
@@ -337,6 +390,8 @@ class Dashboard:
             self._cancel_recovery()
             self.generation += 1
             self.execute = False
+            if action in {'execute_stop', 'inference_stop', 'disconnect', 'emergency_stop'}:
+                self._timing_action = None
             if action == 'connect':
                 self.want_connect = True
             elif action == 'disconnect':
@@ -451,7 +506,37 @@ class Dashboard:
                     self._hardware_operation = hardware_action
                     sampling_action, self._sampling_action = self._sampling_action, None
                     self._sampling_busy = sampling_action is not None
+                    timing_action, self._timing_action = self._timing_action, None
+                    self._timing_busy = timing_action is not None
                     operation_generation = self.generation
+                if timing_action:
+                    try:
+                        self._close_hardware()
+                        fresh_after, last_sequence = 0.0, -1
+                        with self.lock:
+                            if operation_generation != self.generation or not self.want_connect or self.stop_event.is_set():
+                                raise InterruptedError('时序档位切换已取消')
+                            if timing_action not in {p['id'] for p in self.timing_status()['profiles']}:
+                                raise ValueError('Server 已不再支持此时序档位')
+                            path = Path(self.hardware_config)
+                            config = json.loads(path.read_text(encoding='utf-8'))
+                            config['timing_profile'] = timing_action
+                            temporary = path.with_suffix(path.suffix+'.timing.tmp')
+                            temporary.write_text(json.dumps(config, ensure_ascii=False, indent=2)+'\n', encoding='utf-8')
+                            temporary.replace(path)
+                            self.timing_profile = timing_action
+                            self.client_options = replace(self.client_options, **timing_motion_settings(timing_action))
+                            self.inference.update(enabled=False, actions=[], last_error=None)
+                            connect_due = 0.0
+                        self.event('info', '时序档位已切换：'+timing_action+'；推理和执行保持暂停')
+                    except Exception as exc:
+                        with self.lock:
+                            self._timing_error = str(exc)
+                        self.event('error', '时序档位切换未完成：'+str(exc))
+                    finally:
+                        with self.lock:
+                            self._timing_busy = False
+                    continue
                 if sampling_action:
                     try:
                         self._close_client()
@@ -662,6 +747,7 @@ class Dashboard:
                     last_sequence = obs.sequence
                     self.phase = self.inference['phase'] = 'monitoring'
                     timing = dict(source_sequence=obs.sequence,
+                        timing_profile=self.timing_profile,
                         sampling_profile=self.sampling.get('sampling_profile'), executed=bool(execute),
                         executed_steps=self.execute_steps if execute else 0,
                         observation_wait_ms=round((request_started-cycle_started)*1000, 2),
@@ -727,6 +813,7 @@ class Dashboard:
                     reconnecting=(self._hardware_operation or self._hardware_action) == 'reconnect_gripper',
                     clearing=(self._hardware_operation or self._hardware_action) in {'clear_gripper_error','diagnose_gripper'}),
                 sampling=dict(self.sampling, busy=bool(self._sampling_busy or self._sampling_action)),
+                timing=self.timing_status(),
                 inference=dict(self.inference, enabled=self.auto_infer),
                 execution=dict(enabled=self.execute, available=self.execution_available, blocked_reason=self.blocked_reason),
                 recovery=self.recovery,
@@ -840,7 +927,8 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 raise ValueError('Invalid request size')
             self.connection.settimeout(3)
             body = json.loads(self.rfile.read(length))
-            result = self.server.dashboard.control(body['action'], sampling_profile=body.get('sampling_profile'))
+            result = self.server.dashboard.control(body['action'], sampling_profile=body.get('sampling_profile'),
+                timing_profile=body.get('timing_profile'))
             self._send(200, dict(ok=True, **(result or {})))
         except (ValueError, KeyError, TypeError, RuntimeError, OSError) as exc:
             self._send(409, {'error':str(exc)})

@@ -86,6 +86,16 @@
             <p class="sampling-note" id="sampling-note">应用后暂停推理并预热；完成后手动恢复自动推理。动作段仍为 32 步，设备采集 Hz 不变。</p>
             <p class="sampling-error" id="sampling-error" role="status" hidden></p>
           </section>
+          <section class="panel sampling-panel" id="timing-panel" hidden>
+            <div class="panel-heading"><h3>反馈时序实验</h3><span class="pill muted" id="timing-status">等待配置</span></div>
+            <div class="sampling-current"><span>当前实际档位</span><strong id="timing-current">—</strong></div>
+            <p class="sampling-steps" id="timing-limits">等待时序阈值</p>
+            <label class="sampling-label" for="timing-select">选择对照或宽松实验档</label>
+            <div class="sampling-controls"><select id="timing-select" disabled><option value="">等待客户端声明档位</option></select><button class="button secondary" id="timing-apply-button" data-action="timing_set" disabled>应用</button></div>
+            <p class="sampling-note" id="timing-description">等待客户端时序配置</p>
+            <p class="sampling-note">切换会暂停推理并重新连接设备；完成后手动开始推理和执行。设备报警、急停与关节限位继续生效。</p>
+            <p class="sampling-error" id="timing-error" role="status" hidden></p>
+          </section>
         </aside>
       </div>
 
@@ -121,7 +131,7 @@
             <p class="gripper-result" id="gripper-result" role="status" hidden></p>
           </div>
         </section>
-        <section class="panel telemetry-panel"><div class="panel-heading"><h2>六维力反馈</h2><span class="pill muted" id="force-kind">等待反馈</span></div><div class="value-grid force-values" id="force-values"></div><p class="inline-error" id="force-error" hidden></p></section>
+        <section class="panel telemetry-panel"><div class="panel-heading"><h2>六维力反馈</h2><span class="pill muted" id="force-kind">等待反馈</span></div><div class="value-grid force-values" id="force-values"></div><p id="force-timing">等待 UDP 时序统计</p><p class="inline-error" id="force-error" hidden></p></section>
         <section class="panel latency-panel"><div class="panel-heading"><h2>请求延时</h2><div class="legend"><span><i class="legend-inference"></i>推理</span><span><i class="legend-roundtrip"></i>端到端</span></div></div><div class="chart-wrap"><svg id="latency-chart" viewBox="0 0 420 144" role="img" aria-label="最近请求延时曲线，单位毫秒"></svg><p id="chart-empty">首个动作返回后显示延时曲线</p></div></section>
       </div>
 

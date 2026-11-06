@@ -2,7 +2,7 @@
 
 (() => {
   const byId = (id) => document.getElementById(id);
-  const state = { payload: null, lastSuccess: 0, statusError: "", pending: 0, camera: {}, actionKey: "", eventKey: "", chartKey: "", samplingDirty: false, samplingOptionsKey: null };
+  const state = { payload: null, lastSuccess: 0, statusError: "", pending: 0, camera: {}, actionKey: "", eventKey: "", chartKey: "", samplingDirty: false, samplingOptionsKey: null, timingDirty: false, timingOptionsKey: null };
   const clientKey = document.querySelector('meta[name="client-key"]')?.content || "";
   const cameraNames = ["global", "wrist"];
   const gripperActions = {
@@ -53,6 +53,7 @@
   function renderButtons() {
     const data = state.payload || {}, inference = data.inference || {}, execution = data.execution || {}, sampling = data.sampling || {}, recovery = data.recovery || {};
     const gripper = data.gripper || {};
+    const timing = data.timing || {};
     const resetPose = data.reset_pose || {};
     const active = fresh(), busy = state.pending;
     const button = byId("inference-button");
@@ -83,16 +84,25 @@
     applyButton.disabled = samplingBlocked || !profiles.has(samplingSelect.value) || (samplingSelect.value === sampling.sampling_profile && !sampling.error);
     applyButton.textContent = sampling.busy ? "切换中…" : "应用";
     applyButton.title = !active ? "客户端状态未连接" : execution.enabled ? "请先停止动作执行" : sampling.busy ? "正在切换并预热" : !sampling.supported || !profiles.size ? "当前 Server 未声明可切换档位" : samplingSelect.value === sampling.sampling_profile && !sampling.error ? "当前档位已生效" : "应用 Server 声明的采样档位";
+    const timingProfiles = samplingProfiles(timing), timingSelect = byId("timing-select");
+    const timingBlocked = !!busy || !active || !timing.supported || !timingProfiles.size ||
+      !!timing.busy || !!sampling.busy || !!execution.enabled || !!gripper.busy || !!gripper.clearing ||
+      !!gripper.reconnecting || !!gripper.auto_reconnect?.active || !!resetPose.busy || data.phase === "connecting";
+    timingSelect.disabled = timingBlocked;
+    byId("timing-apply-button").disabled = timingBlocked || !timingProfiles.has(timingSelect.value) ||
+      (timingSelect.value === timing.profile && !timing.error);
+    byId("timing-apply-button").textContent = timing.busy ? "切换中…" : "应用";
     const resetButton = byId("reset-pose-button");
     resetButton.disabled = !!busy || !active || !hasResetPose(resetPose) || !resetPose.available || !!resetPose.busy;
     resetButton.textContent = resetPose.busy ? "复位中…" : "复位到记录位置";
     resetButton.title = !active ? "客户端状态未连接" : resetPose.reason || (hasResetPose(resetPose) ? "先暂停当前推理和执行，再复位到记录位置；夹爪保持" : "缺少完整的记录位置");
-    if (resetPose.busy) {
+    if (resetPose.busy || timing.busy) {
       document.querySelectorAll("button[data-action]").forEach((controlButton) => {
         if (!["execute_stop", "emergency_stop"].includes(controlButton.dataset.action)) controlButton.disabled = true;
       });
       samplingSelect.disabled = true;
-      byId("stop-button").disabled = !active;
+      timingSelect.disabled = true;
+      if (resetPose.busy) byId("stop-button").disabled = !active;
     }
     // Stop must remain usable even if another request is in flight or telemetry is stale.
     byId("emergency-button").disabled = false;
@@ -132,6 +142,8 @@
     const forceKind = sensors.force?.kind;
     const forceNames = { raw: "原始力反馈", filtered: "滤波力反馈", model: "模型输入力", mock: "模拟力反馈", calibrated: "校准力反馈", calibrated_filtered: "校准滤波力", controller_zero_force: "控制器原始力" };
     pill("force-kind", forceNames[forceKind] || forceKind || "等待反馈", ["raw", "controller_zero_force"].includes(forceKind) ? "warning" : "muted");
+    const feedbackTiming = sensors.force?.callback_timing;
+    text("force-timing", feedbackTiming ? `UDP 回调间隔 P95 ${number(feedbackTiming.arrival_gap_ms?.p95, 2)} ms · 处理 P95 ${number(feedbackTiming.processing_ms?.p95, 2)} ms · 超过 ${number(feedbackTiming.max_gap_ms)} ms 的空档 ${number(feedbackTiming.gaps_over_budget)} 次` : "等待 UDP 时序统计");
     text("inference-latency", number(inference.inference_ms));
     text("roundtrip-latency", number(inference.round_trip_ms));
     text("request-count", `${number(inference.requests_completed ?? 0)} 次完成`);
@@ -148,6 +160,7 @@
     recoveryNotice.textContent = recovery.active ? `等待反馈恢复，将自动继续。${recovery.resume_execution ? "反馈恢复后将恢复推理和动作执行；点击“停止执行”可取消待恢复执行。" : "反馈恢复后将恢复自动推理，不开启动作执行。"}${recovery.reason ? ` 原因：${recovery.reason}` : ""}${finite(recovery.attempts) && recovery.attempts > 0 ? ` 已尝试 ${number(recovery.attempts)} 次。` : ""}` : "";
     renderGripper(data.gripper || {}, execution);
     renderSampling(data.sampling || {});
+    renderTiming(data.timing || {});
     renderResetPose(data.reset_pose || {});
     const cameras = Array.isArray(sensors.cameras) ? sensors.cameras : [];
     cameraNames.forEach((name) => {
@@ -184,13 +197,17 @@
     const known = Number.isInteger(code) && code >= 0;
     const disabledHint = known && code === 0 && gripper.enabled === false && /^(夹爪)?未使能(?:，请点击夹爪使能)?[。.!！\s]*$/.test(String(gripper.error || ""));
     const controlLimit = finite(gripper.control_max_age_ms) ? gripper.control_max_age_ms : 500;
+    const observationLimit = finite(gripper.observation_max_age_ms) ? gripper.observation_max_age_ms : 1000;
     const feedbackStale = (finite(gripper.age_ms) && gripper.age_ms > controlLimit) ||
       (finite(gripper.enabled_age_ms) && gripper.enabled_age_ms > controlLimit) || /过期/.test(String(gripper.error || ""));
     const transport = gripper.transport || {};
+    const reconnect = gripper.auto_reconnect || {};
     const transportName = ({json:"TCP JSON / 末端 Modbus", sdk:"SDK / 末端 Modbus"})[transport.backend] || transport.backend || "等待通路";
-    const linkState = transport.failed || transport.closed ? "连接已关闭，需重连" :
+    const linkState = reconnect.active ? "只读自动重连中" :
+      reconnect.phase === "failed" ? "自动重连已停止，请检查连接" :
+      transport.failed || transport.closed ? "连接已关闭，需重连" :
       transport.needs_sync ? "超时后同步恢复中" : gripper.communication_error ? "读取异常" :
-      finite(gripper.age_ms) && gripper.age_ms <= 1000 && finite(gripper.samples) && gripper.samples > 0 ? "反馈正在更新" : "等待有效反馈";
+      finite(gripper.age_ms) && gripper.age_ms <= observationLimit && finite(gripper.samples) && gripper.samples > 0 ? "反馈正在更新" : "等待有效反馈";
     text("gripper-link-state", `通信状态：${linkState}${gripper.freshness_error ? ` · ${gripper.freshness_error}` : ""}${known && code !== 0 ? " · 设备报警仍需单独处理" : ""}`);
     text("gripper-opening", finite(gripper.opening) ? `${number(gripper.opening * 100, 1)}%` : "—");
     text("gripper-target", finite(gripper.requested_opening) ? `${number(gripper.requested_opening * 100, 1)}%` : "—");
@@ -198,16 +215,17 @@
     text("gripper-age", finite(gripper.age_ms) ? `${number(gripper.age_ms)} ms` : "—");
     text("gripper-hz", finite(gripper.hz) ? `${number(gripper.hz, 1)} Hz` : "—");
     text("gripper-interval", finite(gripper.last_interval_ms) ? `${number(gripper.last_interval_ms)} ms` : "—");
-    text("gripper-cadence", `近 2 秒最长间隔 ${number(gripper.max_interval_ms)} ms · ${number(gripper.samples)} 次有效反馈${finite(gripper.control_max_age_ms) ? ` · 控制反馈须 ≤ ${number(gripper.control_max_age_ms)} ms` : ""}`);
+    text("gripper-cadence", `近 2 秒最长间隔 ${number(gripper.max_interval_ms)} ms · ${number(gripper.samples)} 次有效反馈 · 推理观测 ≤ ${number(observationLimit)} ms · 动作反馈 ≤ ${number(controlLimit)} ms`);
     text("gripper-communication", `${transportName} · 位置读取 ${number(gripper.read_duration_ms, 1)} ms · 使能年龄 ${number(gripper.enabled_age_ms)} ms · 使能轮询 ${number(finite(gripper.enable_poll_s) ? gripper.enable_poll_s * 1000 : null)} ms`);
-    text("gripper-transport-stats", `成功事务 RTT P50 / P95 ${number(transport.p50_ms, 1)} / ${number(transport.p95_ms, 1)} ms · 全部尝试最长 ${number(transport.all_attempt_max_ms, 1)} ms · 等待超时（含恢复）${number(transport.timeouts)} 次 · 失败尝试 ${number(transport.errors)} / ${number(transport.transactions)} 次`);
+    text("gripper-transport-stats", `成功事务 RTT P50 / P95 ${number(transport.p50_ms, 1)} / ${number(transport.p95_ms, 1)} ms · 全部尝试最长 ${number(transport.all_attempt_max_ms, 1)} ms · TCP 等待超时 ${number(transport.timeouts)} 次 · 外设读超时 ${number(transport.peripheral_read_timeouts || 0)} 次 · 只读重连 ${number(reconnect.count || 0)} 次 · 当前连接失败 ${number(transport.errors)} / ${number(transport.transactions)} 次`);
     text("gripper-fault", known ? `0x${code.toString(16).toUpperCase().padStart(4, "0")}${code === 0x20 ? " · 夹取掉落警报" : ""}` : "未知");
     text("gripper-reconnect-reason", gripper.reconnect_reason || "只读重连通信，不使能、不开合、不清错；完成后需手动恢复推理和执行。");
     if (gripper.reconnecting) pill("gripper-status", "通信重连中", "warning");
     else if (gripper.clearing) pill("gripper-status", "清除中", "warning");
     else if (gripper.busy) pill("gripper-status", `${gripperActions[gripper.operation]?.label || ({enable:"使能",disable:"失能",open:"张开",close:"闭合"}[gripper.operation]) || "操作"}中`, "warning");
     else if (known && code !== 0) pill("gripper-status", "有报警", "bad");
-    else if (feedbackStale) pill("gripper-status", "反馈过期", "bad");
+    else if (feedbackStale && gripper.measurement_ready) pill("gripper-status", "观测可用 · 动作等待反馈", "warning");
+    else if (feedbackStale) pill("gripper-status", "观测反馈过期", "bad");
     else if (gripper.error && !disabledHint) pill("gripper-status", "反馈异常", "bad");
     else if (known && gripper.enabled === false) pill("gripper-status", "无报警 · 已失能", "muted");
     else if (known && gripper.enabled === true && gripper.ready) pill("gripper-status", "无报警", "good");
@@ -231,11 +249,13 @@
     const profile = sampling.sampling_profile;
     const profiles = samplingProfiles(sampling), supportedProfile = profiles.has(profile);
     const singleForward = sampling.video_mode === "single_forward";
+    const actionOnly = sampling.model === "pi05" && sampling.force_conditioning === false;
     text("sampling-current", supportedProfile ? profileLabel(profiles.get(profile)) : profile || "—");
-    text("sampling-steps", singleForward
+    text("sampling-steps", actionOnly ? `动作 ${number(sampling.action_steps)} 步；不使用力条件`
+      : singleForward
       ? `视觉单次前向；Force/Action ${number(sampling.force_steps)}/${number(sampling.action_steps)}`
       : `视频 ${number(sampling.video_steps)} / 力 ${number(sampling.force_steps)} / 动作 ${number(sampling.action_steps)} 步`);
-    text("sampling-label", singleForward ? "视觉单次前向 · Force / Action 去噪步数" : "去噪步数 · 视频 / 力 / 动作");
+    text("sampling-label", actionOnly ? "π0.5 · 动作去噪步数" : singleForward ? "视觉单次前向 · Force / Action 去噪步数" : "去噪步数 · 视频 / 力 / 动作");
     if (sampling.busy) pill("sampling-status", "切换预热中", "warning");
     else if (sampling.error) pill("sampling-status", "切换失败", "bad");
     else if (!sampling.supported) pill("sampling-status", "暂不可用", "muted");
@@ -258,6 +278,36 @@
     select.value = state.samplingDirty && profiles.has(previous) ? previous : supportedProfile ? profile : "";
     if (supportedProfile && select.value === profile && !sampling.busy) state.samplingDirty = false;
     errorText("sampling-error", sampling.error);
+  }
+
+  function renderTiming(timing) {
+    byId("timing-panel").hidden = !timing.supported;
+    const profiles = samplingProfiles(timing), current = profiles.get(timing.profile);
+    text("timing-current", current ? profileLabel(current) : timing.profile || "—");
+    if (timing.busy) pill("timing-status", "切换连接中", "warning");
+    else if (timing.error) pill("timing-status", "切换失败", "bad");
+    else pill("timing-status", current ? "已生效" : "等待配置", current ? "good" : "muted");
+    const limits = timing.limits || {};
+    text("timing-limits", `夹爪动作 ${number(limits.gripper_control_max_age_s * 1000)} ms · 关节 ${number(limits.feedback_max_age_s * 1000)} ms · 相机年龄 ${number(limits.camera_max_age_s * 1000)} ms · 对齐 ${number(limits.camera_pair_skew_s * 1000)} ms`);
+    text("timing-description", current?.description || "等待客户端时序配置");
+    const select = byId("timing-select"), previous = select.value;
+    if (!profiles.has(previous)) state.timingDirty = false;
+    const key = JSON.stringify([...profiles.values()].map((item) => [item.id, profileLabel(item)]));
+    if (key !== state.timingOptionsKey) {
+      const fragment = document.createDocumentFragment();
+      const placeholder = document.createElement("option");
+      placeholder.value = ""; placeholder.textContent = "选择时序实验档位"; placeholder.disabled = true;
+      fragment.append(placeholder);
+      profiles.forEach((item) => {
+        const option = document.createElement("option"); option.value = item.id;
+        option.textContent = profileLabel(item); fragment.append(option);
+      });
+      select.replaceChildren(fragment);
+      state.timingOptionsKey = key;
+    }
+    select.value = state.timingDirty && profiles.has(previous) ? previous : current ? timing.profile : "";
+    if (current && select.value === timing.profile && !timing.busy) state.timingDirty = false;
+    errorText("timing-error", timing.error);
   }
 
   function renderActions(actions) {
@@ -384,6 +434,7 @@
     const stopDuringReset = action === "execute_stop" && resetPose.busy && fresh();
     if (!action || (state.pending && action !== "emergency_stop" && !stopDuringReset)) return;
     if (resetPose.busy && !["execute_stop", "emergency_stop"].includes(action)) return;
+    if (state.payload?.timing?.busy && !["execute_stop", "emergency_stop"].includes(action)) return;
     if (action === "reset_pose" && (!fresh() || !hasResetPose(resetPose) || !resetPose.available || resetPose.busy)) return;
     const payload = {action};
     if (action === "sampling_set") {
@@ -391,6 +442,15 @@
       const profile = byId("sampling-select").value;
       if (!fresh() || !sampling.supported || sampling.busy || state.payload?.execution?.enabled || state.payload?.gripper?.busy || !samplingProfiles(sampling).has(profile)) return;
       payload.sampling_profile = profile;
+    }
+    if (action === "timing_set") {
+      const timing = state.payload?.timing || {}, gripper = state.payload?.gripper || {};
+      const profile = byId("timing-select").value;
+      if (!fresh() || !timing.supported || timing.busy || state.payload?.sampling?.busy ||
+          state.payload?.execution?.enabled || gripper.busy || gripper.clearing || gripper.reconnecting ||
+          gripper.auto_reconnect?.active || state.payload?.phase === "connecting" ||
+          !samplingProfiles(timing).has(profile)) return;
+      payload.timing_profile = profile;
     }
     const gripperAction = gripperActions[action];
     if (gripperAction) {
@@ -403,6 +463,7 @@
     state.pending += 1; renderButtons();
     const notice = byId("command-message"); notice.hidden = false; notice.className = "notice";
     notice.textContent = action === "emergency_stop" ? "正在发送紧急停止…" : action === "reset_pose" ? "正在提交复位请求，先暂停当前推理和执行；夹爪保持…" : action === "gripper_reconnect" ? "正在只读重连通信；不使能、不开合、不清错…" : action === "gripper_clear_error" ? "正在重建通信并失能清错，等待读回确认…" : action === "sampling_set" ? "正在提交采样档位，Client 将暂停推理并预热…" : "正在处理操作…";
+    if (action === "timing_set") notice.textContent = "正在切换时序档位，Client 将暂停推理并重新连接；完成后手动开始推理和执行。";
     try {
       const result = await requestJson("/api/control", {method:"POST", headers:{"Content-Type":"application/json", "X-Client-Key":clientKey}, body:JSON.stringify(payload)}, 15000);
       notice.textContent = result.message || (gripperAction ? `夹爪${gripperAction.label}请求已提交，请查看设备反馈。` : {connect:"连接请求已提交",disconnect:"断开请求已提交",inference_start:"自动推理已开启",inference_stop:"自动推理已暂停",execute_start:"执行请求已提交",execute_stop:"停止执行请求已提交",emergency_stop:"紧急停止请求已提交",reset_pose:"复位请求已提交，请查看设备反馈。",gripper_clear_error:"清错与重连请求已提交，请查看夹爪反馈；尚未收到读回确认结果。",sampling_set:"采样切换已提交。等待预热完成后，请手动恢复自动推理。"}[action] || "操作已提交");
@@ -413,6 +474,7 @@
 
   document.querySelectorAll("button[data-action]").forEach((button) => button.addEventListener("click", () => control(button)));
   byId("sampling-select").addEventListener("change", () => { state.samplingDirty = true; renderButtons(); });
+  byId("timing-select").addEventListener("change", () => { state.timingDirty = true; renderButtons(); });
   cameraNames.forEach((name) => { state.camera[name] = {url:null,error:""}; pollCamera(name); });
   setInterval(() => { text("local-clock", new Date().toLocaleTimeString("zh-CN", {hour12:false})); renderConnection(); }, 500);
   window.addEventListener("pagehide", () => cameraNames.forEach((name) => { if (state.camera[name].url) URL.revokeObjectURL(state.camera[name].url); }));

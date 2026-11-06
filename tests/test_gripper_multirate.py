@@ -54,6 +54,42 @@ class RegisterDevice:
 
 
 class MultirateGripperTests(unittest.TestCase):
+    def test_repeated_disabled_poll_preserves_pending_enable_ticket(self):
+        self.device.enabled = 0
+        self.poll()
+        with self.worker.lock:
+            ticket = self.worker._control_ticket_locked()
+        for _ in range(3):
+            self.timer.advance(.26)
+            self.poll()
+            self.assertTrue(self.worker._control_valid(ticket))
+        # A real user Stop must still cancel this same pending request.
+        self.worker.hold()
+        self.assertFalse(self.worker._control_valid(ticket))
+
+    def test_observed_disable_transition_cancels_pending_control(self):
+        self.poll()
+        with self.worker.lock:
+            ticket = self.worker._control_ticket_locked()
+        hard_generation = self.worker.hard_fault_generation
+        self.device.enabled = 0
+        self.timer.advance(.26)
+        self.poll()
+        self.assertFalse(self.worker._control_valid(ticket))
+        self.assertGreater(self.worker.hard_fault_generation, hard_generation)
+        self.assertFalse(self.worker.state['ready'])
+
+    def test_disabled_feedback_cancels_leftover_motion_target(self):
+        self.device.enabled = 0
+        self.poll()
+        self.worker.desired = self.worker.ramp_target = .5
+        generation = self.worker.cancel_generation
+        self.timer.advance(.26)
+        self.poll()
+        self.assertIsNone(self.worker.desired)
+        self.assertIsNone(self.worker.ramp_target)
+        self.assertGreater(self.worker.cancel_generation, generation)
+
     def setUp(self):
         self.timer = Clock()
         self.device = RegisterDevice(self.timer)

@@ -25,6 +25,10 @@ class ModbusTransportError(RuntimeError):
     """Transport lost or unsynchronized; no confirmed device response."""
 
 
+class PeripheralReadTimeout(ModbusTransportError):
+    """Controller consumed the request but reports no peripheral read result."""
+
+
 class MotionCancelled(RuntimeError):
     """Intent changed before any target/enable bytes were sent."""
 
@@ -49,46 +53,127 @@ class JsonLink:
         self.socket = socket.create_connection((cfg['robot_ip'], cfg['robot_port']), self.timeout)
         self.socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         self.buffer = bytearray()
+        self._timing, self._timing_dropped = [], 0
+        self._timing_phase = 'request'
+        self._endpoints = {}
+        for label, method in (('local', 'getsockname'), ('remote', 'getpeername')):
+            try:
+                endpoint = getattr(self.socket, method)()
+                if (isinstance(endpoint, tuple) and len(endpoint) >= 2
+                        and isinstance(endpoint[0], str) and type(endpoint[1]) is int):
+                    self._endpoints[label] = dict(ip=endpoint[0], port=endpoint[1])
+            except Exception:
+                pass  # Endpoints are optional diagnostic metadata only.
+
+    def set_timing_phase(self, phase):
+        self._timing_phase = phase
+
+    def _record_timing(self, operation, **values):
+        # Keep the first events (including send), not an unbounded packet log.
+        # No payload bytes or additional device data are copied into telemetry.
+        if len(self._timing) < 128:
+            self._timing.append(dict(operation=operation, phase=self._timing_phase, **values))
+        else:
+            self._timing_dropped += 1
+
+    def drain_timing(self):
+        result = dict(events=self._timing, dropped=self._timing_dropped,
+                      endpoints=dict(self._endpoints))
+        self._timing, self._timing_dropped = [], 0
+        return result
 
     def close(self):
         self.socket.close()
 
     def pending(self):
-        return bool(self.buffer) or bool(select.select([self.socket], [], [], 0)[0])
+        started = time.perf_counter()
+        buffered = len(self.buffer)
+        ready = bool(buffered) or bool(select.select([self.socket], [], [], 0)[0])
+        self._record_timing('pending', started=started, completed=time.perf_counter(),
+                            buffered_bytes=buffered, readable=ready)
+        return ready
 
     def send(self, payload, deadline):
         remaining = deadline-time.perf_counter()
         if remaining <= 0:
             raise TimeoutError('Controller send deadline exceeded')
         self.socket.settimeout(remaining)
-        self.socket.sendall((json.dumps(payload, separators=(',', ':'), allow_nan=False)+'\r\n').encode('ascii'))
+        encoded = (json.dumps(payload, separators=(',', ':'), allow_nan=False)+'\r\n').encode('ascii')
+        started = time.perf_counter()
+        success = False
+        try:
+            self.socket.sendall(encoded)
+            success = True
+        finally:
+            completed = time.perf_counter()
+            self._record_timing('send', started=started, completed=completed,
+                duration_ms=(completed-started)*1000, deadline=deadline,
+                deadline_overrun_ms=max(0., completed-deadline)*1000,
+                payload_bytes=len(encoded), success=success)
 
     def receive(self, deadline):
-        if time.perf_counter() >= deadline:
+        entered = time.perf_counter()
+        self._record_timing('receive_begin', started=entered, deadline=deadline,
+                            buffered_bytes=len(self.buffer))
+        if entered >= deadline:
+            self._record_timing('receive_expired', completed=entered, deadline=deadline,
+                                deadline_overrun_ms=max(0., entered-deadline)*1000)
             raise TimeoutError('Controller response timeout')
         while b'\n' not in self.buffer:
-            remaining = deadline-time.perf_counter()
-            if remaining <= 0 or not select.select([self.socket], [], [], remaining)[0]:
+            started = time.perf_counter()
+            remaining = deadline-started
+            if remaining <= 0:
+                self._record_timing('receive_expired', completed=started, deadline=deadline,
+                                    deadline_overrun_ms=max(0., started-deadline)*1000)
+                raise TimeoutError('Controller response timeout')
+            readable = None
+            try:
+                readable = bool(select.select([self.socket], [], [], remaining)[0])
+            finally:
+                completed = time.perf_counter()
+                self._record_timing('select', started=started, completed=completed,
+                    duration_ms=(completed-started)*1000, requested_wait_ms=remaining*1000,
+                    deadline=deadline, deadline_overrun_ms=max(0., completed-deadline)*1000,
+                    readable=readable)
+            if not readable:
                 raise TimeoutError('Controller response timeout')
             self.socket.settimeout(max(.001, deadline-time.perf_counter()))
-            data = self.socket.recv(8192)
+            started = time.perf_counter()
+            data = None
+            try:
+                data = self.socket.recv(8192)
+            finally:
+                completed = time.perf_counter()
+                self._record_timing('recv', started=started, completed=completed,
+                    duration_ms=(completed-started)*1000, deadline=deadline,
+                    deadline_overrun_ms=max(0., completed-deadline)*1000,
+                    received_bytes=len(data) if data is not None else None)
             if not data:
                 raise ConnectionError('Controller TCP disconnected')
             self.buffer.extend(data)
             if len(self.buffer) > 65536:
                 raise _ProtocolError('Controller message exceeds 64 KiB')
-        line, _, rest = self.buffer.partition(b'\n')
-        self.buffer = bytearray(rest)
-        if not line.endswith(b'\r'):
-            raise _ProtocolError('Controller response is not CRLF terminated')
+        started = time.perf_counter()
+        success = False
         try:
-            result = json.loads(line, parse_constant=lambda value: (_ for _ in ()).throw(
-                ValueError(f'Non-finite JSON constant {value}')))
-        except (ValueError, UnicodeError) as exc:
-            raise _ProtocolError('Invalid controller JSON') from exc
-        if not isinstance(result, dict):
-            raise _ProtocolError('Controller JSON must be an object')
-        return result
+            line, _, rest = self.buffer.partition(b'\n')
+            self.buffer = bytearray(rest)
+            if not line.endswith(b'\r'):
+                raise _ProtocolError('Controller response is not CRLF terminated')
+            try:
+                result = json.loads(line, parse_constant=lambda value: (_ for _ in ()).throw(
+                    ValueError(f'Non-finite JSON constant {value}')))
+            except (ValueError, UnicodeError) as exc:
+                raise _ProtocolError('Invalid controller JSON') from exc
+            if not isinstance(result, dict):
+                raise _ProtocolError('Controller JSON must be an object')
+            success = True
+            return result
+        finally:
+            completed = time.perf_counter()
+            self._record_timing('parse', started=started, completed=completed,
+                duration_ms=(completed-started)*1000, frame_bytes=len(line)+1,
+                buffered_bytes=len(self.buffer), success=success)
 
 
 class JsonModbusArm:
@@ -98,9 +183,15 @@ class JsonModbusArm:
                'rm_read_multiple_holding_registers': 'read_multiple_holding_registers'}
 
     def __init__(self, ip, port, timeout_s=.3, *, setup_sdk=None, trace_path=None, request_gap_s=0.,
-                 link_factory=JsonLink):
+                 link_factory=JsonLink, read_timeout_s=None):
         if isinstance(timeout_s, bool) or not math.isfinite(timeout_s) or not 0 < timeout_s <= .5:
             raise ValueError('JSON timeout must be finite and in (0, 0.5] seconds')
+        if read_timeout_s is None:
+            read_timeout_s = timeout_s
+        if (type(read_timeout_s) not in (int, float) or not math.isfinite(read_timeout_s)
+                or not 0 < read_timeout_s <= .7):
+            raise ValueError('JSON read timeout must be finite and in (0, 0.7] seconds')
+        self.read_timeout_s = float(read_timeout_s)
         if (isinstance(request_gap_s, bool) or not isinstance(request_gap_s, (int, float))
                 or not math.isfinite(request_gap_s) or not 0 <= request_gap_s <= .05):
             raise ValueError('gripper_request_gap_s must be finite and in [0, 0.05] seconds')
@@ -116,13 +207,15 @@ class JsonModbusArm:
         self._recovery_deadline = None
         self._sync_waits = 0
         self.recovery_timeout_s = 2.
-        self.max_sync_waits = math.ceil(self.recovery_timeout_s/timeout_s)+1
+        self.max_sync_waits = math.ceil(self.recovery_timeout_s/min(timeout_s, self.read_timeout_s))+1
         self._failed = self._closed = False
+        self._failure_kind = None
         self._call_lock, self._metrics_lock = threading.Lock(), threading.Lock()
         self.last_event = None
         self.events, self.durations = deque(maxlen=64), deque(maxlen=512)
         self.all_attempt_durations = deque(maxlen=512)
         self.transactions = self.successes = self.errors = self.timeouts = self.cancellations = 0
+        self.peripheral_read_timeouts = 0
         self.trace_error = None
         self.trace_path = str(trace_path) if trace_path else None
         self._trace = None
@@ -155,6 +248,8 @@ class JsonModbusArm:
                 all_attempt_max_ms=max(attempts) if attempts else None,
                 all_attempt_samples=len(attempts),
                 timeout_ms=self.cfg['socket_timeout_s']*1000, needs_sync=self.needs_sync,
+                read_timeout_ms=self.read_timeout_s*1000,
+                write_timeout_ms=self.cfg['socket_timeout_s']*1000,
                 request_gap_ms=self.request_gap_s*1000,
                 recovery_timeout_ms=self.recovery_timeout_s*1000,
                 recovery_deadline=self._recovery_deadline, sync_waits=self._sync_waits,
@@ -162,6 +257,10 @@ class JsonModbusArm:
                 pending_drained=self._pending_drained,
                 recovery_phase=('waiting_fence' if self._pending_drained else 'waiting_original') if self.needs_sync else None,
                 failed=self._failed, closed=self._closed, last_event=deepcopy(self.last_event),
+                failure_kind=self._failure_kind,
+                reconnect_allowed=bool(self._failed and not self._closed and self._failure_kind in {
+                    'recovery_timeout', 'connection_lost', 'connect_error', 'send_uncertain'}),
+                peripheral_read_timeouts=self.peripheral_read_timeouts,
                 trace_path=self.trace_path,
                 trace_error=self.trace_error)
             if include_events:
@@ -202,7 +301,13 @@ class JsonModbusArm:
             except OSError:
                 pass
 
-    def _receive(self, deadline):
+    def _set_timing_phase(self, phase):
+        method = getattr(type(self.link), 'set_timing_phase', None)
+        if callable(method):
+            method(self.link, phase)
+
+    def _receive(self, deadline, *, phase='request'):
+        self._set_timing_phase(phase)
         reply = self.link.receive(deadline)
         # Includes retired late replies and fences, not just usable feedback.
         self._last_reply_at = time.perf_counter()
@@ -285,7 +390,13 @@ class JsonModbusArm:
                 raise _ProtocolError('Controller did not acknowledge the write')
             return None
         if 'read_state' in reply and reply['read_state'] is not True:
-            raise _ProtocolError('Controller rejected the read')
+            # This exact negative response is documented by RealMan for a
+            # peripheral/RS485 timeout. It completes the TCP transaction; it
+            # is neither a malformed stream nor a usable sensor measurement.
+            # Contradictory data or non-boolean flags remain protocol errors.
+            if reply['read_state'] is False and 'data' not in reply:
+                raise PeripheralReadTimeout('Controller peripheral read timeout (read_state=false)')
+            raise _ProtocolError('Controller rejected the read with an invalid response')
         value = reply.get('data')
         if command == 'read_holding_registers':
             if type(value) is not int or not -32768 <= value <= 65535:
@@ -300,7 +411,7 @@ class JsonModbusArm:
         discarded = []
         deadline = time.perf_counter()+self.cfg['socket_timeout_s']
         while self.link.pending():
-            reply = self._receive(deadline)
+            reply = self._receive(deadline, phase='drain')
             if reply.get('command') not in self.METHODS.values():
                 raise _ProtocolError('Unrecognized unsolicited controller response')
             discarded.append(reply)
@@ -314,12 +425,16 @@ class JsonModbusArm:
             if self._pending is None:
                 raise _ProtocolError('Unsolicited RTU response on an idle stream')
 
+    def _response_timeout(self, request):
+        return self.read_timeout_s if request['command'].startswith('read_') else self.cfg['socket_timeout_s']
+
     def _synchronize(self, event, request):
         self._check_recovery_budget(event)
         if self._pending is None:
             raise _ProtocolError('No known pending transaction to fence')
         self._sync_waits += 1
-        deadline = min(self._recovery_deadline, time.perf_counter()+self.cfg['socket_timeout_s'])
+        deadline = min(self._recovery_deadline,
+                       time.perf_counter()+self._response_timeout(self._fence or self._pending))
         event['synchronization'] = dict(request=dict(self._fence) if self._fence else None,
                                         discarded=[])
         if not self._pending_drained:
@@ -328,11 +443,16 @@ class JsonModbusArm:
             # before we send even a read-only fence. Its value is diagnostic
             # only, never published as current measurement or write success.
             event['stage'] = 'pending_receive'
-            reply = self._receive(deadline)
+            reply = self._receive(deadline, phase='retired')
             event['synchronization']['discarded'].append(reply)
             if reply.get('command') != self._pending['command']:
                 raise _ProtocolError('Unknown response while retiring the pending transaction')
-            self._validate(reply, self._pending)
+            try:
+                self._validate(reply, self._pending)
+            except PeripheralReadTimeout:
+                # A documented failure still retires the known old READ.
+                # Preserve the usual distinct-command fence before fresh data.
+                event['synchronization']['retired_peripheral_timeout'] = True
             self._pending_drained = True
             if time.perf_counter() >= self._recovery_deadline:
                 self._check_recovery_budget(event)
@@ -352,16 +472,28 @@ class JsonModbusArm:
             # wait's deadline here caused a healthy 50-70 ms fence to time out
             # when the late original response arrived after about 250 ms.
             started = self._before_send(event, fence, recovery=True)
-            deadline = min(self._recovery_deadline, started+self.cfg['socket_timeout_s'])
-            self.link.send(fence, deadline)
+            deadline = min(self._recovery_deadline, started+self._response_timeout(fence))
+            self._set_timing_phase('fence')
+            self.link.send(fence, min(deadline, started+self.cfg['socket_timeout_s']))
             self._fence = fence
         event['synchronization']['request'] = dict(self._fence)
         event['stage'] = 'sync_receive'
-        reply = self._receive(deadline)
+        reply = self._receive(deadline, phase='fence')
         if reply.get('command') != self._fence['command']:
             raise _ProtocolError('Unknown response while fencing the retired transaction')
-        self._validate(reply, self._fence)
         event['synchronization']['response'] = reply
+        try:
+            self._validate(reply, self._fence)
+        except PeripheralReadTimeout:
+            # Its matching command proves the fence was consumed, even though
+            # the peripheral supplied no value. Stop this attempt; the next
+            # caller can issue a fresh read on the synchronized connection.
+            self._pending = self._fence = None
+            self._pending_drained = False
+            self.needs_sync = False
+            self._recovery_deadline = None
+            self._sync_waits = 0
+            raise
         self._pending = self._fence = None
         self._pending_drained = False
         self.needs_sync = False
@@ -377,19 +509,24 @@ class JsonModbusArm:
                        'transport closed, explicit reconnect is required')
             event.update(stage='recovery_expired', error=message)
             self._failed = True
+            self._failure_kind = event['failure_kind'] = 'recovery_timeout'
             self._drop_link()
             raise ModbusTransportError(message)
 
-    def _call(self, method, params, data=None):
+    def _call(self, method, params, data=None, *, with_request_started=False):
         request = self._payload(method, params, data)
         if not self._call_lock.acquire(blocking=False):
             raise RuntimeError('Only one outstanding gripper transaction is permitted')
         event = dict(started=time.perf_counter(), request=request, stage='connect')
+        failed_before_call = self._failed
+        timing_link = None
         try:
             if self._closed or self._failed:
                 raise ModbusTransportError('Gripper transport closed; explicit reconnect is required')
             if self.link is None:
                 self.link = self.factory(self.cfg)
+            timing_link = self.link
+            self._set_timing_phase('request')
             if self.needs_sync:
                 self._check_recovery_budget(event)
                 if request['command'].startswith('write_'):
@@ -404,9 +541,10 @@ class JsonModbusArm:
                 event['stage'] = 'drain'
                 self._drain(event)
             event['request_started'] = self._before_send(event, request)
-            deadline = event['request_started']+self.cfg['socket_timeout_s']
+            deadline = event['request_started']+self._response_timeout(request)
             event['stage'] = 'send'
-            self.link.send(request, deadline)
+            self._set_timing_phase('request')
+            self.link.send(request, min(deadline, event['request_started']+self.cfg['socket_timeout_s']))
             self._pending = request
             self._pending_drained = False
             event['stage'] = 'receive'
@@ -414,14 +552,27 @@ class JsonModbusArm:
             event['response'] = response
             value = self._validate(response, request)
             self._pending = None
+            self._failure_kind = None
             event['success'] = True
-            return 0 if request['command'].startswith('write_') else (0, value)
+            result = 0 if request['command'].startswith('write_') else (0, value)
+            # Metadata belongs to this exact validated fresh request. A fence
+            # or retired reply cannot return it, and no shared last-event read
+            # is needed after releasing the single-transaction lock.
+            return (result, event['request_started']) if with_request_started else result
         except MotionCancelled:
+            raise
+        except PeripheralReadTimeout as exc:
+            # A fully received negative READ is already complete. Do not leave
+            # it pending, fence it again, close TCP, or return fabricated data.
+            self._pending = None
+            self._failure_kind = event['failure_kind'] = 'peripheral_timeout'
+            event.update(error=str(exc), peripheral_timeout=True)
             raise
         except Exception as exc:
             event['error'] = str(exc)
             if isinstance(exc, TimeoutError) and event['stage'] in ('receive', 'pending_receive', 'sync_receive'):
                 event['timeout'] = True
+                self._failure_kind = event['failure_kind'] = 'response_timeout'
                 self.needs_sync = True
                 if self._recovery_deadline is None:
                     self._recovery_deadline = time.perf_counter()+self.recovery_timeout_s
@@ -433,6 +584,14 @@ class JsonModbusArm:
             # Sending can time out after a partial JSON frame. Unknown frames,
             # invalid payloads and TCP loss must not reopen behind the caller.
             self._failed = True
+            if failed_before_call or self._failure_kind == 'recovery_timeout':
+                event['failure_kind'] = self._failure_kind
+            else:
+                self._failure_kind = event['failure_kind'] = (
+                    'protocol_error' if isinstance(exc, _ProtocolError) else
+                    'send_uncertain' if isinstance(exc, OSError) and event['stage'] in ('send', 'sync_send') else
+                    'connect_error' if isinstance(exc, OSError) and event['stage'] == 'connect' else
+                    'connection_lost' if isinstance(exc, OSError) else 'internal_error')
             self._drop_link()
             if isinstance(exc, (OSError, ModbusTransportError)):
                 event['timeout'] = isinstance(exc, TimeoutError)
@@ -443,11 +602,21 @@ class JsonModbusArm:
             event['duration_ms'] = (event['completed']-event['started'])*1000
             if 'request_started' in event:
                 event['request_duration_ms'] = (event['completed']-event['request_started'])*1000
+            # Keep the link reference even if protocol failure closed it above.
+            # Diagnostic extraction cannot change the original call outcome.
+            drain = getattr(type(timing_link), 'drain_timing', None)
+            if callable(drain):
+                try:
+                    event['socket_timing'] = drain(timing_link)
+                except Exception as exc:
+                    event['socket_timing_error'] = type(exc).__name__
             with self._metrics_lock:
                 self.transactions += 1
                 self.successes += int(event.get('success', False))
                 self.errors += int('error' in event)
                 self.timeouts += int(event.get('timeout', False))
+                self.peripheral_read_timeouts += (int(event.get('peripheral_timeout', False))
+                    + int(event.get('synchronization', {}).get('retired_peripheral_timeout', False)))
                 self.cancellations += int(event.get('cancelled', False))
                 if event.get('success'):
                     self.durations.append(event['request_duration_ms'])
@@ -465,6 +634,17 @@ class JsonModbusArm:
 
     def rm_read_holding_registers(self, params):
         return self._call('rm_read_holding_registers', params)
+
+    def read_registers_timed(self, params):
+        """Return (SDK result, actual send-start QPC) for one fresh read only.
+
+        time.perf_counter is also the worker's clock.now() timebase. The stamp
+        precedes sending its own request, after any retirement/fence/quiet time;
+        it is never a receive timestamp or a stamp for discarded old data.
+        """
+        method = ('rm_read_holding_registers' if params.num == 1
+                  else 'rm_read_multiple_holding_registers')
+        return self._call(method, params, with_request_started=True)
 
     def rm_read_multiple_holding_registers(self, params):
         return self._call('rm_read_multiple_holding_registers', params)

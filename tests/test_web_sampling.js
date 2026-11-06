@@ -246,6 +246,19 @@ test("missing declarations and unknown actual profile cannot reuse old profile p
   assert.equal(app.element("sampling-apply-button").disabled, true);
 });
 
+test("pi05 action-only profiles replace Cosmos controls without implying force denoising", async () => {
+  const profiles = [5, 10, 16].map((n) => ({id:`pi05_${n}`, label:`π0.5 · 动作 ${n} 步`, action_steps:n}));
+  const app = await harness(status());
+  await app.poll(status(profiles, "pi05_10", {model:"pi05", video_mode:"single_forward", force_conditioning:false}));
+  assert.equal(app.element("sampling-steps").textContent, "动作 10 步；不使用力条件");
+  assert.equal(app.element("sampling-label").textContent, "π0.5 · 动作去噪步数");
+  await app.choose("pi05_5");
+  await app.apply();
+  assert.deepEqual(app.posts, [{action:"sampling_set", sampling_profile:"pi05_5"}]);
+  await app.poll(status());
+  assert.equal(app.element("sampling-label").textContent, "去噪步数 · 视频 / 力 / 动作");
+});
+
 test("declared choices remain blocked while sampling or robot execution is active", async () => {
   const app = await harness(status(jepaProfiles, "dense16"));
   await app.choose("dense10");
@@ -327,6 +340,81 @@ test("inference-only recovery is described separately and action errors remain i
 const savedResetPose = {saved:true, available:true, busy:false, reason:null,
   recorded_at:"2025-01-01T00:00:00+00:00", speed_percent:10,
   joint_degrees:[0, 10, -5, 20, 0, 30, -10], last_result:null};
+
+const timingState = {supported:true, profile:"strict", busy:false, error:null,
+  profiles:[{id:"strict", label:"原始时序档", description:"原阈值"},
+    {id:"relaxed", label:"宽松实验档", description:"放宽反馈时序"}],
+  limits:{gripper_control_max_age_s:.5, feedback_max_age_s:.03,
+    camera_max_age_s:.12, camera_pair_skew_s:.05}};
+
+test("timing UI submits only declared profile IDs, preserving a draft through polling", async () => {
+  const original = status(); original.timing = structuredClone(timingState);
+  const app = await harness(original);
+  assert.equal(app.element("timing-panel").hidden, false);
+  assert.equal(app.element("timing-select").value, "strict");
+  assert.equal(app.element("timing-apply-button").disabled, true);
+  assert.match(app.element("timing-limits").textContent, /夹爪动作 500 ms · 关节 30 ms/);
+  app.element("timing-select").value = "relaxed";
+  await app.element("timing-select").dispatch("change");
+  await app.poll(original);
+  assert.equal(app.element("timing-select").value, "relaxed");
+  assert.equal(app.element("timing-apply-button").disabled, false);
+  await app.click("timing-apply-button");
+  assert.deepEqual(app.posts, [{action:"timing_set", timing_profile:"relaxed"}]);
+  app.element("timing-select").value = "unlimited";
+  await app.element("timing-select").dispatch("change");
+  await app.click("timing-apply-button");
+  assert.equal(app.posts.length, 1);
+  const changed = status(); changed.timing = {...timingState, profile:"relaxed"};
+  await app.poll(changed);
+  assert.equal(app.element("timing-current").textContent, "宽松实验档");
+  assert.equal(app.element("timing-select").value, "relaxed");
+  assert.equal(app.element("timing-apply-button").disabled, true);
+});
+
+test("timing changes are blocked during execution, other operations, or undeclared support", async () => {
+  for (const condition of ["execute", "sampling", "hardware", "reconnect", "reset", "timing", "unsupported"]) {
+    const current = status(); current.timing = structuredClone(timingState);
+    if (condition === "execute") current.execution.enabled = true;
+    if (condition === "sampling") current.sampling.busy = true;
+    if (condition === "hardware") current.gripper.busy = true;
+    if (condition === "reconnect") current.gripper.auto_reconnect = {active:true};
+    if (condition === "reset") current.reset_pose = {...savedResetPose, busy:true};
+    if (condition === "timing") current.timing.busy = true;
+    if (condition === "unsupported") delete current.timing;
+    const app = await harness(current);
+    app.element("timing-select").value = "relaxed";
+    await app.element("timing-select").dispatch("change");
+    assert.equal(app.element("timing-select").disabled, true, condition);
+    assert.equal(app.element("timing-apply-button").disabled, true, condition);
+    await app.click("timing-apply-button");
+    assert.equal(app.posts.length, 0, condition);
+    if (condition === "unsupported") assert.equal(app.element("timing-panel").hidden, true);
+    if (condition === "timing") {
+      assert.equal(app.element("execute-button").disabled, true);
+      assert.equal(app.element("sampling-select").disabled, true);
+      assert.equal(app.element("emergency-button").disabled, false);
+    }
+  }
+});
+
+test("gripper distinguishes usable observation from expired motion feedback", async () => {
+  const waiting = status();
+  waiting.gripper = {fault_code:0, enabled:true, ready:false, measurement_ready:true,
+    age_ms:1200, enabled_age_ms:200, observation_max_age_ms:1500, control_max_age_ms:500,
+    samples:12, error:"夹爪运动反馈过期", motion_available:false};
+  const app = await harness(waiting);
+  assert.equal(app.element("gripper-status").textContent, "观测可用 · 动作等待反馈");
+  assert.match(app.element("gripper-cadence").textContent, /推理观测 ≤ 1,500 ms · 动作反馈 ≤ 500 ms/);
+  assert.equal(app.element("gripper-open-button").disabled, true);
+  waiting.gripper = {...waiting.gripper, age_ms:1600, measurement_ready:false};
+  await app.poll(waiting);
+  assert.equal(app.element("gripper-status").textContent, "观测反馈过期");
+  waiting.gripper = {...waiting.gripper, fault_code:32};
+  await app.poll(waiting);
+  assert.equal(app.element("gripper-status").textContent, "有报警");
+  assert.equal(app.posts.length, 0);
+});
 
 test("reset requires a complete saved target and submits once without confirmation while execution is active", async () => {
   const app = await harness(status());

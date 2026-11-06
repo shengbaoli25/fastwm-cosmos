@@ -34,6 +34,12 @@ def _signed32(high: int, low: int) -> int:
 class Ctag2F120Worker:
     def __init__(self, config: Mapping[str, Any]):
         self.config = dict(config)
+        control_age = self.config.get('gripper_control_max_age_s', .5)
+        if (isinstance(control_age, bool) or not isinstance(control_age, (int, float))
+                or not math.isfinite(control_age) or not 0 < control_age <= 2.):
+            raise ValueError('gripper_control_max_age_s must be finite and in (0, 2] seconds')
+        self.control_max_age_s = float(control_age)
+        self.config['gripper_control_max_age_s'] = self.control_max_age_s
         request_gap = self.config.get('gripper_request_gap_s', 0.)
         if (isinstance(request_gap, bool) or not isinstance(request_gap, (int, float))
                 or not math.isfinite(request_gap) or not 0 <= request_gap <= .05):
@@ -65,6 +71,12 @@ class Ctag2F120Worker:
         self.ramp_target: float | None = None
         self._target_inflight = None
         self.transport = None
+        self.connection_generation = 0
+        self._reconnecting = False
+        self._reconnect_times = deque()
+        self.auto_reconnect = dict(phase='idle', count=0, error=None)
+        if type(self.config.get('gripper_auto_reconnect', False)) is not bool:
+            raise ValueError('gripper_auto_reconnect must be bool')
         self.fault_generation = 0
         self.hard_fault_generation = 0
         self._confirmed_enabled = self._confirmed_alarm = None
@@ -138,16 +150,34 @@ class Ctag2F120Worker:
     def _read(self, sdk, factory, address: int, count: int) -> list[int]:
         if count == 1:
             result = sdk.rm_read_holding_registers(self._params(factory, address, count))
-            payload = self._code(result, f"读取夹爪寄存器 0x{address:04x}")
+        else:
+            result = sdk.rm_read_multiple_holding_registers(self._params(factory, address, count))
+        return self._decode_read(result, address, count)
+
+    def _decode_read(self, result, address, count):
+        payload = self._code(result, f"读取夹爪寄存器 0x{address:04x}")
+        if count == 1:
             if type(payload) is not int:
                 raise RuntimeError(f"夹爪寄存器 0x{address:04x} 返回类型错误")
             return [payload & 0xffff]
-        payload = self._code(sdk.rm_read_multiple_holding_registers(
-            self._params(factory, address, count)), f"读取夹爪寄存器 0x{address:04x}")
         if not isinstance(payload, list) or len(payload) != count * 2:
             raise RuntimeError(f"夹爪寄存器 0x{address:04x} 返回长度错误")
         raw = [int(value) & 0xff for value in payload]
         return [raw[i] << 8 | raw[i + 1] for i in range(0, len(raw), 2)]
+
+    def _read_timed(self, sdk, factory, address, count):
+        started = clock.now()
+        # Probe the explicit type API, not a vendor SDK's dynamic dispatcher.
+        timed_read = getattr(type(sdk), 'read_registers_timed', None)
+        if not callable(timed_read):
+            # The SDK does not expose dispatch metadata. Its call entry stays
+            # the conservative bound rather than inventing a receive-time age.
+            return self._read(sdk, factory, address, count), started
+        result, dispatched = timed_read(sdk, self._params(factory, address, count))
+        if (type(dispatched) not in (int, float) or not math.isfinite(dispatched)
+                or not started <= dispatched <= clock.now()):
+            raise RuntimeError('夹爪读取时间戳无效')
+        return self._decode_read(result, address, count), dispatched
 
     def _write(self, sdk, factory, address: int, values: list[int]) -> None:
         if not values or any(type(value) is not int or not 0 <= value <= 65535 for value in values):
@@ -220,14 +250,14 @@ class Ctag2F120Worker:
             self._require_control(ticket)
             self._code(sdk.rm_write_single_register(
                 self._params(factory, 0x0100), int(enabled)), "设置夹爪使能")
-            read_started = clock.now()
-            if self._read(sdk, factory, 0x0100, 1)[0] != int(enabled):
+            enabled_words, read_started = self._read_timed(sdk, factory, 0x0100, 1)
+            if enabled_words[0] != int(enabled):
                 raise RuntimeError("夹爪使能状态回读不一致")
             with self.lock:
                 self._observe_device_locked(enabled=enabled)
                 self.enabled_received, self.enabled_value = read_started, enabled
-                fresh = (0 <= clock.now()-read_started <= .5 and
-                         0 <= clock.now()-self.state.get('measurement_started', self.state.get('received', 0)) <= .5)
+                fresh = (0 <= clock.now()-read_started <= self.control_max_age_s and
+                         0 <= clock.now()-self.state.get('measurement_started', self.state.get('received', 0)) <= self.control_max_age_s)
                 ready = bool(enabled and fresh and self.state.get('alarm') == 0
                              and not self.state.get('communication_fault'))
                 self.state.update(enabled=enabled, enabled_received=read_started, ready=ready,
@@ -239,6 +269,8 @@ class Ctag2F120Worker:
     def _feedback_failed(self, error):
         """A successful later read restores monitoring, never an old target."""
         from .gripper_transport import transport_interruption
+        reconnect_pending = (self.config.get('gripper_auto_reconnect', False)
+            and self.transport is not None and self.transport.status().get('reconnect_allowed'))
         with self.lock:
             self.desired = self.ramp_target = None
             self.command_sequence += 1
@@ -247,7 +279,8 @@ class Ctag2F120Worker:
                 # Unknown parser, mapping, setup, device and control errors
                 # cannot become an automatic-recovery permit after a good read.
                 self.hard_fault_generation += 1
-            self.state.update(ready=False, error=str(error), communication_fault=True)
+            self.state.update(ready=False, error=('夹爪通信自动重连中（等待只读核验）'
+                if reconnect_pending else str(error)), communication_fault=True)
             self.enabled_received = self.enabled_value = None
 
     def _observe_device_locked(self, *, enabled=None, alarm=None):
@@ -286,8 +319,8 @@ class Ctag2F120Worker:
             now = clock.now()
             return (self.state.get('alarm') == 0 and not self.state.get('communication_fault')
                 and self.enabled_received is not None
-                and 0 <= now-self.enabled_received <= .5
-                and 0 <= now-self.state.get('measurement_started', -math.inf) <= .5
+                and 0 <= now-self.enabled_received <= self.control_max_age_s
+                and 0 <= now-self.state.get('measurement_started', -math.inf) <= self.control_max_age_s
                 and (enabled is None or self.enabled_value is enabled))
 
     def _require_control(self, ticket, *, fresh=False, enabled=None):
@@ -295,11 +328,11 @@ class Ctag2F120Worker:
         if not self._control_valid(ticket):
             raise MotionCancelled('夹爪手动准备已取消或被新操作替换')
         if fresh and not self._control_fresh(enabled):
-            raise RuntimeError('夹爪手动准备需要500ms内真实位置、使能反馈且无报警')
+            raise RuntimeError(f'夹爪手动准备需要{self.control_max_age_s*1000:g}ms内真实位置、使能反馈且无报警')
 
     def _transition_enabled_read(self, sdk, factory):
-        started = clock.now()
-        word = self._read(sdk, factory, 0x0100, 1)[0]
+        words, started = self._read_timed(sdk, factory, 0x0100, 1)
+        word = words[0]
         if word not in (0, 1):
             raise RuntimeError('夹爪使能反馈不是0或1')
         with self.lock:
@@ -310,8 +343,7 @@ class Ctag2F120Worker:
 
     def _transition_position_read(self, sdk, factory):
         """Publish only a real reply; intentional disable is not a new fault."""
-        started = clock.now()
-        block = self._read(sdk, factory, 0x060D, 6)
+        block, started = self._read_timed(sdk, factory, 0x060D, 6)
         raw = _signed32(*block[:2])
         opening = 1-(raw-self.mapping_min)/(self.mapping_max-self.mapping_min)
         if not math.isfinite(opening) or not -.02 <= opening <= 1.02:
@@ -322,8 +354,8 @@ class Ctag2F120Worker:
             self._observe_device_locked(alarm=block[5])
             self.history.append((completed, opening))
             self.history_started.append((completed, started))
-            fresh = (0 <= completed-started <= .5 and self.enabled_received is not None
-                     and 0 <= completed-self.enabled_received <= .5)
+            fresh = (0 <= completed-started <= self.control_max_age_s and self.enabled_received is not None
+                     and 0 <= completed-self.enabled_received <= self.control_max_age_s)
             self.state.update(initialized=True, ready=False, enabled=self.enabled_value,
                 opening=opening, position=raw, alarm=block[5], received=completed,
                 response_received=completed, measurement_started=started, read_started=started,
@@ -463,6 +495,8 @@ class Ctag2F120Worker:
         future = Future()
         with self.lock:
             self._require_expected_cancel_locked(expected_cancel_generation)
+            if self._reconnecting:
+                raise RuntimeError('夹爪只读重连中，手动请求未入队')
             if self.stop.is_set() or not self.thread or not self.thread.is_alive():
                 raise RuntimeError('夹爪通信线程未连接')
             # Cancel old policy/manual targets atomically with reserving the
@@ -627,13 +661,158 @@ class Ctag2F120Worker:
     def _request_gap(self):
         return self.config['gripper_request_gap_s'] if self.config.get('gripper_transport', 'sdk') == 'json' else 0.
 
+    def _feedback_retry_delay(self, period):
+        # A timed-out JSON transaction is still outstanding. Let the next READ
+        # retire it immediately instead of adding an artificial 100 ms sleep.
+        # The transport blocks on the original response/fence with its own
+        # bounded two-second recovery budget; this never retries a write.
+        if self.transport is not None:
+            state = self.transport.status()
+            if state.get('backend') == 'json' and state.get('needs_sync') and not state.get('failed'):
+                return 0.
+        return max(period, .1)
+
+    def _new_json_transport(self, sdk):
+        from .gripper_transport import JsonModbusArm
+        return JsonModbusArm(str(self.config['robot_ip']), int(self.config['robot_port']),
+            timeout_s=float(self.config.get('gripper_timeout_s', .3)),
+            read_timeout_s=self.config.get('gripper_read_timeout_s'),
+            request_gap_s=self.config['gripper_request_gap_s'],
+            setup_sdk=sdk, trace_path=self.config.get('gripper_trace_path'))
+
+    def _verify_readonly_reconnect(self, sdk, factory):
+        # Base _setup may change voltage/bus/parameters. Only a subclass which
+        # explicitly implements read-only verification may opt into reopening.
+        raise RuntimeError('夹爪自动重连缺少只读配置核验，保持停止')
+
+    def _cancel_reconnect_intents(self):
+        from .gripper_transport import MotionCancelled
+        with self.lock:
+            self.desired = self.ramp_target = None
+            self.command_sequence += 1
+            self.cancel_generation += 1
+            self._manual_queued_ticket = self._manual_queued_sequence = None
+        while True:
+            try:
+                future = self.requests.get_nowait()[1]
+            except Empty:
+                break
+            if not future.done() and future.set_running_or_notify_cancel():
+                future.set_exception(MotionCancelled('夹爪通信重连已取消旧手动请求；不会重放'))
+
+    def _recover_readonly(self, sdk, factory):
+        """Replace a proven broken stream; never replay a write or old intent.
+
+        At most three connection attempts in 60 seconds and 12 seconds in a
+        recovery episode. Stop interrupts backoff; native read-only setup calls
+        retain their existing bounded SDK timeout. Protocol/config failures are
+        terminal. A connection epoch revokes execution independently of faults.
+        """
+        from .gripper_transport import ModbusTransportError, MotionCancelled
+        transport = self.transport
+        if (not self.config.get('gripper_auto_reconnect', False) or transport is None
+                or not transport.status().get('reconnect_allowed')):
+            return None
+        deadline = clock.now()+12.
+        with self.lock:
+            self._reconnecting = True
+            self.auto_reconnect.update(phase='backoff', error=(transport.status().get('last_event') or {}).get('error') or self.state.get('error'))
+            self.connection_generation += 1
+            self.history.clear()
+            self.history_started.clear()
+            self.enabled_received = self.enabled_value = None
+            self.state.update(ready=False, initialized=False, opening=None,
+                received=0., measurement_started=0., communication_fault=True,
+                error='夹爪通信自动重连中（只读核验）')
+        self._cancel_reconnect_intents()
+        transport.close()  # Close the old owner before any setup read/new socket.
+        logger.warning('Gripper read-only reconnect started; connection_generation=%s',
+                       self.connection_generation)
+        try:
+            for delay in (.5, 1., 2.):
+                now = clock.now()
+                while self._reconnect_times and now-self._reconnect_times[0] >= 60.:
+                    self._reconnect_times.popleft()
+                if len(self._reconnect_times) >= 3 or now+delay >= deadline:
+                    raise RuntimeError('夹爪只读自动重连达到次数或时间上限，保持停止')
+                with self.lock:
+                    self.auto_reconnect['phase'] = 'backoff'
+                if self.stop.wait(delay):
+                    raise MotionCancelled('夹爪只读重连已停止')
+                self._reconnect_times.append(clock.now())
+                with self.lock:
+                    self.auto_reconnect.update(phase='verifying', count=self.auto_reconnect['count']+1)
+                logger.info('Gripper read-only reconnect attempt=%s', self.auto_reconnect['count'])
+                # This hook is deliberately outside the retryable transport
+                # block: a changed mapping/mode/device is never repaired/retried.
+                lower, upper, opening = self._verify_readonly_reconnect(sdk, factory)
+                if ((lower, upper) != (self.mapping_min, self.mapping_max)
+                        or not isinstance(opening, (int, float)) or not math.isfinite(opening)
+                        or not 0 <= opening <= 1):
+                    raise RuntimeError('夹爪只读重连映射或实测开度不匹配，保持停止')
+                if self.stop.is_set() or clock.now() >= deadline:
+                    raise MotionCancelled('夹爪只读重连已取消或超时')
+                self.transport = self._new_json_transport(sdk)
+                with self.lock:
+                    self.enabled_received = self.enabled_value = None
+                    self.history.clear()
+                    self.history_started.clear()
+                    self.state.update(ready=False, initialized=False, opening=None)
+                    self.auto_reconnect['phase'] = 'feedback'
+                try:
+                    while not self.stop.is_set() and clock.now() < deadline:
+                        try:
+                            sample = self._poll_feedback(self.transport, factory, lower, upper)
+                        except ModbusTransportError:
+                            if self.transport.status().get('failed'):
+                                raise
+                            # Retirement stays on this connection and never
+                            # sends a second request over an unresolved frame.
+                            if self.stop.wait(self._feedback_retry_delay(.1)):
+                                raise MotionCancelled('夹爪只读重连已停止')
+                            continue
+                        if sample is None:
+                            raise MotionCancelled('夹爪只读重连已停止')
+                        with self.lock:
+                            fresh = (self.enabled_received is not None
+                                and 0 <= clock.now()-self.enabled_received <= self.control_max_age_s
+                                and 0 <= clock.now()-self.state['measurement_started'] <= self.control_max_age_s)
+                        if fresh:
+                            with self.lock:
+                                self.auto_reconnect.update(phase='monitoring', error=None)
+                            logger.info('Gripper read-only reconnect verified; new measured feedback available')
+                            return sample
+                    raise MotionCancelled('夹爪只读重连已取消或超时')
+                except ModbusTransportError as exc:
+                    can_retry = self.transport.status().get('reconnect_allowed')
+                    self.transport.close()
+                    with self.lock:
+                        self.state.update(ready=False, initialized=False, opening=None,
+                            communication_fault=True, error='夹爪通信自动重连中（等待下一次只读连接）')
+                        self.enabled_received = self.enabled_value = None
+                        self.history.clear()
+                        self.history_started.clear()
+                        self.auto_reconnect['error'] = str(exc)
+                    if not can_retry:
+                        raise
+            raise RuntimeError('夹爪只读自动重连三次失败，保持停止')
+        except Exception as exc:
+            with self.lock:
+                self.auto_reconnect.update(phase='stopped' if self.stop.is_set() else 'failed', error=str(exc))
+            logger.warning('Gripper read-only reconnect ended without recovery: %s', exc)
+            raise
+        finally:
+            self._cancel_reconnect_intents()
+            with self.lock:
+                self._reconnecting = False
+
     def _enable_refresh_interval(self):
         if self.config.get('gripper_transport', 'sdk') != 'json':
             return self.enable_poll_s
         # Leave room for one bounded position request and the following enable
         # read. Waiting until 250 ms at poll entry left no such reserve.
         timeout = float(self.config.get('gripper_timeout_s', .3))
-        return min(self.enable_poll_s, max(.001, .5-timeout-self._request_gap()-self._read_budget()-.020))
+        return min(self.enable_poll_s, max(.001, self.control_max_age_s-timeout-self._request_gap()-self._read_budget()-.020))
 
     def _motion_has_feedback_budget(self, source):
         """Defer a write if it would crowd out the next real feedback reads."""
@@ -652,8 +831,8 @@ class Ctag2F120Worker:
         with self.lock:
             position_age = now-self.state.get('measurement_started', self.state.get('received', 0.))
             enable_age = now-self.enabled_received if self.enabled_received is not None else math.inf
-            fits = (position_age+dispatch+2*read+.020 < .5
-                    and enable_age+dispatch+read+.020 < .5)
+            fits = (position_age+dispatch+2*read+.020 < self.control_max_age_s
+                    and enable_age+dispatch+read+.020 < self.control_max_age_s)
             self._deadline_reason = None if fits else '先刷新反馈：目标写入会挤占下一次位置或使能读取'
             if not fits:
                 self._deadline_deferrals += 1
@@ -670,8 +849,8 @@ class Ctag2F120Worker:
         if (self.enabled_received is None or
                 read_started-self.enabled_received >= self._enable_refresh_interval() or
                 (motion_due and self.config.get('gripper_transport', 'sdk') == 'json')):
-            enabled_started = clock.now()
-            enabled_word = self._read(sdk, factory, 0x0100, 1)[0]
+            enabled_words, enabled_started = self._read_timed(sdk, factory, 0x0100, 1)
+            enabled_word = enabled_words[0]
             with self.lock:
                 self._feedback_read_costs.append(clock.now()-enabled_started)
             if self.stop.is_set():
@@ -679,12 +858,20 @@ class Ctag2F120Worker:
             if enabled_word not in (0, 1):
                 raise RuntimeError('夹爪使能反馈不是 0 或 1')
             with self.lock:
+                # Repeated disabled feedback is the normal starting condition
+                # for a manual enable. It must not cancel that new request.
+                # A real enabled->disabled transition or a leftover target
+                # still invalidates pending control atomically with observation.
+                cancel_disabled = (enabled_word == 0 and
+                    (self._confirmed_enabled is True or self.desired is not None
+                     or self.ramp_target is not None))
                 self._observe_device_locked(enabled=enabled_word == 1)
                 self.enabled_received, self.enabled_value = enabled_started, enabled_word == 1
-            if not self.enabled_value:
-                self.hold()
-        position_started = clock.now()
-        block = self._read(sdk, factory, 0x060D, 6)
+                if cancel_disabled:
+                    self.cancel_generation += 1
+                    self.command_sequence += 1
+                    self.desired = self.ramp_target = None
+        block, position_started = self._read_timed(sdk, factory, 0x060D, 6)
         with self.lock:
             self._feedback_read_costs.append(clock.now()-position_started)
         if self.stop.is_set():
@@ -706,8 +893,8 @@ class Ctag2F120Worker:
             # a newly received measurement into an earlier observation anchor.
             self.history.append((completed, opening))
             self.history_started.append((completed, received))
-            fresh = (0 <= completed-received <= .5 and
-                     self.enabled_received is not None and 0 <= completed-self.enabled_received <= .5)
+            fresh = (0 <= completed-received <= self.control_max_age_s and
+                     self.enabled_received is not None and 0 <= completed-self.enabled_received <= self.control_max_age_s)
             ready = enabled and alarm == 0 and fresh
             if ((not fresh and not self.state.get('communication_fault')) or
                     (self.state.get('enabled') is True and not enabled) or
@@ -749,12 +936,7 @@ class Ctag2F120Worker:
             self.mapping_min, self.mapping_max = lower, upper
             io = sdk
             if self.config.get('gripper_transport', 'sdk') == 'json':
-                from .gripper_transport import JsonModbusArm
-                self.transport = JsonModbusArm(str(self.config['robot_ip']),
-                    int(self.config['robot_port']),
-                    timeout_s=float(self.config.get('gripper_timeout_s', .3)),
-                    request_gap_s=self.config['gripper_request_gap_s'],
-                    setup_sdk=sdk, trace_path=self.config.get('gripper_trace_path'))
+                self.transport = self._new_json_transport(sdk)
                 io = self.transport
             period = float(self.config.get("gripper_poll_s", 0.10))
             min_command_interval = float(self.config.get("gripper_command_interval_s", 0.10))
@@ -772,7 +954,7 @@ class Ctag2F120Worker:
                     if (self.transport is None or not isinstance(exc, ModbusTransportError)
                             or self.transport.status()['failed'] or clock.now() >= startup_deadline):
                         raise
-                    self.stop.wait(.1)
+                    self.stop.wait(self._feedback_retry_delay(.1))
             else:
                 return
             if initial is None:
@@ -847,10 +1029,18 @@ class Ctag2F120Worker:
                         command_reference_valid = False
                         if (self.transport is None or not isinstance(exc, ModbusTransportError)
                                 or self.transport.status()['failed']):
+                            sample = (self._recover_readonly(sdk, rm_peripheral_read_write_params_t)
+                                      if isinstance(exc, ModbusTransportError) else None)
+                            if sample is not None:
+                                io = self.transport
+                                commanded, _, read_started = sample
+                                command_reference_valid = True
+                                next_poll = read_started+period
+                                continue
                             raise
                         # No retries of targets/enables. Only a later scheduled
                         # read may recover monitoring after transport fencing.
-                        next_poll = clock.now()+max(period, .1)
+                        next_poll = clock.now()+self._feedback_retry_delay(period)
                         continue
                     if sample is None:
                         break
@@ -883,8 +1073,16 @@ class Ctag2F120Worker:
                         command_reference_valid = False
                         if (self.transport is None or not isinstance(exc, (ModbusTransportError, FeedbackUnavailable))
                                 or self.transport.status()['failed']):
+                            sample = (self._recover_readonly(sdk, rm_peripheral_read_write_params_t)
+                                      if isinstance(exc, ModbusTransportError) else None)
+                            if sample is not None:
+                                io = self.transport
+                                commanded, _, read_started = sample
+                                command_reference_valid = True
+                                next_poll = read_started+period
+                                continue
                             raise
-                        next_poll = clock.now()+max(period, .1)
+                        next_poll = clock.now()+self._feedback_retry_delay(period)
                         continue
                     if completed is not None:
                         # Separate mode includes three transactions; retain a
@@ -911,7 +1109,8 @@ class Ctag2F120Worker:
                 except Exception:
                     pass
 
-    def status(self, max_age_s: float = 0.5) -> dict[str, Any]:
+    def status(self, max_age_s: float | None = None) -> dict[str, Any]:
+        control_age = self.control_max_age_s if max_age_s is None else min(max_age_s, self.control_max_age_s)
         with self.lock:
             result = dict(self.state)
             result.update(requested_opening=self.desired, command_sequence=self.command_sequence,
@@ -919,6 +1118,8 @@ class Ctag2F120Worker:
                           fault_generation=self.fault_generation,
                           hard_fault_generation=self.hard_fault_generation,
                           cancel_generation=self.cancel_generation,
+                          connection_generation=self.connection_generation,
+                          auto_reconnect=dict(self.auto_reconnect, active=self._reconnecting),
                           last_sent=dict(self.sent_target) if self.sent_target else None)
             enable_stamp = self.enabled_received
             transition = self.manual_transition
@@ -926,20 +1127,21 @@ class Ctag2F120Worker:
         if transition is not None:
             result.update(ready=False, error='夹爪手动准备：'+transition)
         result['enable_poll_s'] = self.enable_poll_s
+        result['control_max_age_ms'] = self.control_max_age_s*1000
         result['feedback_schedule'] = dict(enable_refresh_s=self._enable_refresh_interval(),
             read_budget_ms=round(self._read_budget()*1000, 2),
             request_gap_ms=self._request_gap()*1000,
             target_deferrals=self._deadline_deferrals, deferred_reason=self._deadline_reason,
-            control_max_age_ms=500)
+            control_max_age_ms=self.control_max_age_s*1000)
         result['transport'] = (self.transport.status() if self.transport is not None else dict(backend='sdk'))
         received = float(result.get('measurement_started', result.get("received", 0.0)))
         age = clock.now() - received if received else math.inf
         result["age_ms"] = round(age * 1000.0, 2) if math.isfinite(age) else None
-        if age > max_age_s:
+        if not 0 <= age <= control_age:
             result.update(ready=False, error="夹爪反馈过期")
         enable_age = clock.now()-enable_stamp if enable_stamp is not None else math.inf
         result['enabled_age_ms'] = round(enable_age*1000, 2) if math.isfinite(enable_age) else None
-        if result.get('initialized') and (not math.isfinite(enable_age) or not 0 <= enable_age <= .5):
+        if result.get('initialized') and (not math.isfinite(enable_age) or not 0 <= enable_age <= self.control_max_age_s):
             result.update(ready=False, error='夹爪使能反馈过期')
         return result
 
@@ -969,9 +1171,9 @@ class Ctag2F120Worker:
             now = clock.now()
             if (observed.get('fault_generation') != self.fault_generation
                     or observed.get('cancel_generation') != self.cancel_generation or not self.state.get('ready')
-                    or not 0 <= now-self.state.get('measurement_started', self.state.get('received', 0)) <= .5
-                    or self.enabled_received is None or not 0 <= now-self.enabled_received <= .5
-                    or self.stop.is_set()):
+                    or not 0 <= now-self.state.get('measurement_started', self.state.get('received', 0)) <= self.control_max_age_s
+                    or self.enabled_received is None or not 0 <= now-self.enabled_received <= self.control_max_age_s
+                    or self.stop.is_set() or self._reconnecting):
                 raise RuntimeError('夹爪反馈在目标入队前已改变或过期')
             self.desired = value
             self.command_sequence += 1

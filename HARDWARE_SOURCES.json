@@ -15,7 +15,7 @@
     "src/realman_sync_client/camera.py": {
       "source_sha256": "9f5f3559eddedbb96d9e3781170198a055ab186aee5ae81615c354f716688e43",
       "sha256": "2b00781bb49cddc34bcaf49d6be9d05c449efd3a451126af54a1d6658c2220c9",
-      "reason": "Shared Windows QPC clock; match realman-data-collection 762e4a2 camera auto exposure=1, exposure priority=0, frames queue=1, restoring prior settings on exit; Fixed-anchor causal camera selection with a shared <=10ms IPC wait capped by the next 30Hz grid; nonblocking preflight reuses alignment; original skew/freshness limits retained",
+      "reason": "Shared Windows QPC clock; match realman-data-collection 762e4a2 camera auto exposure=1, exposure priority=0, frames queue=1, restoring prior settings on exit; Fixed-anchor causal camera selection with a shared <=20ms IPC wait capped by the next 30Hz grid; nonblocking preflight reuses alignment; original skew/freshness limits retained",
       "reference_commit": "762e4a2bb4ff29c6a7ec447592f92688990b8237"
     },
     "src/realman_sync_client/contracts.py": {
@@ -25,18 +25,27 @@
     },
     "src/realman_sync_client/hardware.py": {
       "source_sha256": "c3dcc2125b2e6ff64e644109009cf739ce0a0b50ee213ef666638d22b9849f6c",
-      "sha256": "a638879e696ef71c3043e81ba94ea280a4d558cf724c99e65fd2786edad1256d",
-      "reason": "Shared Windows QPC; adapter dispatch guard immediately before native motion calls; explicit opt-in manual-open torque-hold release through the sole RTU worker; Fixed-anchor causal camera selection with a shared <=10ms IPC wait capped by the next 30Hz grid; nonblocking preflight reuses alignment; original skew/freshness limits retained; motion tracing separates measured tracking error from adjacent command delta; read-only fresh joint feedback for request-to-dispatch drift verification"
+      "sha256": "e7b2d72e7584e095544b12960f827c6f0c88bcecf9098a548367b20ee881a992",
+      "reason": "Shared Windows QPC; adapter dispatch guard immediately before native motion calls; explicit opt-in manual-open torque-hold release through the sole RTU worker; Fixed-anchor causal camera selection with a shared <=20ms IPC wait capped by the next 30Hz grid; nonblocking preflight reuses alignment; original skew/freshness limits retained; motion tracing separates measured tracking error from adjacent command delta; read-only fresh joint feedback for request-to-dispatch drift verification",
+      "timing_experiment_20261106": "Explicit strict/relaxed online timing profiles; bounded gripper motion age, joint/force source and camera ages; real device faults, trained filter/calibration and action semantics retained."
     },
     "src/realman_sync_client/gripper.py": {
       "source_sha256": "0e977c37ff703045a2cb7029bc3361284530af02b4187412b967af3536668ba2",
-      "sha256": "489cddb6db8aa5220d8c4f90d1f085d7e32f8068363228b5fabec94e2b30d037",
-      "reason": "Shared Windows QPC; bounded single-owner JSON RTU transport, independent enable/position freshness, cancellation-safe dispatch; explicit manual torque-hold release and measured-target neutralization before manual enable, with cancellation cleanup and no policy auto-enable; configurable manual separate target-readback-trigger protocol with guarded dispatch and no uncertain-ACK retries; deadline-aware enable/position polling before target dispatch, bounded freshness reserve and no uncertain motion retries; optional cancellable JSON request quiet time with post-wait intent guards and pacing-aware feedback budgets; latch hard device/unknown faults independently of transient feedback gaps; freshness-only target rejection continues read monitoring without replay; manual admission checks captured cancellation generation under hold lock; ordinary enable also retains ticket through final transport guard"
+      "sha256": "20504c69043366b59b15454ce4bfe0602dee3974411845760c9caf50df2b0c61",
+      "enable_poll_fix": "Repeated disabled observations preserve pending manual enable; enabled-to-disabled transitions and stale targets cancel atomically. Explicit hold/stop cancellation is unchanged.",
+      "reason": "Shared Windows QPC; bounded single-owner JSON RTU transport, independent enable/position freshness, cancellation-safe dispatch; explicit manual torque-hold release and measured-target neutralization before manual enable, with cancellation cleanup and no policy auto-enable; configurable manual separate target-readback-trigger protocol with guarded dispatch and no uncertain-ACK retries; deadline-aware enable/position polling before target dispatch, bounded freshness reserve and no uncertain motion retries; optional cancellable JSON request quiet time with post-wait intent guards and pacing-aware feedback budgets; latch hard device/unknown faults independently of transient feedback gaps; freshness-only target rejection continues read monitoring without replay; manual admission checks captured cancellation generation under hold lock; ordinary enable also retains ticket through final transport guard",
+      "prompt_recovery_fix": "Known pending JSON response is retired/fenced immediately; bounded recovery, stop cancellation and no uncertain-write replay retained.",
+      "timed_read_fix": "Feedback age uses the actual fresh request send-start after retirement/fence, not synchronization entry or receive time. SDK fallback remains conservative.",
+      "read_timeout_fix": "Independent optional TCP read timeout; write timeout and 500ms motion feedback bound unchanged.",
+      "communication_review_20261106": "Opt-in bounded read-only TCP reconnection; old targets/futures and sample times cancelled, mapping/config reverified, new connection generation revokes old execution permits; at most three attempts per sixty seconds, no uncertain write replay.",
+      "timing_experiment_20261106": "Explicit strict/relaxed online timing profiles; bounded gripper motion age, joint/force source and camera ages; real device faults, trained filter/calibration and action semantics retained."
     },
     "src/realman_sync_client/web_hardware.py": {
       "previous_local_sha256": "7aaa05d72b1c55c6850b9d99707f9079e3ff18de800a3cbd2132dfbf9a89fd8b",
-      "sha256": "03356018d0e4395da529ccabdf072ce2b436baa2b0ff422c6b2e37ca90038390",
-      "reason": "Fixed-anchor causal camera selection with a shared <=10ms IPC wait capped by the next 30Hz grid; nonblocking preflight reuses alignment; original skew/freshness limits retained; expose deadline-aware gripper feedback scheduling diagnostics; object-bound execution recovery tokens retain historical gripper and arm hard faults, invalidate on manual control/reconnect/close, and only acknowledge stable measured feedback without hardware writes; manual UI tokens bind worker identity and original cancellation generation through final worker admission without blocking stop on hardware lock; explicit epoch-cancellable 10-percent planned joint reset validates native limits and fresh arm-only feedback, confirms stable measured arrival, and never retries uncertain motion ACKs"
+      "sha256": "b6d95a463acf8c50605b371b6d27a001c920fb7c243cf162aa81ac038ada19c3",
+      "reason": "Fixed-anchor causal camera selection with a shared <=20ms IPC wait capped by the next 30Hz grid; nonblocking preflight reuses alignment; original skew/freshness limits retained; expose deadline-aware gripper feedback scheduling diagnostics; object-bound execution recovery tokens retain historical gripper and arm hard faults, invalidate on manual control/reconnect/close, and only acknowledge stable measured feedback without hardware writes; manual UI tokens bind worker identity and original cancellation generation through final worker admission without blocking stop on hardware lock; explicit epoch-cancellable 10-percent planned joint reset validates native limits and fresh arm-only feedback, confirms stable measured arrival, and never retries uncertain motion ACKs",
+      "communication_review_20261106": "Separate configurable observation freshness from fixed 500ms motion feedback; read-only reconnect verification and connection-bound execution permits; bounded UDP callback arrival/processing telemetry without timestamp or filter changes.",
+      "timing_experiment_20261106": "Explicit strict/relaxed online timing profiles; bounded gripper motion age, joint/force source and camera ages; real device faults, trained filter/calibration and action semantics retained."
     }
   }
 }

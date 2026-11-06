@@ -18,8 +18,9 @@ from . import clock
 from .camera import RealSenseCamera
 from .client import validate_metadata
 from .gripper import Ctag2F120Worker, FeedbackUnavailable, _signed32, verify_arm_state
+from .feedback_metrics import FeedbackMetrics, HostSchedulerProbe
 from .hardware import RealManHardwareAdapter, _RobotFeedback, _finite
-from .wire import PROTOCOL
+from .wire import PROTOCOL, temporal_tolerances
 
 
 @dataclass(frozen=True)
@@ -45,6 +46,7 @@ class _FeedbackRecoveryToken:
     control_generation: int
     gripper_hard_generation: int
     arm_hard_generation: int
+    gripper_connection_generation: int = 0
 
 
 class _Rate:
@@ -108,8 +110,35 @@ class _MonitoredFeedback(_RobotFeedback):
         self.hard_fault_generation = 0
         self.arm_fault_generation = 0
         self.state_received = None
+        self.feedback_metrics = FeedbackMetrics(max_gap_s=float((config.get('_force_filter') or {}).get('max_gap_s', .02)))
+        self.scheduler_probe = HostSchedulerProbe(max_gap_s=float((config.get('_force_filter') or {}).get('max_gap_s', .02)))
+
+    def start(self):
+        self.scheduler_probe.start()
+        try:
+            return super().start()
+        except Exception:
+            self.scheduler_probe.close()
+            raise
+
+    def restore(self):
+        try:
+            return super().restore()
+        finally:
+            self.scheduler_probe.close()
 
     def ingest(self, state, now):
+        started = clock.now()
+        try:
+            return self._ingest(state, now)
+        finally:
+            # Telemetry never supplies timestamps or data to the filter.
+            try:
+                self.feedback_metrics.record(now, max(0., clock.now()-started)*1000)
+            except ValueError:
+                pass
+
+    def _ingest(self, state, now):
         # Keep state diagnostics useful even when the independent force field is
         # invalid. The inherited model loader still rejects the entire sample.
         try:
@@ -192,6 +221,13 @@ class _MonitoredFeedback(_RobotFeedback):
         with self.lock:
             filtered = dict(self.processed[-1]) if self.processed else None
             filter_error = self.force_error or self.error
+            filter_state = dict(epoch=self.force_filter.epoch,
+                last_reset_reason=self.force_filter.reset_reason) if self.force_filter is not None else None
+        timing = self.feedback_metrics.snapshot()
+        state['callback_timing'] = timing
+        force['callback_timing'] = timing
+        force['filter_state'] = filter_state
+        force['scheduler_timing'] = self.scheduler_probe.snapshot()
         state.update(values=list(q) if q is not None else None, units='degrees',
                      kind='measured_joint_positions', error=state_error)
         # Fall back to genuine raw measurements during filter warm-up, with an
@@ -261,7 +297,16 @@ class _CheckedGripper(Ctag2F120Worker):
                 self._observed_alarm = self.state.get('alarm')
         return sample
 
-    def status(self, max_age_s=0.5):
+    def _verify_readonly_reconnect(self, sdk, factory):
+        # Unlike the base worker setup, this subclass only reads and verifies.
+        # No power/bus/parameter writes, enable, clear, or target replay.
+        lower, upper, opening = self._setup(sdk, factory)
+        if (lower, upper) != (self.mapping_min, self.mapping_max):
+            raise RuntimeError('夹爪重连行程映射不匹配，保持停止')
+        return lower, upper, opening
+
+    def status(self, max_age_s=None):
+        max_age_s = self.control_max_age_s if max_age_s is None else max_age_s
         result = super().status(max_age_s)
         # The base stale check must not erase the actual failed setup reason.
         with self.lock:
@@ -288,24 +333,36 @@ class _CheckedGripper(Ctag2F120Worker):
         result['last_interval_ms'] = round(intervals[-1], 2) if intervals else None
         result['max_interval_ms'] = round(max(intervals), 2) if intervals else None
         result['observation_max_age_ms'] = max_age_s*1000
-        # The collection source accepts gripper observations up to 1 s old.
-        # Changing that observation setting must not relax the existing 0.5 s
-        # motion gate, including worker.command's default status() check.
-        control_age_s = min(max_age_s, .5)
+        # Observation and motion budgets are independent profile settings.
+        control_age_s = min(max_age_s, self.control_max_age_s)
         if result.get('initialized') and not 0 <= age_s <= control_age_s:
             result.update(ready=False, error='夹爪运动反馈过期')
         result['alarm'] = observed_alarm
         opening, age = result.get('opening'), result.get('age_ms')
         # A read timeout cannot invalidate the historical fact of an earlier
-        # measurement that is still inside the observation contract (1 s).
+        # measurement that is still inside the configured observation budget.
         # Motion is separately blocked by ready, enable age and fault generation.
         position_fresh = bool(result.get('initialized')
             and isinstance(opening, (int, float)) and not isinstance(opening, bool)
             and math.isfinite(opening) and 0 <= opening <= 1
             and isinstance(age, (int, float)) and math.isfinite(age) and 0 <= age <= max_age_s * 1000)
         result['measurement_ready'] = position_fresh and result.get('alarm') == 0
+        # Observation failures must name the observation contract, not the
+        # tighter motion gate. A valid older measurement can still condition
+        # inference while fresh feedback is required before any motor command.
+        if result['measurement_ready']:
+            result['measurement_error'] = None
+        elif type(observed_alarm) is int and observed_alarm != 0:
+            result['measurement_error'] = f'夹爪报警 0x{observed_alarm:04x}'
+        elif not result.get('initialized'):
+            result['measurement_error'] = source_error or '缺少已初始化的夹爪实测开度'
+        elif not position_fresh:
+            result['measurement_error'] = ('夹爪观测反馈过期或无效'
+                f'（年龄 {age} ms，观测上限 {max_age_s*1000:g} ms）')
+        else:
+            result['measurement_error'] = '夹爪报警状态未知'
         enable_age = result.get('enabled_age_ms')
-        enable_fresh = isinstance(enable_age, (int, float)) and math.isfinite(enable_age) and 0 <= enable_age <= 500
+        enable_fresh = isinstance(enable_age, (int, float)) and math.isfinite(enable_age) and 0 <= enable_age <= self.control_max_age_s*1000
         result['control_feedback_ready'] = bool(result['measurement_ready'] and 0 <= age_s <= control_age_s
             and enable_fresh)
         result['monitoring_ready'] = bool(position_fresh and enable_fresh
@@ -339,22 +396,24 @@ class _CheckedGripper(Ctag2F120Worker):
         with self.lock:
             eligible = [(stamp, opening) for stamp, opening in self.history if stamp <= anchor]
             request_times = dict(self.history_started)
-        if not state.get('measurement_ready') or not eligible:
-            raise RuntimeError(state.get('error') or '缺少已初始化、无报警的夹爪实测开度')
+        if not state.get('measurement_ready'):
+            raise RuntimeError(state.get('measurement_error') or '缺少已初始化、无报警的夹爪实测开度')
+        if not eligible:
+            raise RuntimeError('没有机械臂状态锚点之前的夹爪反馈')
         stamp, opening = eligible[-1]
         source_start = request_times.get(stamp, stamp)
         if not 0 <= anchor-source_start <= max_age_s or not 0 <= now-source_start <= max_age_s:
-            raise RuntimeError('夹爪反馈与机械臂状态不同步')
+            raise RuntimeError('夹爪观测反馈过期或与机械臂状态不同步')
         return opening
 
     def _send_target(self, sdk, factory, requested, bounded, previous, sequence, source):
         # Recheck every ramp write, not just admission of its original target.
         # status() uses position history; an enable ACK cannot refresh its age.
-        state = self.status(.5)
+        state = self.status()
         if not state.get('ready') or not state.get('control_feedback_ready'):
             self.hold()
             raise FeedbackUnavailable('夹爪目标未写入：真实位置反馈过期或运动状态未就绪；'
-                               + str(state.get('error') or '需要500ms内有效位置、使能且无报警'))
+                               + str(state.get('error') or f'需要{self.control_max_age_s*1000:g}ms内有效位置、使能且无报警'))
         return super()._send_target(sdk, factory, requested, bounded, previous, sequence, source)
 
 
@@ -523,7 +582,8 @@ class WebHardware(RealManHardwareAdapter):
         # old config marks gripper_required=false. Never invent its eighth DOF.
         gripper_key = 'ready' if for_execution else 'measurement_ready'
         if self.gripper is None or not status.get('gripper', {}).get(gripper_key):
-            return False, status.get('gripper', {}).get('error') or '缺少真实夹爪开度'
+            error_key = 'error' if for_execution else 'measurement_error'
+            return False, status.get('gripper', {}).get(error_key) or '缺少真实夹爪开度'
         if (not status.get('cameras_ready') or status.get('camera_order') != ['global', 'wrist']
                 or len(self.cameras) != 2):
             return False, next((c.get('error') for c in status['cameras'] if not c.get('ready')),
@@ -545,6 +605,11 @@ class WebHardware(RealManHardwareAdapter):
     def can_infer(self, metadata):
         try:
             metadata = validate_metadata(dict(protocol=PROTOCOL, ready=True, metadata=metadata))
+            limits = temporal_tolerances(metadata)
+            for config_key, server_key in (('force_source_max_age_s', 'force_max_age_s'),
+                    ('camera_max_age_s', 'camera_max_age_s'), ('camera_pair_skew_s', 'camera_pair_skew_s')):
+                if float(self.config.get(config_key, limits[server_key])) > limits[server_key]+1e-9:
+                    return False, '当前 Server 不支持此时序档位，请切回原始档或更新 Server'
             status = self.status()
             ready, reason = self._local_ready(status, for_execution=False)
             if not ready:
@@ -589,10 +654,10 @@ class WebHardware(RealManHardwareAdapter):
         state['values'] = ([math.radians(x) for x in joints] + [opening] if joints is not None
                            else [None] * 7 + [opening] if opening is not None else None)
         state.update(units=['rad'] * 7 + ['0..1'], kind='measured_joint8',
-                     gripper_age_ms=age, gripper_error=gripper.get('error'))
+                     gripper_age_ms=age, gripper_error=gripper.get('measurement_error'))
         if opening is None or not gripper.get('measurement_ready', gripper.get('ready')):
             state['ready'] = False
-            state['error'] = state['error'] or gripper.get('error') or '缺少新鲜实测夹爪开度'
+            state['error'] = state['error'] or gripper.get('measurement_error') or '缺少新鲜实测夹爪开度'
         return dict(state=state, force=force, cameras=[camera.diagnostics() for camera in self.cameras],
                     reference_checks=dict(self.frame_geometry,
                                           passed=bool(self.frame_geometry.get('verified'))))
@@ -613,7 +678,7 @@ class WebHardware(RealManHardwareAdapter):
 
     def acknowledge_gripper_faults(self):
         """Explicit execute_start acknowledges recovery; arm per chunk cannot."""
-        state = self.gripper.status(.5) if self.gripper is not None else {}
+        state = self.gripper.status() if self.gripper is not None else {}
         if not state.get('ready') or not state.get('control_feedback_ready'):
             raise RuntimeError('夹爪反馈尚未恢复，不能恢复动作执行')
         self._acknowledged_gripper_faults = state.get('fault_generation', 0)
@@ -628,7 +693,15 @@ class WebHardware(RealManHardwareAdapter):
             and token.gripper is self.gripper and token.feedback is self.feedback
             and token.control_generation == getattr(self, '_feedback_recovery_generation', 0)
             and token.gripper_hard_generation == self.gripper.hard_fault_generation
-            and token.arm_hard_generation == self.feedback.hard_fault_generation)
+            and token.arm_hard_generation == self.feedback.hard_fault_generation
+            and token.gripper_connection_generation == getattr(self.gripper, 'connection_generation', 0))
+
+    def recovery_requires_execution_restart(self, token):
+        """A new TCP connection can restore sensing, never the old motion permit."""
+        return (isinstance(token, _FeedbackRecoveryToken) and token.hardware is self
+            and token.gripper is self.gripper and token.feedback is self.feedback
+            and token.control_generation == getattr(self, '_feedback_recovery_generation', 0)
+            and token.gripper_connection_generation != getattr(self.gripper, 'connection_generation', 0))
 
     def _recovery_feedback_ready_locked(self, state):
         """Recheck a status snapshot while both feedback owners are locked."""
@@ -643,8 +716,8 @@ class WebHardware(RealManHardwareAdapter):
             and worker.state.get('ready') and not worker.state.get('communication_fault')
             and worker.enabled_value is True and type(worker.state.get('alarm')) is int
             and worker.state.get('alarm') == 0
-            and worker.enabled_received is not None and 0 <= now-worker.enabled_received <= .5
-            and 0 <= now-worker.state.get('measurement_started', -math.inf) <= .5
+            and worker.enabled_received is not None and 0 <= now-worker.enabled_received <= worker.control_max_age_s
+            and 0 <= now-worker.state.get('measurement_started', -math.inf) <= worker.control_max_age_s
             and self.feedback.state_diagnostic_error is None
             and self.feedback.force_diagnostic_error is None)
 
@@ -654,13 +727,14 @@ class WebHardware(RealManHardwareAdapter):
             ready, _ = self._local_ready(self.status())
             if not ready or self.gripper is None or self.feedback is None:
                 raise RuntimeError('硬件尚未就绪，不能创建反馈恢复许可')
-            state = self.gripper.status(.5)
+            state = self.gripper.status()
             with self.feedback.telemetry_lock, self.gripper.lock:
                 if not self._recovery_feedback_ready_locked(state):
                     raise RuntimeError('硬件反馈已改变，不能创建反馈恢复许可')
                 token = _FeedbackRecoveryToken(self, self.gripper, self.feedback,
                     getattr(self, '_feedback_recovery_generation', 0),
-                    self.gripper.hard_fault_generation, self.feedback.hard_fault_generation)
+                    self.gripper.hard_fault_generation, self.feedback.hard_fault_generation,
+                    getattr(self.gripper, 'connection_generation', 0))
                 self._active_feedback_recovery_token = token
                 return token
 
@@ -672,7 +746,7 @@ class WebHardware(RealManHardwareAdapter):
             ready, _ = self._local_ready(self.status())
             if not ready:
                 return False
-            state = self.gripper.status(.5)
+            state = self.gripper.status()
             with self.feedback.telemetry_lock, self.gripper.lock:
                 if not self._recovery_token_matches(token) or not self._recovery_feedback_ready_locked(state):
                     return False
@@ -713,6 +787,9 @@ class WebHardware(RealManHardwareAdapter):
                     communication_error=state.get('communication_error'), freshness_error=state.get('freshness_error'),
                     monitoring_ready=bool(state.get('monitoring_ready')),
                     fault_code=fault, enabled=enabled, measurement_ready=bool(state.get('measurement_ready')),
+                    measurement_error=state.get('measurement_error'),
+                    auto_reconnect=state.get('auto_reconnect'),
+                    connection_generation=state.get('connection_generation', 0),
                     opening=state.get('opening'), requested_opening=state.get('requested_opening'),
                     age_ms=state.get('age_ms'),
                     enabled_age_ms=state.get('enabled_age_ms'),
@@ -722,7 +799,7 @@ class WebHardware(RealManHardwareAdapter):
                     transport=state.get('transport') if isinstance(state.get('transport'), dict) else {},
                     hz=state.get('hz', 0.0), samples=state.get('samples', 0),
                     last_interval_ms=state.get('last_interval_ms'), max_interval_ms=state.get('max_interval_ms'),
-                    observation_max_age_ms=state.get('observation_max_age_ms'), control_max_age_ms=500,
+                    observation_max_age_ms=state.get('observation_max_age_ms'), control_max_age_ms=state.get('control_max_age_ms', 500),
                     enable_available=manual_available and live_enabled is False,
                     disable_available=manual_available and live_enabled is True,
                     motion_available=manual_available and live_enabled is True and bool(state.get('ready')),
@@ -1011,7 +1088,7 @@ class WebHardware(RealManHardwareAdapter):
             candidate.start()
             candidate.wait_initialized(float(self.config.get('gripper_start_timeout_s', 8.)))
             guard()
-            state = candidate.status(.5)
+            state = candidate.status()
             if not state.get('monitoring_ready'):
                 raise RuntimeError(state.get('error') or '重连后尚无新鲜、完整的夹爪反馈')
             result.update(ok=True, stage='monitoring', enabled=state['enabled'],
@@ -1296,9 +1373,11 @@ class WebHardware(RealManHardwareAdapter):
         if self._closing:
             raise RuntimeError('硬件正在关闭')
         token = getattr(self, '_active_feedback_recovery_token', None)
+        if self.recovery_requires_execution_restart(token):
+            raise FeedbackUnavailable('夹爪通信连接已重建，需要重新开始执行')
         if token is not None and not self._recovery_token_matches(token):
             raise RuntimeError('执行会话已失效：设备报警、失能或用户操作后需要重新开始执行')
-        state = self.gripper.status(.5) if self.gripper is not None else {}
+        state = self.gripper.status() if self.gripper is not None else {}
         if state.get('fault_generation', 0) != getattr(self, '_acknowledged_gripper_faults', 0):
             raise RuntimeError('关节目标未写入：夹爪通信曾中断；反馈恢复后请重新点击开始执行')
         def detail(value):
@@ -1309,7 +1388,7 @@ class WebHardware(RealManHardwareAdapter):
 
     def command(self, action):
         self._check_command_dispatch()
-        state = self.gripper.status(.5) if self.gripper is not None else {}
+        state = self.gripper.status() if self.gripper is not None else {}
         def detail(value):
             return {key: value.get(key) for key in ('age_ms', 'enabled_age_ms', 'hz', 'last_interval_ms',
                 'max_interval_ms', 'enabled', 'alarm', 'ready', 'error', 'fault_generation')}
@@ -1317,7 +1396,7 @@ class WebHardware(RealManHardwareAdapter):
         try:
             return super().command(action)
         except Exception as exc:
-            after = self.gripper.status(.5) if self.gripper is not None else {}
+            after = self.gripper.status() if self.gripper is not None else {}
             raise RuntimeError(f'{exc}; command_ms={(clock.now()-started)*1000:.2f}; '
                                f'gripper_before={detail(state)}; gripper_after={detail(after)}') from exc
 

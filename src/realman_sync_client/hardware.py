@@ -127,7 +127,8 @@ class _RobotFeedback:
         with self.lock:
             if self.force_error or self.error:
                 raise RuntimeError(self.force_error or self.error)
-            point, _ = source_at(list(self.processed), anchor)
+            point, _ = source_at(list(self.processed), anchor,
+                max_age_s=float(self.config.get('force_source_max_age_s', .03)))
             meta = dict(source_time=point['time'], grid_time=anchor,
                         source_age_s=anchor-point['time'], epoch=point['epoch'],
                         preprocessing_id=self.force_contract['id'])
@@ -257,6 +258,9 @@ class RealManHardwareAdapter:
     @staticmethod
     def _validate_config(config: Mapping[str, Any]) -> dict[str, Any]:
         result = dict(config)
+        if 'timing_profile' in result:
+            from .timing_profiles import hardware_settings
+            result.update(hardware_settings(result['timing_profile']))
         for key in ("robot_ip", "robot_port", "expected_model", "expected_force_type"):
             if key not in result:
                 raise ValueError(f"缺少硬件配置: {key}")
@@ -424,11 +428,12 @@ class RealManHardwareAdapter:
     def _aligned_camera_frames(self, anchor, feedback_stamp, *, wait_s=0.):
         """Select causal frames with one shared, bounded IPC arrival budget.
 
-        Both timestamps stay fixed while waiting. The next 30 Hz grid is an
-        upper bound, not an excuse to shift observations or relax freshness.
+        Both timestamps stay fixed while waiting. The shared IPC budget is at
+        most 20 ms, capped by the next 30 Hz grid; neither bound permits moving
+        observations or relaxing freshness.
         Preflight uses wait_s=0 and never creates an observation/sequence.
         """
-        deadline = min(clock.now() + max(0., min(float(wait_s), .010)), anchor + 1 / 30)
+        deadline = min(clock.now() + max(0., min(float(wait_s), .020)), anchor + 1 / 30)
         skew = float(self.config['camera_pair_skew_s'])
         while True:
             revisions = [camera.frame_revision() for camera in self.cameras]
@@ -484,7 +489,7 @@ class RealManHardwareAdapter:
             q, pose, force, feedback_stamp = self.feedback.snapshot(float(self.config["feedback_max_age_s"]))
         frames: dict[str, bytes] = {}
         metadata: dict[str, Mapping[str, Any]] = {}
-        for rgb, meta in self._aligned_camera_frames(anchor, feedback_stamp, wait_s=.010):
+        for rgb, meta in self._aligned_camera_frames(anchor, feedback_stamp, wait_s=.020):
             frames[str(meta["name"])] = rgb
             metadata[str(meta["name"])] = meta
         gripper = self.gripper.snapshot(

@@ -71,6 +71,19 @@ class RecoveryPermitTests(unittest.TestCase):
             self.assertTrue(self.worker.requests.empty())
             self.assertEqual(self.hardware.sdk.mock_calls, [])
 
+    def test_new_tcp_connection_revokes_motion_permit_until_explicit_restart(self):
+        self.worker.connection_generation = self.token.gripper_connection_generation + 1
+        self.read()
+        self.assertTrue(self.worker.status()['ready'])
+        self.assertTrue(self.hardware.recovery_requires_execution_restart(self.token))
+        self.assertFalse(self.hardware.acknowledge_recovered_feedback(self.token))
+        with self.assertRaisesRegex(FeedbackUnavailable, '连接已重建'):
+            self.hardware._check_command_dispatch()
+        self.hardware.sdk.assert_not_called()
+        new_token = self.hardware.capture_feedback_recovery_token()
+        self.assertFalse(self.hardware.recovery_requires_execution_restart(new_token))
+        self.assertTrue(self.hardware.acknowledge_recovered_feedback(new_token))
+
     def test_disabled_seen_after_timeout_remains_hard_after_reenabled(self):
         self.worker._feedback_failed(TimeoutError())
         self.bus.enabled = 0

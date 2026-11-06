@@ -11,7 +11,7 @@ import time
 from . import clock
 import uuid
 
-from .wire import PROTOCOL, encode_observation, validate_response
+from .wire import PROTOCOL, encode_observation, validate_response, temporal_tolerances
 
 logger = logging.getLogger(__name__)
 
@@ -43,8 +43,15 @@ def validate_metadata(health):
     if not isinstance(meta, dict):
         raise ValueError("server health must contain metadata")
     result = dict(meta)
+    temporal_tolerances(result)
     if result.get("action_space") != "joint8":
         raise ValueError("client requires joint8 absolute joint radians + gripper openness")
+    # Legacy joint8 servers already imply these conventions. Explicit new
+    # declarations must agree; never silently accumulate an incremental chunk.
+    for key, expected in (("action_semantics", "absolute"), ("joint_unit", "radian"),
+                          ("gripper_semantics", "absolute_openness_0_1")):
+        if key in result and result[key] != expected:
+            raise ValueError(f"server {key} must be {expected}")
     for key in ("width", "height", "action_horizon", "history_length", "video_context_frames"):
         if key == "video_context_frames":
             result.setdefault(key, 1)

@@ -289,6 +289,16 @@ class SyncClientTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 validate_metadata(dict(protocol=PROTOCOL, ready=True, metadata=dict(metadata(), **change)))
 
+    def test_explicit_incremental_wire_actions_are_rejected(self):
+        conventions = dict(action_semantics="absolute", joint_unit="radian",
+                           gripper_semantics="absolute_openness_0_1")
+        health = dict(protocol=PROTOCOL, ready=True, metadata=metadata(**conventions))
+        self.assertEqual(validate_metadata(health)["action_semantics"], "absolute")
+        for key, wrong in (("action_semantics", "delta"), ("joint_unit", "degree"),
+                           ("gripper_semantics", "delta")):
+            with self.assertRaisesRegex(ValueError, key):
+                validate_metadata(dict(health, metadata=dict(health["metadata"], **{key: wrong})))
+
     def test_supported_short_horizons_preserve_complete_history(self):
         for horizon in (1, 4, 32):
             meta = metadata(action_horizon=horizon)

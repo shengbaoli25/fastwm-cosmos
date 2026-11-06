@@ -30,7 +30,7 @@ class CameraAlignmentTests(unittest.TestCase):
             color_order='RGB', width=2, height=2)
         camera._accept((meta, bytes(12), None))
 
-    def select(self, *, wait=.01):
+    def select(self, *, wait=.02):
         return self.hardware._aligned_camera_frames(10., 10., wait_s=wait)
 
     def test_late_past_frames_use_one_shared_budget_and_fixed_anchor(self):
@@ -38,19 +38,20 @@ class CameraAlignmentTests(unittest.TestCase):
         def deliver(camera, delay, stamp):
             def wait(revision, timeout):
                 budgets.append(timeout)
+                self.assertLessEqual(delay, timeout)
                 self.now += delay
                 self.publish(camera, stamp)
                 return True
             return wait
         with patch.object(self.cameras[0], 'wait_for_frame_update',
-                          side_effect=deliver(self.cameras[0], .004, 9.975)), \
+                          side_effect=deliver(self.cameras[0], .013, 9.975)), \
              patch.object(self.cameras[1], 'wait_for_frame_update',
-                          side_effect=deliver(self.cameras[1], .003, 9.98)):
+                          side_effect=deliver(self.cameras[1], .006, 9.98)):
             selected = self.select()
         self.assertEqual([meta['received'] for _, meta in selected], [9.975, 9.98])
-        self.assertAlmostEqual(budgets[0], .010)
-        self.assertAlmostEqual(budgets[1], .006)
-        self.assertAlmostEqual(self.now, 10.008)
+        self.assertAlmostEqual(budgets[0], .020)
+        self.assertAlmostEqual(budgets[1], .007)
+        self.assertAlmostEqual(self.now, 10.020)
 
     def test_future_delivery_does_not_replace_old_causal_frame(self):
         self.publish(self.cameras[1], 9.98)
@@ -76,7 +77,8 @@ class CameraAlignmentTests(unittest.TestCase):
         hardware.gripper = Mock()
         hardware.gripper.snapshot.return_value = .5
         def deliver(revision, timeout):
-            self.now += .004
+            self.assertAlmostEqual(timeout, .020)
+            self.now += .013
             for camera in self.cameras:
                 self.publish(camera, 9.98)
         with patch.object(self.cameras[0], 'wait_for_frame_update', side_effect=deliver):
@@ -100,7 +102,30 @@ class CameraAlignmentTests(unittest.TestCase):
                 self.select()
             second.assert_not_called()
         self.assertEqual(len(calls), 1)
-        self.assertAlmostEqual(self.now, 10.011)
+        self.assertAlmostEqual(self.now, 10.021)
+
+    def test_requested_wait_cannot_exceed_shared_twenty_ms_cap(self):
+        def timeout(revision, seconds):
+            self.assertAlmostEqual(seconds, .020)
+            self.now += seconds
+            return False
+        with patch.object(self.cameras[0], 'wait_for_frame_update', side_effect=timeout) as wait:
+            with self.assertRaisesRegex(RuntimeError, '相机与机械臂状态时间差超限'):
+                self.select(wait=.5)
+        wait.assert_called_once()
+        self.assertAlmostEqual(self.now, 10.021)
+
+    def test_matching_old_pair_still_fails_state_skew_after_wait(self):
+        # Pair skew is zero, but both timestamps remain 60 ms before the fixed
+        # state anchor. A larger arrival budget must not relax the 50 ms gate.
+        def timeout(revision, seconds):
+            self.now += seconds
+            return False
+        with patch.object(self.cameras[0], 'wait_for_frame_update', side_effect=timeout):
+            with self.assertRaisesRegex(RuntimeError, '相机与机械臂状态时间差超限'):
+                self.select()
+        self.assertEqual([camera.snapshot(10., self.now)[1]['received']
+                          for camera in self.cameras], [9.94, 9.94])
 
     def test_late_collector_is_capped_by_next_30hz_grid(self):
         self.now = 10.031

@@ -6,6 +6,7 @@ import unittest
 from unittest.mock import Mock, patch
 from urllib.error import HTTPError
 
+from realman_force.contract import source_at
 from realman_sync_client import webapp
 from realman_sync_client.http import InferenceHTTPClient
 from realman_sync_client.mock import MockHardware
@@ -15,6 +16,7 @@ from test_webapp import Client, GateTransport, META, until
 
 
 TRANSIENT = '关节目标未写入：夹爪通信曾中断；反馈恢复后请重新点击开始执行'
+FORCE_GAP = 'No fresh force sample at or before observation grid time'
 
 
 class RecoveryHardware(MockHardware):
@@ -189,6 +191,31 @@ class DashboardRecoveryTests(unittest.TestCase):
         until(lambda: self.dashboard.inference['requests_completed'] == 1)
         self.assertEqual(self.hardware.commands, [])
 
+    def test_transport_rebuild_during_recovery_resumes_only_inference(self):
+        self.enter_execution_recovery()
+        self.hardware.recovery_requires_execution_restart = lambda _token: True
+        self.hardware.set_feedback_ready(True)
+        until(lambda: len(self.transport.calls) == 3)
+        self.assertFalse(self.dashboard.execute)
+        self.assertFalse(self.recovery()['resume_execution'])
+        self.assertTrue(self.dashboard.auto_infer)
+        self.assertIsNone(self.dashboard._execution_recovery_token)
+        self.transport.gates[2].set()
+        until(lambda: self.dashboard.inference['requests_completed'] >= 1)
+        self.assertEqual(self.hardware.commands, [])
+        self.assertEqual(self.hardware.recovery_ack_times, [])
+
+    def test_transport_already_rebuilt_at_failure_does_not_preserve_execution_intent(self):
+        old_client = self.start_execution_request()
+        self.hardware.recovery_requires_execution_restart = lambda _token: True
+        old_client.collector.fail = '夹爪通信自动重连中'
+        self.transport.gates[1].set()
+        until(lambda: self.recovery()['active'])
+        self.assertFalse(self.recovery()['resume_execution'])
+        until(lambda: len(self.transport.calls) == 3)
+        self.assertFalse(self.dashboard.execute)
+        self.assertEqual(self.hardware.commands, [])
+
     def test_user_stop_cancels_pending_execution_recovery(self):
         self.enter_execution_recovery()
         invalidations = self.hardware.calls.count('invalidate')
@@ -203,6 +230,39 @@ class DashboardRecoveryTests(unittest.TestCase):
         self.assertFalse(self.recovery()['active'])
         self.assertEqual(self.hardware.commands, [])
         self.assertNotIn('recovery_ack', self.hardware.calls)
+
+    def test_observation_feedback_gap_rebuilds_session_without_enabling_motion(self):
+        # Exercise the real force selector: accepting an old/future sample is
+        # not the recovery mechanism. The failed cycle must be discarded.
+        with self.assertRaisesRegex(ValueError, FORCE_GAP) as caught:
+            source_at([{'time': 99.96}, {'time': 100.01}], 100.)
+        messages = (str(caught.exception), '夹爪观测反馈过期', '夹爪反馈与机械臂状态不同步')
+        for message in messages:
+            with self.subTest(error=message):
+                transport, hardware, dashboard = self.make_fixture()
+                dashboard.start()
+                until(lambda: len(transport.calls) == 1)
+                old_client = dashboard.client
+                old_client.collector.fail = 'sensor collection failed: ' + message
+                hardware.set_feedback_ready(False)
+                transport.gates[0].set()
+                until(lambda: dashboard.status()['recovery']['active'])
+                until(lambda: old_client.collector.closed)
+                self.assertTrue(dashboard.auto_infer)
+                self.assertFalse(dashboard.status()['recovery']['resume_execution'])
+                self.assertEqual(dashboard.inference['requests_completed'], 0)
+                hardware.set_feedback_ready(True)
+                until(lambda: len(transport.calls) == 2)
+                self.assertNotEqual(old_client.session_id, dashboard.client.session_id)
+                self.assertIn(old_client.session_id, transport.released)
+                self.assertGreater(transport.calls[1]['observation']['sequence'],
+                                   transport.calls[0]['observation']['sequence'])
+                transport.gates[1].set()
+                until(lambda: dashboard.inference['requests_completed'] == 1)
+                self.assertFalse(dashboard.execute)
+                self.assertNotIn('capture', hardware.calls)
+                self.assertEqual(hardware.commands, [])
+                self.close_fixture((transport, hardware, dashboard))
 
     def test_late_transient_error_after_user_stop_cannot_recreate_recovery(self):
         old_client = self.start_execution_request()
@@ -237,7 +297,10 @@ class DashboardRecoveryTests(unittest.TestCase):
 
     def test_unknown_hard_and_mixed_errors_are_terminal(self):
         cases = ('unexpected parser bug', '关节目标超出软限位', '夹爪报警 0x0001',
-                 'RM75 存在未使能关节', 'Controller response timeout; 夹爪报警 0x0001')
+                 'RM75 存在未使能关节', 'Controller response timeout; 夹爪报警 0x0001',
+                 FORCE_GAP + '; RM75 控制器或关节反馈报错',
+                 '夹爪观测反馈过期; 夹爪报警 0x0001',
+                 '夹爪反馈与机械臂状态不同步; 夹爪未使能')
         for message in cases:
             with self.subTest(error=message):
                 transport, hardware, dashboard = self.make_fixture()
@@ -259,6 +322,11 @@ class DashboardRecoveryTests(unittest.TestCase):
         self.assertFalse(self.recovery()['active'])
         self.assertFalse(self.dashboard.execute)
         self.assertEqual(self.hardware.commands, [])
+
+    def test_missing_sample_does_not_hide_a_hard_cause(self):
+        error = RuntimeError('sensor collection failed: ' + FORCE_GAP)
+        error.__cause__ = RuntimeError('RM75 存在未使能关节')
+        self.assertFalse(transient_failure(error))
 
     def test_stop_failure_prevents_automatic_recovery(self):
         self.start_execution_request()
@@ -301,7 +369,7 @@ class DashboardRecoveryTests(unittest.TestCase):
             simulated_now[0] = 100.02
             until(lambda: len(self.transport.calls) == 2)
             self.assertFalse(self.recovery()['active'])
-            self.dashboard.client.collector.fail = 'sensor collection failed: 夹爪使能反馈过期'
+            self.dashboard.client.collector.fail = 'sensor collection failed: ' + FORCE_GAP
             self.transport.gates[1].set()
             until(lambda: self.recovery()['active'] and self.recovery()['attempts'] == 2)
             self.assertEqual(self.dashboard._recovery_deadline, original_deadline)
