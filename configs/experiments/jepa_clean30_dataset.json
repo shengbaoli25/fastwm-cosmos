@@ -1,0 +1,15 @@
+{
+  "schema": "cosmos-jepa-dataset-spec-v1",
+  "dataset_id": "realman-clean30-20261107",
+  "source_inventory_sha256": "c6854415da322c8051395525891b17f89e5469b762cca1322c6952b19299e4be",
+  "source_episodes": 30,
+  "source_frames": 46870,
+  "training_anchors": 45329,
+  "continuous_segments": 285,
+  "prompts": ["七轴相对遥操作演示"],
+  "action_representation": "delta_current_joint7",
+  "split_counts": {"train": 30, "val": 0, "test": 0},
+  "initialization": "official_cosmos_and_jepa_fresh_action_force_optimizer",
+  "recipe_reference": "52c01ac",
+  "variant": "vitl"
+}
