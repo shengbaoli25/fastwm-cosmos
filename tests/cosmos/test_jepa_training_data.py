@@ -109,3 +109,38 @@ def test_hydra_instantiates_nested_baseline_once_and_batches_observations(tmp_pa
     assert batch['jepa_observation'].dtype == torch.float32
     torch.testing.assert_close(batch['action'], torch.stack([base[j]['action'] for j in range(2)]),
                                rtol=0, atol=0)
+
+
+def test_reference_jepa_keeps_epoch_and_pads_only_the_reference(tmp_path):
+    from fastwam.cosmos.reference_dataset import reference_collate
+    from test_reference_dataset_cpu import reference_item
+
+    base, observed, _ = fixture_data(tmp_path)
+    seen = []
+
+    class ReferenceBase(type(base)):
+        accepts_epoch_indices = True
+        collate_fn = staticmethod(reference_collate)
+        reference_binding = {'status': 'bound'}
+        reference_augmentation_config = {'dropout_probability': .1}
+
+        def __getitem__(self, index):
+            anchor, epoch = index
+            seen.append((anchor, epoch))
+            sample = super().__getitem__(anchor)
+            reference = reference_item(2 + anchor)
+            sample.update(reference_inputs=reference['reference_inputs'],
+                          reference_supervision=reference['reference_supervision'])
+            return sample
+
+    with patch('fastwam.cosmos.reference_dataset.ReferenceCachedDataset', return_value=ReferenceBase()):
+        dataset = JepaForceTrainingDataset({'_target_': 'fastwam.cosmos.reference_dataset.ReferenceCachedDataset'},
+            tmp_path / 'observations', observed['identity_sha256'])
+    loader = torch.utils.data.DataLoader(dataset, batch_size=2, sampler=[(0, 7), (1, 7)],
+                                        collate_fn=dataset.collate_fn)
+    batch = next(iter(loader))
+    assert dataset.accepts_epoch_indices and seen == [(0, 7), (1, 7)]
+    assert dataset.reference_binding['status'] == 'bound'
+    assert batch['reference_inputs']['reference_pose'].shape == (2, 3, 8)
+    assert batch['reference_inputs']['reference_valid'][0].tolist() == [True, True, False]
+    assert batch['jepa_observation'].shape == (2, 2, 3, 2, 224, 224)

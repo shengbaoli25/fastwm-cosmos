@@ -307,7 +307,8 @@ def create_jepa_force_latent_cosmos(*, observation_encoder=None, device='cuda',
                                   reader_heads=4, injection_layers=(7, 14, 21, 28),
                                   latent_loss_weight=1., wrench_loss_weight=.1,
                                   latent_warmup_steps=2500, jepa_seed=47,
-                                  allow_preencoded_patches=False, jepa_feature_dim=768, **kwargs):
+                                  allow_preencoded_patches=False, jepa_feature_dim=768,
+                                  _model_class=None, _model_kwargs=None, **kwargs):
     """Reuse the verified official-asset factory, then add a checkpoint-isolated side path."""
     from .assets import create_noaction_joint_cosmos
     if observation_encoder is not None and not isinstance(observation_encoder, nn.Module):
@@ -326,7 +327,14 @@ def create_jepa_force_latent_cosmos(*, observation_encoder=None, device='cuda',
         latent_loss_weight=latent_loss_weight, wrench_loss_weight=wrench_loss_weight,
         latent_warmup_steps=latent_warmup_steps, jepa_seed=jepa_seed,
         allow_preencoded_patches=allow_preencoded_patches)
-    model = create_noaction_joint_cosmos(device=device, _model_class=JepaForceLatentModel,
+    extra = dict(_model_kwargs or {})
+    if set(extra) & set(model_kwargs):
+        raise ValueError('Subclass configuration must not override the JEPA backbone recipe')
+    model_kwargs.update(extra)
+    model_type = JepaForceLatentModel if _model_class is None else _model_class
+    if not isinstance(model_type, type) or not issubclass(model_type, JepaForceLatentModel):
+        raise ValueError('JEPA factory extension must inherit the action-force residual model')
+    model = create_noaction_joint_cosmos(device=device, _model_class=model_type,
                                         _model_kwargs=model_kwargs, **kwargs)
     model.configure_trainable_parameters()
     return model

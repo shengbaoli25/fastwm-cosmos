@@ -152,6 +152,10 @@ class NoActionJointModel(CosmosForceWM):
         history = torch.where(hvalid[..., None], history, 0)
         return observed, history, (ok, ov, hk, hv)
 
+    def _condition_action_input(self, tokens, conditions):
+        """Optional observation-side conditioning of AE input slots only."""
+        return tokens
+
     def _action_force_context(self, action, tv, tf, ta, conditions):
         """Optional observation/action-derived memory; never an input to V/F."""
         return None
@@ -221,6 +225,7 @@ class NoActionJointModel(CosmosForceWM):
         observed, vt = op['tokens'], vp['tokens']
         ft, fm = self.dit['force'].prepare_future(force, tf, tv, context)
         at, _, am, text, text_mask, freq = self.dit['action'].prepare(action, ta, context, cmask)
+        at = self._condition_action_input(at, conditions)
         source_time = torch.cat((sinusoidal_embedding_1d(256, tv), sinusoidal_embedding_1d(256, tf)), -1)
         am = am + self.dit['action_source_time'](source_time).unflatten(-1, (6, self.dit['action'].hidden_dim))
         action_force_context = self._action_force_context(action, tv, tf, ta, conditions)

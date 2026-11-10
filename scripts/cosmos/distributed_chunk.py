@@ -29,6 +29,26 @@ def new_recipe(original, run):
     return cfg
 
 
+def experiment_contract(model):
+    """Keep journal semantics faithful to the actual conditioning interface."""
+    target = model['_target_']
+    if target.endswith(('.create_reference_joint_cosmos', '.create_reference_jepa_cosmos')):
+        experiment = ('cosmos-reference-audited-jepa-force-latent'
+                      if target.endswith('.create_reference_jepa_cosmos')
+                      else 'cosmos-reference-audited-joint-diffusion')
+        return (experiment,
+                'observation-audited full-plan condition to AE only; unchanged Joint8 FM targets',
+                {'video': 1, 'action': 1, 'force': 1,
+                 'reference_alignment': model['alignment_weight']})
+    if target.endswith('.create_jepa_force_latent_cosmos'):
+        return 'cosmos-jepa-force-latent', 'no-reference joint diffusion', {'video': 1, 'action': 1, 'force': 1}
+    if target.endswith('.create_noaction_joint_cosmos'):
+        return 'cosmos-noaction-joint-diffusion', 'no-reference joint diffusion', {'video': 1, 'action': 1, 'force': 1}
+    if target.endswith('.create_joint_cosmos_forcewm'):
+        return 'cosmos-force-joint-self-attention', 'GT-conditioned reconstruction', {'video': 1, 'action': 1, 'force': 1}
+    return 'clean-action-force-chunk', 'GT-conditioned reconstruction', {'video': 1, 'action': 1, 'force': 1}
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     for key in ('config', 'run-root', 'native-python'):
@@ -41,8 +61,14 @@ def main():
         raise ValueError('Absolute run path and original .venv/bin/python invocation required')
     commands = phase_commands(native, ROOT, run)
     if not args.execute:
+        batch, steps = None, 30000
+        if args.config.is_file():
+            from omegaconf import OmegaConf
+            cfg = OmegaConf.load(args.config)
+            batch, steps = 4*int(cfg.batch_size), int(cfg.max_steps)
         print(json.dumps({'mode': 'plan_only', 'commands': commands, 'resume': False,
-                          'ranks': 4, 'global_batch': 64, 'max_steps': 30000}))
+                          'ranks': 4, 'global_batch': batch, 'max_steps': steps,
+                          'configuration_resolved': args.config.is_file()}))
         return
     if not native.is_file() or Path(sys.executable) != native:
         raise ValueError('Invoke this foreground command with the original native Python')
@@ -62,19 +88,13 @@ def main():
     cfg = OmegaConf.create(new_recipe(original, run))
     run.mkdir(parents=False, exist_ok=False)
     OmegaConf.save(cfg, str(run/'resolved.yaml'))
-    experiment = ('cosmos-jepa-force-latent'
-                  if original['model']['_target_'].endswith('.create_jepa_force_latent_cosmos')
-                  else 'cosmos-noaction-joint-diffusion'
-                  if original['model']['_target_'].endswith('.create_noaction_joint_cosmos')
-                  else 'cosmos-force-joint-self-attention'
-                  if original['model']['_target_'].endswith('.create_joint_cosmos_forcewm')
-                  else 'clean-action-force-chunk')
+    experiment, action_semantics, loss_weights = experiment_contract(original['model'])
     journal = {'status': 'starting', 'resource': resource, 'source': str(ROOT), 'resume': False,
-               'experiment': experiment, 'action_semantics': ('no-reference joint diffusion' if experiment in ('cosmos-noaction-joint-diffusion', 'cosmos-jepa-force-latent') else 'GT-conditioned reconstruction'),
-               'loss_weights': {'video': 1, 'action': 1, 'force': 1}, 'original_config_sha256': sha(args.config),
+               'experiment': experiment, 'action_semantics': action_semantics,
+               'loss_weights': loss_weights, 'original_config_sha256': sha(args.config),
                'config_sha256': sha(run/'resolved.yaml'), 'commands': commands,
                'user_time_cap': None, 'started_at': datetime.now(timezone.utc).isoformat()}
-    if experiment == 'cosmos-jepa-force-latent':
+    if experiment in ('cosmos-jepa-force-latent', 'cosmos-reference-audited-jepa-force-latent'):
         journal['auxiliary'] = dict(variant=original['model']['observation_encoder']['variant'],
             force_latent_weight=original['model']['latent_loss_weight'],
             latent_warmup_steps=original['model']['latent_warmup_steps'],

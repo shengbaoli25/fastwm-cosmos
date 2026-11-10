@@ -1,0 +1,2 @@
+# Keep Linux entrypoints executable when archives are produced on Windows.
+*.sh text eol=lf

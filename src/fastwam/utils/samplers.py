@@ -33,6 +33,11 @@ class ResumableEpochSampler(Sampler[int]):
         if self.epoch == 0 and self.resume_batch_offset > 0:
             sample_offset = self.resume_batch_offset * self.batch_size * self.num_processes
             indices = indices[sample_offset:]
+        if getattr(self.dataset, 'accepts_epoch_indices', False):
+            # Explicit metadata travels into worker queues and survives resume.
+            # Never use a mutable dataset epoch copied into persistent workers.
+            epoch = self.epoch + self.epoch_offset
+            return iter((index, epoch) for index in indices)
         return iter(indices)
 
     def __len__(self) -> int:

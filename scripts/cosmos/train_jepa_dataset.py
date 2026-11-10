@@ -1,10 +1,11 @@
-"""Fresh clean30 ViT-L run with the unchanged 52c01ac training recipe.
+"""Fresh source-bound ViT-L run, optionally with an observation-only auditor.
 
 Default mode prints a plan. Execution builds new source-bound caches and
 statistics, then runs the existing four-H200 update/restore gates and training.
 No learned robot checkpoint, old normalization, or force teacher is used.
 """
 import argparse
+from dataclasses import asdict
 from datetime import datetime, timezone
 import json
 import os
@@ -21,14 +22,23 @@ from train_rm71d78_jepa import add_jepa_config, recipe
 SSD = Path('/inspire/ssd/project/long-range-embodied-collaborative-intelligence/ky26340')
 HDD = Path('/inspire/hdd/project/long-range-embodied-collaborative-intelligence/ky26340')
 GROUP = SSD / 'rm71d-jepa-clean30-20261107'
+REFERENCE_GROUP = SSD / 'rm71d-reference-jepa-wipe-20261111'
 OLD_GROUP = SSD / 'rm71d-jepa-force-latent-20261104'
 VITL_SHA = '963f92a54541f128cb1249c9d34a94a5be5767729e8edeac51b3bf76d3a2b0f3'
+REFERENCE_TARGET = 'fastwam.cosmos.reference_model.create_reference_jepa_cosmos'
+REFERENCE_DATASET = 'fastwam.cosmos.reference_dataset.ReferenceCachedDataset'
+REFERENCE_MODEL = dict(reference_hidden=128, reference_heads=4, reference_layers=2,
+                       reference_seed=46, alignment_weight=.1)
+REFERENCE_COARSENING = dict(max_stride=12, position_tolerance_m=.005,
+                            rotation_tolerance_rad=.05, gripper_tolerance=.05)
 
 
 def arguments(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--spec', type=Path, default=ROOT / 'configs/experiments/jepa_clean30_dataset.json')
-    parser.add_argument('--dataset', type=Path, default=GROUP / 'data/clean')
+    parser.add_argument('--reference-audit', action='store_true',
+                        help='Add the observation-only reference auditor to JEPA; defaults to wipe30 source')
+    parser.add_argument('--spec', type=Path)
+    parser.add_argument('--dataset', type=Path)
     parser.add_argument('--output-root', type=Path)
     parser.add_argument('--prepared', type=Path, help='Optional already verified clean30 prepared directory')
     text = parser.add_mutually_exclusive_group()
@@ -43,12 +53,19 @@ def arguments(argv=None):
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument('--execute', action='store_true')
     mode.add_argument('--plan', action='store_true')
-    return parser.parse_args(argv)
+    args = parser.parse_args(argv)
+    if args.spec is None:
+        name = 'jepa_wipe30_dataset.json' if args.reference_audit else 'jepa_clean30_dataset.json'
+        args.spec = ROOT / 'configs/experiments' / name
+    if args.dataset is None:
+        args.dataset = REFERENCE_GROUP / 'data/wipe30' if args.reference_audit else GROUP / 'data/clean'
+    return args
 
 
 def plan_for(args):
     spec = load_spec(args.spec)
-    output = args.output_root or GROUP / 'vitl/online' / os.environ.get('TRAIN_JOB_ID', 'PLAN_ONLY')
+    group = REFERENCE_GROUP if args.reference_audit else GROUP
+    output = args.output_root or group / 'vitl/online' / os.environ.get('TRAIN_JOB_ID', 'PLAN_ONLY')
     inherited = recipe()
     training = dict(inherited['shared'], source_episodes=spec['source_episodes'],
                     split_counts=spec['split_counts'])
@@ -57,6 +74,11 @@ def plan_for(args):
         prepared=(args.prepared or output / 'prepared').as_posix(),
         training_recipe=training, encoder=inherited['variants']['vitl'],
         model_additions=inherited['model_additions'],
+        model_target=REFERENCE_TARGET if args.reference_audit else 'fastwam.cosmos.jepa_force_latent.create_jepa_force_latent_cosmos',
+        reference_audit_enabled=args.reference_audit,
+        reference_bank=(output / 'reference-bank').as_posix() if args.reference_audit else None,
+        reference_model_additions=REFERENCE_MODEL if args.reference_audit else None,
+        reference_coarsening=REFERENCE_COARSENING if args.reference_audit else None,
         text_cache=args.text_cache.as_posix() if args.text_cache else None,
         reason1_checkpoint=args.reason1_checkpoint.as_posix() if args.reason1_checkpoint else None,
         jepa_checkpoint=args.jepa_checkpoint.as_posix(), jepa_sha256=VITL_SHA,
@@ -75,6 +97,46 @@ def dataset_jepa_config(baseline, spec, **kwargs):
     return config
 
 
+def reference_jepa_config(baseline, spec, *, reference_bank, reference_identity, **kwargs):
+    """Compose both branches while preserving the complete existing JEPA recipe."""
+    from fastwam.cosmos.preflight import validate_config
+    from fastwam.cosmos.reference_trajectory import AugmentationConfig
+    from train_rm71d78_jepa import pinned_digest
+    pinned_digest(reference_identity)
+    config = dataset_jepa_config(baseline, spec, **kwargs)
+    config['model'].update(_target_=REFERENCE_TARGET,
+        expected_reference_identity=reference_identity, **REFERENCE_MODEL)
+    config['data']['train']['base_config'].update(_target_=REFERENCE_DATASET,
+        reference_bank=str(reference_bank), expected_reference_identity=reference_identity,
+        reference_seed=42, reference_augmentation=asdict(AugmentationConfig()))
+    config['reference_experiment'] = dict(reference_identity=reference_identity,
+        source_inventory_sha256=spec['source_inventory_sha256'],
+        reference_source='measured_TCP_complete_valid_episode',
+        auditor_inputs='current_first_frame_latent_current_state_TCP_causal_force_history_full_reference',
+        injection='Action_Expert_only', alignment_weight=.1,
+        augmentation=asdict(AugmentationConfig()), coarsening=REFERENCE_COARSENING)
+    validate_config(config)
+    return config
+
+
+def prepare_bound_reference(source, spec, cache_manifest, output, *, progress=None):
+    """Build a fresh bank from the exact raw source and reject any lineage drift."""
+    from fastwam.cosmos.reference_bank import prepare_bank
+    from fastwam.cosmos.reference_binding import verify_binding
+    verify_source(spec, source)
+    bank = prepare_bank(source.root, output, expected_episodes=spec['source_episodes'],
+        expected_source_sha=spec['source_inventory_sha256'], progress=progress,
+        **REFERENCE_COARSENING)
+    receipt = verify_binding(output, cache_manifest)
+    if (receipt['status'] != 'bound' or receipt.get('full_raw_inventory_equal') is not True
+            or receipt.get('episode_count') != spec['source_episodes']
+            or receipt.get('continuous_segment_count') != spec['continuous_segments']
+            or receipt.get('retained_anchors') != spec['training_anchors']
+            or receipt.get('reference_identity_sha256') != bank['identity_sha256']):
+        raise ValueError('New reference bank must match this exact dataset/cache: '+json.dumps(receipt))
+    return bank, receipt
+
+
 def encode_four(native, encoder_args, prepared, env):
     workers, logs = [], []
     try:
@@ -85,10 +147,10 @@ def encode_four(native, encoder_args, prepared, env):
                 env=dict(env, CUDA_VISIBLE_DEVICES=str(rank)), stdout=log, stderr=subprocess.STDOUT, cwd=ROOT))
         while any(worker.poll() is None for worker in workers):
             if any(worker.poll() not in (None, 0) for worker in workers):
-                raise RuntimeError('A clean30 feature encoder failed; see encode_rank logs')
+                raise RuntimeError('A source feature encoder failed; see encode_rank logs')
             time.sleep(2)
         if any(worker.returncode != 0 for worker in workers):
-            raise RuntimeError('Clean30 feature encoding did not complete')
+            raise RuntimeError('Source feature encoding did not complete')
     finally:
         for worker in workers:
             if worker.poll() is None:
@@ -183,9 +245,9 @@ def main():
             '--tokenizer', args.tokenizer, '--upstream', args.upstream, '--output', prepared / 'features',
             '--stage', prepared / 'encoder-stage', '--action-representation', 'delta_current_joint7',
             '--expected-episodes', str(spec['source_episodes'])]
-        status('encode_clean30_on_four_gpus')
+        status('encode_source_on_four_gpus')
         encode_four(native, encoder_args, prepared, env)
-        run('assemble_clean30_features', [*encoder_args, '--assemble'])
+        run('assemble_source_features', [*encoder_args, '--assemble'])
     bank, text_manifest, _ = read_text_bank(prepared / 'text')
     del bank
     verify_prompt_manifest(spec, text_manifest)
@@ -193,7 +255,15 @@ def main():
     norm = json.loads((prepared / 'normalization.json').read_text())
     verify_prepared(spec, source, manifest, norm)
     if norm != json.loads((work / 'source-normalization.json').read_text()):
-        raise ValueError('Prepared normalization differs from freshly exported clean30 normalization')
+        raise ValueError('Prepared normalization differs from freshly exported source normalization')
+    reference = None
+    if args.reference_audit:
+        status('prepare_and_bind_reference_bank')
+        reference, binding = prepare_bound_reference(source, spec, prepared / 'features/manifest.json',
+            output / 'reference-bank', progress=lambda done, total, points: status(
+                'prepare_and_bind_reference_bank', episodes=done, total_episodes=total,
+                last_reference_points=points))
+        _atomic(work / 'reference_cache_binding.json', binding)
     run('resolve_baseline_recipe', [ROOT / 'scripts/cosmos/resolve_config.py',
         '--task', 'cosmos_noaction_joint_4gpu_30k', '--batch-size', '64', '--max-steps', '30000',
         '--scheduler-total-steps', '50000', '--action-representation', 'delta_current_joint7',
@@ -208,7 +278,10 @@ def main():
         on_episode=lambda done, total: status('prepare_observed_rgb', episodes=done, total_episodes=total))
     del source
     base = OmegaConf.to_container(OmegaConf.load(work / 'baseline-resolved.yaml'), resolve=True, throw_on_missing=True)
-    final = dataset_jepa_config(base, spec, checkpoint=args.jepa_checkpoint.resolve(),
+    reference_options = dict(reference_bank=output / 'reference-bank',
+        reference_identity=reference['identity_sha256']) if reference is not None else {}
+    transform = reference_jepa_config if args.reference_audit else dataset_jepa_config
+    final = transform(base, spec, **reference_options, checkpoint=args.jepa_checkpoint.resolve(),
         checkpoint_sha256=VITL_SHA, observation_cache=observations,
         observation_identity=observed['identity_sha256'], output_dir=work / 'jepa-placeholder')
     resolved = work / 'resolved.yaml'
@@ -217,6 +290,7 @@ def main():
     _atomic(output / 'experiment.json', dict(plan, resource=resource, verification_pending=False,
         spec_sha256=file_sha256(args.spec), resolved_config_sha256=file_sha256(resolved),
         baseline_cache_identity=manifest['identity_sha256'], observation_identity=observed['identity_sha256'],
+        reference_identity=reference['identity_sha256'] if reference is not None else None,
         normalization_sha256=file_sha256(prepared / 'normalization.json')))
     status('gpu_update_restore_gates_then_fresh_training')
     os.execv(str(native), [str(native), '-u', str(ROOT / 'scripts/cosmos/distributed_chunk.py'),

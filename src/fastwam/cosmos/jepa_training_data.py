@@ -113,10 +113,18 @@ class JepaForceTrainingDataset(torch.utils.data.Dataset):
     def __init__(self, base_config, observation_cache_root, expected_observation_identity):
         config = dict(base_config)
         target = config.pop('_target_', 'fastwam.cosmos.cache.CosmosCachedDataset')
-        if target != 'fastwam.cosmos.cache.CosmosCachedDataset':
-            raise ValueError('An existing verified CosmosCachedDataset config is required')
         config.pop('_recursive_', None)
-        self.base = CosmosCachedDataset(**config)
+        if target == 'fastwam.cosmos.cache.CosmosCachedDataset':
+            self.base = CosmosCachedDataset(**config)
+        elif target == 'fastwam.cosmos.reference_dataset.ReferenceCachedDataset':
+            from .reference_dataset import ReferenceCachedDataset
+            self.base = ReferenceCachedDataset(**config)
+            self.accepts_epoch_indices = self.base.accepts_epoch_indices
+            self.collate_fn = self.base.collate_fn
+            self.reference_binding = self.base.reference_binding
+            self.reference_augmentation_config = self.base.reference_augmentation_config
+        else:
+            raise ValueError('A verified Cosmos or reference cache configuration is required')
         self.root, self.identity_sha256 = self.base.root, self.base.identity_sha256
         self.manifest = self.base.manifest
         self.obs_root, self.obs_manifest = _read_manifest(observation_cache_root, OBSERVATION_SCHEMA,
@@ -149,8 +157,9 @@ class JepaForceTrainingDataset(torch.utils.data.Dataset):
         sample = self.base[index]
         if any(key in sample for key in ('force_teacher_features', 'force_teacher_valid')):
             raise ValueError('External Force-teacher labels are not part of this online-target experiment')
-        ep, frame, lo, hi = self.rows[index]
-        if (int(sample['sample_index']), int(sample['episode_index']), int(sample['frame_index'])) != (index, ep, frame):
+        anchor_index = index[0] if isinstance(index, tuple) else index
+        ep, frame, lo, hi = self.rows[anchor_index]
+        if (int(sample['sample_index']), int(sample['episode_index']), int(sample['frame_index'])) != (anchor_index, ep, frame):
             raise ValueError('Baseline substituted a training anchor')
         if file_sha256(self.obs_root / 'manifest.json') != self.observation_manifest_sha256:
             raise ValueError('JEPA cache manifest changed during training')
