@@ -2,6 +2,7 @@
 import argparse
 import importlib.util
 import json
+import math
 import os
 from pathlib import Path
 import time
@@ -77,6 +78,13 @@ def validate_jepa_config(cfg):
     required = dict(reader_width=256, query_count=8, reader_depth=2, reader_heads=4,
                     latent_loss_weight=1., wrench_loss_weight=.1,
                     latent_warmup_steps=2500, jepa_seed=47)
+    qw = m.get('query_redundancy_weight', 0.)
+    qm = m.get('query_redundancy_margin', .95)
+    qs = m.get('query_redundancy_warmup_steps', 2500)
+    if (isinstance(qw, bool) or not isinstance(qw, (int, float)) or not math.isfinite(qw) or qw < 0
+            or isinstance(qm, bool) or not isinstance(qm, (int, float)) or not math.isfinite(qm)
+            or not 0 <= qm < 1 or isinstance(qs, bool) or not isinstance(qs, int) or qs < 0):
+        raise ValueError('Invalid query redundancy weight/margin/warmup configuration')
     if (any(m.get(k) != v for k, v in required.items())
             or tuple(m.get('injection_layers', ())) != (7, 14, 21, 28)
             or m.get('allow_preencoded_patches', False)

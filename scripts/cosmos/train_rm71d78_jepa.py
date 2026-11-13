@@ -8,6 +8,7 @@ import argparse
 import copy
 from datetime import datetime, timezone
 import json
+import math
 import os
 from pathlib import Path
 import subprocess
@@ -35,6 +36,8 @@ def arguments(argv=None):
     parser.add_argument('--source-sha', default=RAW_SHA)
     parser.add_argument('--observation-cache', type=Path, default=GROUP / 'prepared/observations')
     parser.add_argument('--output-root', type=Path)
+    parser.add_argument('--query-redundancy-recipe', type=Path,
+        help='Optional spatial-query regularizer recipe; omitted preserves the original experiment')
     parser.add_argument('--upstream', type=Path, default=HDD / 'realman-noaction-joint8/code-82cb9d2/third_party/cosmos-predict2.5')
     parser.add_argument('--checkpoint', '--cosmos-checkpoint', dest='checkpoint', type=Path,
         default=HDD / 'realman-noaction-joint8/assets/base/base/post-trained/81edfebe-bd6a-4039-8c1d-737df1a790bf_ema_bf16.pt')
@@ -57,14 +60,35 @@ def recipe():
     return result
 
 
+def query_redundancy_recipe(path):
+    if path is None:
+        return {}
+    data = json.loads(Path(path).read_text(encoding='utf-8'))
+    fields = {'query_redundancy_weight', 'query_redundancy_margin', 'query_redundancy_warmup_steps'}
+    if (data.get('schema') != 'jepa-spatial-query-redundancy-v1'
+            or set(data) != fields | {'schema'}):
+        raise ValueError('Expected the explicit spatial query redundancy recipe')
+    weight, margin, steps = (data[name] for name in
+        ('query_redundancy_weight', 'query_redundancy_margin', 'query_redundancy_warmup_steps'))
+    if (isinstance(weight, bool) or not isinstance(weight, (int, float))
+            or not math.isfinite(weight) or weight <= 0
+            or isinstance(margin, bool) or not isinstance(margin, (int, float))
+            or not math.isfinite(margin) or not 0 <= margin < 1
+            or isinstance(steps, bool) or not isinstance(steps, int) or steps < 0):
+        raise ValueError('Positive finite query weight, margin in [0,1), and integer warmup required')
+    return {name: data[name] for name in fields}
+
+
 def plan_for(args):
     pinned_digest(args.jepa_sha256)
     if args.source_sha != RAW_SHA:
         raise ValueError('Use the same immutable all78 source as the delta baseline')
     data = recipe()
+    additions = dict(data['model_additions'])
+    additions.update(query_redundancy_recipe(args.query_redundancy_recipe))
     output = args.output_root or GROUP / args.variant / 'online' / os.environ.get('TRAIN_JOB_ID', 'PLAN_ONLY')
     return dict(mode='execute' if args.execute else 'plan_only', source=str(ROOT), variant=args.variant,
-                recipe=data['shared'], encoder=data['variants'][args.variant], model_additions=data['model_additions'],
+                recipe=data['shared'], encoder=data['variants'][args.variant], model_additions=additions,
                 dataset=str(args.dataset), raw_source_sha256=RAW_SHA, prepared=str(args.prepared),
                 observation_cache=str(args.observation_cache), output_root=str(output),
                 cosmos_checkpoint=str(args.checkpoint), jepa_checkpoint=str(args.jepa_checkpoint),
@@ -73,7 +97,7 @@ def plan_for(args):
 
 
 def add_jepa_config(baseline, *, variant, checkpoint, checkpoint_sha256,
-                    observation_cache, observation_identity, output_dir):
+                    observation_cache, observation_identity, output_dir, query_redundancy=None):
     """Pure config transform, retaining every original data/optimizer setting."""
     from fastwam.cosmos.preflight import validate_config
     validate_config(baseline)
@@ -96,6 +120,11 @@ def add_jepa_config(baseline, *, variant, checkpoint, checkpoint_sha256,
     cfg = copy.deepcopy(baseline)
     cfg['output_dir'] = str(output_dir)
     cfg['model'].update(recipe()['model_additions'])
+    if query_redundancy:
+        allowed = {'query_redundancy_weight', 'query_redundancy_margin', 'query_redundancy_warmup_steps'}
+        if set(query_redundancy) != allowed:
+            raise ValueError('Query regularization may only change its three dedicated loss settings')
+        cfg['model'].update(query_redundancy)
     cfg['model']['_target_'] = JEPA_TARGET
     cfg['model']['observation_encoder'] = dict(variant=variant, checkpoint=str(checkpoint),
         expected_sha256=checkpoint_sha256, checkpoint_suffix=True)
@@ -107,6 +136,10 @@ def add_jepa_config(baseline, *, variant, checkpoint, checkpoint_sha256,
         target='online_current_force_clean_observed_only_stop_gradient',
         baseline_initialization='official_cosmos_fresh_action_force',
         raw_source_sha256=RAW_SHA, split_counts=shared['split_counts'])
+    if query_redundancy:
+        cfg['jepa_experiment']['query_regularization'] = dict(query_redundancy,
+            target='within_view_reader_attention_cosine_hinge',
+            claim='penalizes_near_duplicate_queries_not_contact_supervision')
     validate_config(cfg)
     return cfg
 
@@ -204,7 +237,8 @@ def main():
     baseline = OmegaConf.to_container(OmegaConf.load(work / 'baseline-resolved.yaml'), resolve=True, throw_on_missing=True)
     final = add_jepa_config(baseline, variant=args.variant, checkpoint=args.jepa_checkpoint.resolve(),
         checkpoint_sha256=args.jepa_sha256, observation_cache=observation_root,
-        observation_identity=observed['identity_sha256'], output_dir=work / 'jepa-placeholder')
+        observation_identity=observed['identity_sha256'], output_dir=work / 'jepa-placeholder',
+        query_redundancy=query_redundancy_recipe(args.query_redundancy_recipe))
     resolved = work / 'resolved.yaml'
     with resolved.open('x') as stream:
         OmegaConf.save(OmegaConf.create(final), stream)

@@ -147,3 +147,14 @@ def test_actual_lora_probe_rejects_accidental_base_unfreeze(monkeypatch):
     model.dit['jepa_observation'].requires_grad_(True)
     with pytest.raises(RuntimeError, match='frozen/eval'):
         JepaGradientProbe(model)
+
+
+@pytest.mark.parametrize('field,value', [('query_redundancy_weight', float('inf')),
+    ('query_redundancy_weight', -1.), ('query_redundancy_margin', 1.),
+    ('query_redundancy_margin', float('nan')), ('query_redundancy_warmup_steps', -1),
+    ('query_redundancy_warmup_steps', True)])
+def test_preflight_rejects_invalid_query_regularizer(field, value):
+    cfg = config()
+    cfg['model'][field] = value
+    with pytest.raises(ValueError, match='query redundancy'):
+        validate_config(cfg)

@@ -1,0 +1,6 @@
+{
+  "schema": "jepa-spatial-query-redundancy-v1",
+  "query_redundancy_weight": 0.01,
+  "query_redundancy_margin": 0.95,
+  "query_redundancy_warmup_steps": 2500
+}

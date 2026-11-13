@@ -32,6 +32,55 @@ def _split(x, heads):
     return x.unflatten(-1, (heads, x.shape[-1] // heads)).transpose(1, 2)
 
 
+def spatial_query_redundancy(query, key, valid, *, margin=.95):
+    """Weak duplicate-routing penalty on actual per-camera spatial attention.
+
+    query/key are the same projected [B,H,Q/P,D] tensors used by SDPA. For
+    each camera separately, condition the spatial distribution on that view;
+    camera preference alone therefore cannot satisfy this objective. Only
+    pairwise cosine similarities above ``margin`` are penalized. Shared
+    evidence and overlap remain allowed; there is no orthogonality target.
+
+    All arithmetic after the projections is FP32, including under autocast,
+    and is differentiable into Q/K. Views with fewer than two valid patches
+    cannot support distinct spatial reads and are excluded. Views are weighted
+    equally, including ones with small global attention mass: no learnable
+    camera mass can switch this penalty off. This regularizer does not supply
+    contact labels and cannot guarantee task-relevant attention or escape an
+    exactly symmetric, identical-query stationary point by itself.
+    """
+    if not math.isfinite(margin) or not 0 <= margin < 1:
+        raise ValueError('Query redundancy margin must be finite in [0,1)')
+    if (query.ndim != 4 or key.ndim != 4 or query.shape[:2] != key.shape[:2]
+            or query.shape[-1] != key.shape[-1] or key.shape[-2] % 2
+            or valid.dtype != torch.bool or valid.shape != (key.shape[0], key.shape[-2])):
+        raise ValueError('Expected compatible Q/K and boolean two-view patch validity')
+    batch, heads, queries, width = query.shape
+    patches = key.shape[-2] // 2
+    if min(heads, queries, width, patches) < 1:
+        raise ValueError('Nonempty attention geometry required')
+    with torch.autocast(device_type=query.device.type, enabled=False):
+        logits = torch.matmul(query.float(), key.float().transpose(-2, -1)) / math.sqrt(width)
+        # [B,H,view,Q,patch] follows main-then-wrist row-major encoder order.
+        logits = logits.reshape(batch, heads, queries, 2, patches).transpose(2, 3)
+        mask = valid.reshape(batch, 2, patches)[:, None, :, None]
+        # A finite floor also makes an entirely masked view well-defined;
+        # multiply by the mask afterwards and exclude that view from the mean.
+        logits = logits.masked_fill(~mask, -torch.finfo(torch.float32).max)
+        spatial = logits.softmax(-1) * mask
+        unit = F.normalize(spatial, dim=-1, eps=1e-12)
+        similarity = (unit @ unit.transpose(-2, -1)).clamp(0., 1.)
+        pairs = torch.ones(queries, queries, device=query.device, dtype=torch.bool).triu(1)
+        eligible = (mask.sum(-1) >= 2)[..., None] & pairs
+        eligible = eligible.expand_as(similarity)
+        denominator = eligible.sum().clamp_min(1)
+        excess = F.relu(similarity - margin)
+        loss = torch.where(eligible, excess, 0.).sum() / denominator
+        mean = torch.where(eligible, similarity, 0.).sum() / denominator
+        active = (eligible & (similarity > margin)).sum() / denominator
+    return dict(loss=loss, mean_cosine=mean.detach(), active_fraction=active.detach())
+
+
 class VisualValueRead(nn.Module):
     """No query residual: output values must pass through observed patches."""
     def __init__(self, width, heads):
@@ -49,13 +98,18 @@ class VisualValueRead(nn.Module):
         return (_split(self.key(values + positions), self.heads),
                 _split(self.value(values), self.heads))
 
-    def forward(self, query, kv, valid):
+    def forward(self, query, kv, valid, *, redundancy_margin=None):
         q = _split(self.query(self.query_norm(query)), self.heads)
         k, v = kv
         result = F.scaled_dot_product_attention(q, k, v,
             attn_mask=valid[:, None, None, :], dropout_p=0.)
         result = self.output(result.transpose(1, 2).flatten(2))
-        return result + self.ff(result)
+        result = result + self.ff(result)
+        if redundancy_margin is None:
+            return result
+        # The original fast SDPA result remains the policy output. This small
+        # training-only branch penalizes routing, not cosmetic query features.
+        return result, spatial_query_redundancy(q, k, valid, margin=redundancy_margin)
 
 
 class ActionGuidedVisualReader(nn.Module):
@@ -109,18 +163,29 @@ class ActionGuidedVisualReader(nn.Module):
         return dict(kv=tuple(reader.project(values, position) for reader in self.readers),
                     valid=patch_valid, condition=condition)
 
-    def forward(self, action, ta, observation):
+    def forward(self, action, ta, observation, *, query_redundancy_margin=None):
         condition = observation['condition'] + self.action(action.flatten(1))
         condition = condition + self.clock(sinusoidal_embedding_1d(128, ta).to(condition.dtype))
         query = self.query_slots[None] + condition[:, None]
         visual = None
+        redundancy = []
         for reader, kv in zip(self.readers, observation['kv']):
-            visual = reader(query if visual is None else query + visual, kv, observation['valid'])
+            query_input = query if visual is None else query + visual
+            if query_redundancy_margin is None:
+                visual = reader(query_input, kv, observation['valid'])
+            else:
+                visual, penalty = reader(query_input, kv, observation['valid'],
+                                         redundancy_margin=query_redundancy_margin)
+                redundancy.append(penalty)
         # The horizon query is learned position only; no raw action skip enters U.
         slots = self.horizon_slots[None].expand(len(action), -1, -1)
         valid = torch.ones(visual.shape[:2], dtype=torch.bool, device=visual.device)
         u = self.horizon_read(slots, self.horizon_read.project(visual, torch.zeros_like(visual)), valid)
-        return dict(visual=u, features=self.feature_head(u), wrench=self.wrench_head(u))
+        result = dict(visual=u, features=self.feature_head(u), wrench=self.wrench_head(u))
+        if redundancy:
+            result['query_redundancy'] = {name: torch.stack([item[name] for item in redundancy]).mean()
+                                        for name in ('loss', 'mean_cosine', 'active_fraction')}
+        return result
 
 
 class ActionForceResidual(nn.Module):
@@ -154,6 +219,8 @@ class JepaForceLatentModel(NoActionJointModel):
                  reader_width=256, query_count=8, reader_depth=2, reader_heads=4,
                  injection_layers=(7, 14, 21, 28), latent_loss_weight=1.,
                  wrench_loss_weight=.1, latent_warmup_steps=2500, jepa_seed=47,
+                 query_redundancy_weight=0., query_redundancy_margin=.95,
+                 query_redundancy_warmup_steps=2500,
                  allow_preencoded_patches=False, **kwargs):
         super().__init__(net, **kwargs)
         if latent_loss_weight < 0 or wrench_loss_weight < 0:
@@ -163,6 +230,17 @@ class JepaForceLatentModel(NoActionJointModel):
         if isinstance(latent_warmup_steps, bool) or int(latent_warmup_steps) != latent_warmup_steps or latent_warmup_steps < 0:
             raise ValueError('Latent warmup steps must be a nonnegative integer')
         self.latent_warmup_steps = int(latent_warmup_steps)
+        if (not math.isfinite(query_redundancy_weight) or query_redundancy_weight < 0
+                or not math.isfinite(query_redundancy_margin) or not 0 <= query_redundancy_margin < 1):
+            raise ValueError('Nonnegative finite query redundancy weight and margin in [0,1) required')
+        if (isinstance(query_redundancy_warmup_steps, bool)
+                or not math.isfinite(query_redundancy_warmup_steps)
+                or int(query_redundancy_warmup_steps) != query_redundancy_warmup_steps
+                or query_redundancy_warmup_steps < 0):
+            raise ValueError('Query redundancy warmup steps must be a nonnegative integer')
+        self.query_redundancy_weight = float(query_redundancy_weight)
+        self.query_redundancy_margin = float(query_redundancy_margin)
+        self.query_redundancy_warmup_steps = int(query_redundancy_warmup_steps)
         self._auxiliary_step = 0
         self.allow_preencoded_patches = bool(allow_preencoded_patches)
         if observation_encoder is None and not allow_preencoded_patches:
@@ -191,6 +269,16 @@ class JepaForceLatentModel(NoActionJointModel):
                 visibility='Query: noisy action + clock + measured history/proprio/task + observed JEPA only',
                 feedback='Action-only Force KV copy; no writeback to Video/Force/history',
                 query_residual_bypass=False))
+        # Keep the exact original manifest and state keys when disabled, so
+        # historical checkpoints still load with strict identity checking.
+        if self.query_redundancy_weight > 0:
+            self.manifest['jepa_force_latent']['query_redundancy'] = dict(
+                objective='per_camera_spatial_attention_cosine_hinge_v1',
+                weight=self.query_redundancy_weight, margin=self.query_redundancy_margin,
+                warmup_steps=self.query_redundancy_warmup_steps,
+                reduction='mean unordered query pairs, eligible views, heads, layers, examples',
+                views='equal view weights; skip fewer than two valid patches',
+                scope='training_only; observed patch QK; no contact labels')
         # Runtime is metadata-only, but its identity must describe this checkpoint.
         self.dit['runtime'].bind_manifest(self.manifest)
 
@@ -264,7 +352,11 @@ class JepaForceLatentModel(NoActionJointModel):
     def _action_force_context(self, action, tv, tf, ta, conditions):
         if not isinstance(conditions, ObservationConditions):
             raise ValueError('JEPA model conditions require observation context')
-        context = self.dit['jepa_reader'](action, ta, conditions.observation)
+        if self.query_redundancy_weight > 0 and self.training:
+            context = self.dit['jepa_reader'](action, ta, conditions.observation,
+                query_redundancy_margin=self.query_redundancy_margin)
+        else:
+            context = self.dit['jepa_reader'](action, ta, conditions.observation)
         context['clocks'] = self.dit['jepa_adapter'].clocks(tv, tf, ta, action.dtype)
         return context
 
@@ -297,9 +389,23 @@ class JepaForceLatentModel(NoActionJointModel):
         ramp = 1. if self.latent_warmup_steps == 0 else min(1., self._auxiliary_step / self.latent_warmup_steps)
         latent_weight = self.latent_loss_weight * ramp
         loss = latent_weight * latent_loss + self.wrench_loss_weight * wrench_loss
-        return loss, dict(loss_force_feature=float(latent_loss.detach()),
-                          loss_query_wrench=float(wrench_loss.detach()),
-                          force_feature_weight=latent_weight, auxiliary_step=float(self._auxiliary_step))
+        metrics = dict(loss_force_feature=float(latent_loss.detach()),
+                       loss_query_wrench=float(wrench_loss.detach()),
+                       force_feature_weight=latent_weight, auxiliary_step=float(self._auxiliary_step))
+        if self.query_redundancy_weight > 0:
+            if self.training and 'query_redundancy' not in context:
+                raise RuntimeError('Enabled training query redundancy statistics are missing')
+            if 'query_redundancy' in context:
+                redundancy = context['query_redundancy']
+                ramp = (1. if self.query_redundancy_warmup_steps == 0 else
+                        min(1., self._auxiliary_step / self.query_redundancy_warmup_steps))
+                weight = self.query_redundancy_weight * ramp
+                loss = loss + weight * redundancy['loss']
+                metrics.update(loss_query_redundancy=float(redundancy['loss'].detach()),
+                    query_redundancy_weight=weight,
+                    query_redundancy_cosine=float(redundancy['mean_cosine']),
+                    query_redundancy_active_fraction=float(redundancy['active_fraction']))
+        return loss, metrics
 
 
 def create_jepa_force_latent_cosmos(*, observation_encoder=None, device='cuda',
@@ -307,6 +413,8 @@ def create_jepa_force_latent_cosmos(*, observation_encoder=None, device='cuda',
                                   reader_heads=4, injection_layers=(7, 14, 21, 28),
                                   latent_loss_weight=1., wrench_loss_weight=.1,
                                   latent_warmup_steps=2500, jepa_seed=47,
+                                  query_redundancy_weight=0., query_redundancy_margin=.95,
+                                  query_redundancy_warmup_steps=2500,
                                   allow_preencoded_patches=False, jepa_feature_dim=768, **kwargs):
     """Reuse the verified official-asset factory, then add a checkpoint-isolated side path."""
     from .assets import create_noaction_joint_cosmos
@@ -325,6 +433,9 @@ def create_jepa_force_latent_cosmos(*, observation_encoder=None, device='cuda',
         reader_heads=reader_heads, injection_layers=injection_layers,
         latent_loss_weight=latent_loss_weight, wrench_loss_weight=wrench_loss_weight,
         latent_warmup_steps=latent_warmup_steps, jepa_seed=jepa_seed,
+        query_redundancy_weight=query_redundancy_weight,
+        query_redundancy_margin=query_redundancy_margin,
+        query_redundancy_warmup_steps=query_redundancy_warmup_steps,
         allow_preencoded_patches=allow_preencoded_patches)
     model = create_noaction_joint_cosmos(device=device, _model_class=JepaForceLatentModel,
                                         _model_kwargs=model_kwargs, **kwargs)

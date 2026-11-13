@@ -92,3 +92,53 @@ def test_source_guard_rejects_holdout_or_normalization_changes(tmp_path):
     source.identity = dict(source.identity, split_counts=dict(train=71, val=7, test=0))
     with pytest.raises(ValueError, match='all78'):
         launch.verify_all78_source(source, manifest, a, a)
+
+
+def test_query_regularizer_only_changes_dedicated_loss_and_experiment_metadata():
+    base = baseline()
+    original = copy.deepcopy(base)
+    settings = launch.query_redundancy_recipe(ROOT / 'configs/experiments/jepa_query_redundancy.json')
+    regularized = launch.add_jepa_config(base, variant='vitl', checkpoint='/assets/vitl.pt',
+        checkpoint_sha256='d' * 64, observation_cache='/cache/observations',
+        observation_identity='e' * 64, output_dir='/new/run', query_redundancy=settings)
+    standard = convert(base, 'vitl')
+    assert base == original
+    assert settings == dict(query_redundancy_weight=.01, query_redundancy_margin=.95,
+                            query_redundancy_warmup_steps=2500)
+    for key, value in settings.items():
+        assert regularized['model'].pop(key) == value
+    metadata = regularized['jepa_experiment'].pop('query_regularization')
+    assert metadata['target'] == 'within_view_reader_attention_cosine_hinge'
+    assert regularized == standard
+
+
+@pytest.mark.parametrize('field,value', [('query_redundancy_weight', float('nan')),
+    ('query_redundancy_weight', -1.), ('query_redundancy_margin', 1.),
+    ('query_redundancy_warmup_steps', True), ('query_redundancy_warmup_steps', -1)])
+def test_query_recipe_rejects_invalid_regularizer_settings(tmp_path, field, value):
+    data = json.loads((ROOT / 'configs/experiments/jepa_query_redundancy.json').read_text())
+    data[field] = value
+    path = tmp_path / 'recipe.json'
+    path.write_text(json.dumps(data))
+    with pytest.raises(ValueError):
+        launch.query_redundancy_recipe(path)
+
+
+def test_query_recipe_cannot_change_architecture_or_training_settings(tmp_path):
+    data = json.loads((ROOT / 'configs/experiments/jepa_query_redundancy.json').read_text())
+    data['query_count'] = 16
+    path = tmp_path / 'recipe.json'
+    path.write_text(json.dumps(data))
+    with pytest.raises(ValueError):
+        launch.query_redundancy_recipe(path)
+
+
+def test_regularized_plan_and_config_use_same_settings():
+    path = ROOT / 'configs/experiments/jepa_query_redundancy.json'
+    args = launch.arguments(['--variant', 'vitl', '--jepa-checkpoint', '/assets/vitl.pt',
+        '--jepa-sha256', 'd' * 64, '--query-redundancy-recipe', str(path)])
+    plan = launch.plan_for(args)
+    for key, value in launch.query_redundancy_recipe(path).items():
+        assert plan['model_additions'][key] == value
+    assert plan['recipe']['max_steps'] == 30000
+    assert not plan['model_warm_start'] and not plan['optimizer_resume']
