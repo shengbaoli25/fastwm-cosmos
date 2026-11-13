@@ -77,6 +77,9 @@ within-view probability relative to a uniform grid. The global probability view
 retains the two-camera mass split. The float16 row is renormalized for display
 only; its original probability sum is reported. Thumbnails are JPEG previews;
 numerical attention is never computed from those compressed images.
+When several ROI rectangles overlap, enrichment uses their exact geometric union
+within each patch. Duplicate or overlapping boxes do not count the same pixels
+twice. The camera-mass column is labeled attention share, not localization quality.
 
 The overview's entropy and peak are computed per layer/head/query and then
 averaged. Query redundancy is the mean of 28 pairwise query cosine similarities
