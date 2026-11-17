@@ -114,10 +114,16 @@ class VisualValueRead(nn.Module):
 
 class ActionGuidedVisualReader(nn.Module):
     def __init__(self, *, feature_dim, action_dim, state_dim, history_steps,
-                 text_dim, force_hidden, width=256, query_count=8, depth=2, heads=4, horizon=32):
+                 text_dim, force_hidden, width=256, query_count=8, depth=2, heads=4, horizon=32,
+                 query_slot_condition_ratio=None):
         super().__init__()
         if min(width, query_count, depth, heads) < 1 or width % heads:
             raise ValueError('Positive reader geometry and width divisible by heads required')
+        if query_slot_condition_ratio is not None and (
+                isinstance(query_slot_condition_ratio, bool) or not math.isfinite(query_slot_condition_ratio)
+                or query_slot_condition_ratio <= 0 or query_count < 2):
+            raise ValueError('A positive finite query slot/condition ratio requires at least two slots')
+        self.query_slot_condition_ratio = query_slot_condition_ratio
         self.feature_dim, self.width, self.horizon = feature_dim, width, horizon
         self.history_dim, self.history_steps = state_dim + 6, history_steps
         self.patch = nn.Sequential(nn.LayerNorm(feature_dim), nn.Linear(feature_dim, width))
@@ -163,10 +169,36 @@ class ActionGuidedVisualReader(nn.Module):
         return dict(kv=tuple(reader.project(values, position) for reader in self.readers),
                     valid=patch_valid, condition=condition)
 
+    def _compose_query(self, condition):
+        ratio = self.query_slot_condition_ratio
+        if ratio is None:
+            return self.query_slots[None] + condition[:, None]
+
+        slots = self.query_slots.float()
+        slot_mean = slots.mean(0, keepdim=True)
+        distinct = slots - slot_mean
+        common = condition.float() + slot_mean
+        # The reader LayerNorm removes each vector's channel mean. Balance the
+        # remaining common and slot-specific terms rather than their discarded offsets.
+        distinct = distinct - distinct.mean(-1, keepdim=True)
+        common = common - common.mean(-1, keepdim=True)
+        distinct_energy = distinct.square().mean()
+        common_energy = common.square().mean(-1, keepdim=True)
+        floor = 1e-6
+        distinct_unit = distinct * distinct_energy.clamp_min(floor).rsqrt()
+        common_unit = common * common_energy.clamp_min(floor).rsqrt()
+        # Keep the original total scale so the second reader's visual input
+        # competes with a base query of the same RMS as before.
+        gain = math.hypot(1, ratio)
+        direction = common_unit[:, None] / gain + (ratio / gain) * distinct_unit[None]
+        total_rms = (common_energy + distinct_energy).clamp_min(floor).sqrt()
+        dtype = torch.promote_types(condition.dtype, self.query_slots.dtype)
+        return (direction * total_rms[:, None]).to(dtype)
+
     def forward(self, action, ta, observation, *, query_redundancy_margin=None):
         condition = observation['condition'] + self.action(action.flatten(1))
         condition = condition + self.clock(sinusoidal_embedding_1d(128, ta).to(condition.dtype))
-        query = self.query_slots[None] + condition[:, None]
+        query = self._compose_query(condition)
         visual = None
         redundancy = []
         for reader, kv in zip(self.readers, observation['kv']):
@@ -221,6 +253,7 @@ class JepaForceLatentModel(NoActionJointModel):
                  wrench_loss_weight=.1, latent_warmup_steps=2500, jepa_seed=47,
                  query_redundancy_weight=0., query_redundancy_margin=.95,
                  query_redundancy_warmup_steps=2500,
+                 query_slot_condition_ratio=None,
                  allow_preencoded_patches=False, **kwargs):
         super().__init__(net, **kwargs)
         if latent_loss_weight < 0 or wrench_loss_weight < 0:
@@ -252,7 +285,8 @@ class JepaForceLatentModel(NoActionJointModel):
             self.dit['jepa_reader'] = ActionGuidedVisualReader(feature_dim=feature_dim,
                 action_dim=self.action_dim, state_dim=self.state_dim, history_steps=force.history_steps,
                 text_dim=force.text_encoder.in_features, force_hidden=force.hidden_dim,
-                width=reader_width, query_count=query_count, depth=reader_depth, heads=reader_heads)
+                width=reader_width, query_count=query_count, depth=reader_depth, heads=reader_heads,
+                query_slot_condition_ratio=query_slot_condition_ratio)
             self.dit['jepa_adapter'] = ActionForceResidual(force.hidden_dim, reader_width, self.depth, injection_layers)
         if observation_encoder is not None:
             self.dit['jepa_observation'] = observation_encoder
@@ -271,6 +305,13 @@ class JepaForceLatentModel(NoActionJointModel):
                 query_residual_bypass=False))
         # Keep the exact original manifest and state keys when disabled, so
         # historical checkpoints still load with strict identity checking.
+        if query_slot_condition_ratio is not None:
+            self.manifest['jepa_force_latent']['query_composition'] = dict(
+                mode='separate_slot_common_rms_v1',
+                distinct_slot_to_common_rms=float(query_slot_condition_ratio),
+                common='condition plus mean learned slot',
+                scale='preserve channel-centered base query RMS before visual residual',
+                minimum_component_mean_square=1e-6)
         if self.query_redundancy_weight > 0:
             self.manifest['jepa_force_latent']['query_redundancy'] = dict(
                 objective='per_camera_spatial_attention_cosine_hinge_v1',
@@ -415,6 +456,7 @@ def create_jepa_force_latent_cosmos(*, observation_encoder=None, device='cuda',
                                   latent_warmup_steps=2500, jepa_seed=47,
                                   query_redundancy_weight=0., query_redundancy_margin=.95,
                                   query_redundancy_warmup_steps=2500,
+                                  query_slot_condition_ratio=None,
                                   allow_preencoded_patches=False, jepa_feature_dim=768, **kwargs):
     """Reuse the verified official-asset factory, then add a checkpoint-isolated side path."""
     from .assets import create_noaction_joint_cosmos
@@ -436,6 +478,7 @@ def create_jepa_force_latent_cosmos(*, observation_encoder=None, device='cuda',
         query_redundancy_weight=query_redundancy_weight,
         query_redundancy_margin=query_redundancy_margin,
         query_redundancy_warmup_steps=query_redundancy_warmup_steps,
+        query_slot_condition_ratio=query_slot_condition_ratio,
         allow_preencoded_patches=allow_preencoded_patches)
     model = create_noaction_joint_cosmos(device=device, _model_class=JepaForceLatentModel,
                                         _model_kwargs=model_kwargs, **kwargs)

@@ -132,6 +132,42 @@ def make_model(**extra):
         reader_heads=2, query_count=4, reader_depth=2, injection_layers=(1, 2), **extra)
 
 
+def test_query_composition_changes_ratio_without_changing_checkpoint_tensors(tmp_path):
+    legacy = make_model(query_redundancy_weight=.01)
+    balanced = make_model(query_redundancy_weight=.01, query_slot_condition_ratio=.5)
+    model_state = legacy.state_dict()
+    assert set(balanced.state_dict()) == set(model_state)
+    with pytest.raises(ValueError, match='manifest differs'):
+        balanced.load_state_dict(model_state, strict=True)
+    model_state['dit.runtime.manifest_bytes'] = balanced.state_dict()['dit.runtime.manifest_bytes']
+    balanced.load_state_dict(model_state, strict=True)
+    assert 'query_composition' not in legacy.manifest['jepa_force_latent']
+    assert balanced.manifest['jepa_force_latent']['query_composition']['distinct_slot_to_common_rms'] == .5
+
+    old_reader, new_reader = (model.dit['jepa_reader'] for model in (legacy, balanced))
+    condition = torch.randn(3, old_reader.width, requires_grad=True) * 4
+    baseline_query = old_reader._compose_query(condition)
+    torch.testing.assert_close(baseline_query, old_reader.query_slots[None] + condition[:, None], atol=0, rtol=0)
+    new_query = new_reader._compose_query(condition)
+    common = new_query.mean(1, keepdim=True)
+    torch.testing.assert_close(
+        (new_query - common).square().mean((1, 2)).sqrt() / common.square().mean((1, 2)).sqrt(),
+        torch.full((3,), .5))
+    centered = baseline_query - baseline_query.mean(-1, keepdim=True)
+    torch.testing.assert_close(new_query.square().mean((1, 2)), centered.square().mean((1, 2)))
+    gradients = torch.autograd.grad(new_query[..., 0].mean() + new_query[:, 0, 1].mean(),
+                                    (condition, new_reader.query_slots))
+    assert all(torch.isfinite(g).all() and g.abs().sum() > 0 for g in gradients)
+
+    legacy_path, balanced_path = tmp_path / 'legacy.pt', tmp_path / 'balanced.pt'
+    legacy.save_checkpoint(legacy_path, step=1)
+    balanced.save_checkpoint(balanced_path, step=2)
+    assert make_model(query_redundancy_weight=.01).load_checkpoint(legacy_path) == 1
+    assert make_model(query_redundancy_weight=.01, query_slot_condition_ratio=.5).load_checkpoint(balanced_path) == 2
+    with pytest.raises(ValueError, match='differ'):
+        balanced.load_checkpoint(legacy_path)
+
+
 def test_disabled_legacy_manifest_state_and_checkpoint_are_compatible(tmp_path):
     from test_jepa_force_latent import observed_sample
     model = make_model()
