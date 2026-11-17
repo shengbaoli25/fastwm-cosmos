@@ -38,6 +38,14 @@ $$
 
 Force 隐特征由冻结的 25k Force 路径使用真实未来 wrench 生成，作为停止梯度的监督标签。它与冻结的 JEPA patches 一次计算后缓存，两组共用。辅助损失的全局计步从 25k 起算，两个 warmup 均已完成。短训仍按原动作 FM 时钟分布加噪得到 reader 的候选动作条件，优化只使用上述辅助目标。Action FM loss 不参与优化。推理仅使用当前或过去的观测及采样过程生成的候选动作。 [训练与评估 runner](../../scripts/cosmos/query_scale_ablation.py)
 
+## 本地重建数据
+
+启智的单卡 H200 作业排队后未启动，本轮改用本机 RTX 5090 Laptop GPU。生产 manifest 列出的 554 个源文件全部与本地副本逐文件 SHA256 一致。本地额外的 78 个 `force_streams` JSONL 未列入生产 inventory，按原清单构建的只读数据视图排除了它们。力数据仍由原 loader 从 Parquet 读取。原 loader 和归一化的 SHA256 已按生产记录验证，训练抽样沿用原版的种子 `812` 与 512 个窗口的选择顺序。
+
+双相机按生产解码顺序读取，只对选中的观察帧执行同一 Resize、归一化及 uint8 量化。首条纳入的轨迹取 16 个观察帧，双相机合计 32 张，选帧实现的浮点结果逐值等于原整段解码器。首帧 Cosmos latent 由同一官方 WanVAE 权重在本机独立重编码。在固定的 36 窗口上，重编码相对生产缓存的 RMSE 约为参考 latent RMS 的 `0.40%`。
+
+A、B 两组共用标记为 `local_reconstructed` 的同一训练包。验证仍直接读取 36 个窗口的生产缓存张量。训练包保存原生产缓存身份作为参考，并单独记录构建脚本、窗口清单、运行环境及 SHA256。本轮结果衡量该重建数据条件下的组间差异。 [本地输入验证](../../scripts/cosmos/query_scale_ablation.py)
+
 ## 四格评估
 
 | 组别 | 短训前 `step 0` | 短训后 `step 1000` |
